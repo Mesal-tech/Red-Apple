@@ -6,7 +6,7 @@ Red Apple is a mobile-first fertility tracking, reproductive health education, p
 
 ## 1. Repository Architecture
 
-The project is structured as a **split-repo (polyrepo)** workspace:
+The project is structured as a **unified single-repository** workspace containing all packages:
 
 ```
 red_apple/
