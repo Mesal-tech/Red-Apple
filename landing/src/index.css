@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Bebas Neue", "League Gothic", "Antonio", "Teko", "Impact", sans-serif;
+  --font-mono: "Space Mono", monospace;
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+
+  --color-crimson: #E52E2E;
+  --color-crimson-dark: #C71F1F;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-sans);
+    background-color: #FAFAFA;
+    color: #0F0F0F;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

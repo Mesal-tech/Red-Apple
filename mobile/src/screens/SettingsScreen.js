@@ -4,6 +4,7 @@ import {
   Text,
   View,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Switch,
   Modal,
@@ -13,15 +14,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 
 export default function SettingsScreen({
   onClose,
   onSignOut,
+  onRedoSetup,
   currentMode = 'cycle',
   onSwitchMode,
   onOpenPrivacyPolicy,
   onOpenTermsOfUse,
 }) {
+  const { user } = useAuth();
+  const displayName = user?.name || 'Amara Okonkwo';
+  const displayEmail = user?.email || 'amara@redapple.health';
+  const memberSince = user?.created_at
+    ? `Member since ${new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+    : 'Member since January 2026';
+
   // Notification States
   const [periodAlerts, setPeriodAlerts] = useState(true);
   const [dailyPillAlerts, setDailyPillAlerts] = useState(true);
@@ -51,6 +61,14 @@ export default function SettingsScreen({
     }, 1500);
   };
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await new Promise((res) => setTimeout(res, 600));
+    setIsRefreshing(false);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.backgroundLight} />
@@ -64,7 +82,19 @@ export default function SettingsScreen({
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary, '#FA4A14']}
+            progressBackgroundColor="#FFFFFF"
+          />
+        }
+      >
         {/* USER PROFILE CARD */}
         <View style={styles.profileCard}>
           <View style={styles.avatarCircle}>
@@ -76,14 +106,14 @@ export default function SettingsScreen({
 
           <View style={styles.profileInfoCol}>
             <View style={styles.nameBadgeRow}>
-              <Text style={styles.profileName}>Jane Doe</Text>
+              <Text style={styles.profileName}>{displayName}</Text>
               <View style={styles.premiumBadge}>
                 <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" style={{ marginRight: 3 }} />
                 <Text style={styles.premiumBadgeText}>PREMIUM</Text>
               </View>
             </View>
-            <Text style={styles.profileEmail}>jane.doe@example.com</Text>
-            <Text style={styles.profileSubText}>Member since January 2025</Text>
+            <Text style={styles.profileEmail}>{displayEmail}</Text>
+            <Text style={styles.profileSubText}>{memberSince}</Text>
           </View>
         </View>
 
@@ -130,6 +160,21 @@ export default function SettingsScreen({
                 </TouchableOpacity>
               );
             })}
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 8 }]}
+              onPress={() => onRedoSetup && onRedoSetup()}
+            >
+              <View style={styles.settingLabelRow}>
+                <Ionicons name="sparkles-outline" size={20} color={colors.primary} style={styles.settingIcon} />
+                <View>
+                  <Text style={styles.settingTitle}>Retake Health Onboarding</Text>
+                  <Text style={styles.settingSubText}>Change stage, due dates, or health goals</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
         </View>
 

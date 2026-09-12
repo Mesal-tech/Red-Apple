@@ -9,236 +9,533 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useGoogleAuth } from '../services/googleAuth';
+import ForgotPasswordModal from './ForgotPasswordModal';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
-export default function LoginScreen({ onBack, onLoginSuccess }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HEADER_HEIGHT = SCREEN_WIDTH * (830 / 1200);
+
+export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess }) {
+  const { login, loginApple, loginGoogle } = useAuth();
+  const { showError, showSuccess } = useToast();
+
+  const [email, setEmail] = useState('amara@redapple.health');
+  const [password, setPassword] = useState('Amara@2026');
   const [showPassword, setShowPassword] = useState(false);
 
+  const [loading, setLoading] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+
+  const { signInWithGoogle } = useGoogleAuth({
+    onTokenSuccess: async (idToken) => {
+      setLoading(true);
+      try {
+        await loginGoogle(idToken);
+        showSuccess('Welcome back!');
+        if (onLoginSuccess) onLoginSuccess();
+      } catch (err) {
+        showError(err.message || 'Google sign-in failed.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (msg) => {
+      showError(msg);
+    },
+  });
+
+  const handleLogin = async () => {
+    if (!email.trim()) {
+      showError('Please enter your email address.');
+      return;
+    }
+
+    if (!password) {
+      showError('Please enter your password.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await login(email.trim(), password);
+      showSuccess('Logged in successfully!');
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
+    } catch (err) {
+      showError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    try {
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      if (!isAvailable) {
+        showError('Apple Sign-In is only available on supported iOS devices.');
+        return;
+      }
+
+      setLoading(true);
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (credential.identityToken) {
+        await loginApple(credential.identityToken, credential.fullName);
+        showSuccess('Logged in with Apple!');
+        if (onLoginSuccess) onLoginSuccess();
+      }
+    } catch (e) {
+      if (e.code !== 'ERR_REQUEST_CANCELED') {
+        showError(e.message || 'Apple authentication failed.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.loginContainer} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.backgroundLight} />
+    <LinearGradient
+      colors={['#880E18', '#540810', '#220306', '#0C0103']}
+      locations={[0, 0.35, 0.72, 1]}
+      style={styles.screenWrapper}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+
+      {/* LIGHT GLASSMORPHISM TRANSLUCENT OVERLAY */}
+      <View style={styles.glassmorphismOverlay} pointerEvents="none" />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.loginScrollContent} showsVerticalScrollIndicator={false}>
-          <TouchableOpacity activeOpacity={0.7} style={styles.loginBackButton} onPress={onBack}>
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* HEADER CONTAINER WITH EXACT SWIRL WAVE BACKGROUND */}
+          <View style={styles.headerContainer}>
+            <Image
+              source={require('../../assets/top_wave_bg.png')}
+              style={styles.headerWaveBg}
+              resizeMode="stretch"
+            />
 
-          <Text style={styles.welcomeTitle}>Welcome Back</Text>
-          <View style={styles.signUpPromptRow}>
-            <Text style={styles.signUpPromptText}>Don't have an account?</Text>
-            <TouchableOpacity activeOpacity={0.7} onPress={onBack}>
-              <Text style={styles.signUpLinkText}>Sign Up</Text>
-            </TouchableOpacity>
+            <SafeAreaView edges={['top', 'left', 'right']} style={styles.headerSafeArea}>
+              {/* TOP NAV BAR */}
+              <View style={styles.topNavBar}>
+                {/* ANGLE LEFT WITH CIRCULAR BACKGROUND */}
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={onBack}
+                  style={styles.backCircleBtn}
+                >
+                  <Ionicons name="chevron-back" size={20} color="#FFFFFF" style={{ marginRight: 2 }} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={onNavigateSignUp}
+                  style={styles.signUpHeaderBtn}
+                >
+                  <Ionicons name="person-outline" size={19} color="#000000" />
+                  <Text style={styles.signUpHeaderText}>Sign Up</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* TITLE "Sign In" */}
+              <View style={styles.titleWrapper}>
+                <Text style={styles.signInTitle}>Sign In</Text>
+              </View>
+            </SafeAreaView>
           </View>
 
-          <View style={styles.formContainer}>
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <View style={styles.inputPill}>
-              <Ionicons name="mail-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="mail@domain.com"
-                placeholderTextColor="#A0A0A0"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
+          {/* LOWER DARK SECTION */}
+          <View style={styles.darkSection}>
+
+            {/* EMAIL INPUT */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <View style={styles.pillInputContainer}>
+                <Ionicons
+                  name="mail-outline"
+                  size={19}
+                  color="rgba(255, 255, 255, 0.6)"
+                  style={styles.inputLeftIcon}
+                />
+                <TextInput
+                  style={styles.pillTextInput}
+                  placeholder="name@example.com"
+                  placeholderTextColor="rgba(255, 255, 255, 0.45)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                  editable={!loading}
+                />
+              </View>
             </View>
 
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputPill}>
-              <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter your password"
-                placeholderTextColor="#A0A0A0"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPassword(!showPassword)}>
+            {/* PASSWORD INPUT */}
+            <View style={styles.inputGroup}>
+              <View style={styles.passwordLabelRow}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setShowForgotModal(true)}
+                >
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.pillInputContainer}>
                 <Ionicons
-                  name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color={colors.textMuted}
+                  name="lock-closed-outline"
+                  size={19}
+                  color="rgba(255, 255, 255, 0.6)"
+                  style={styles.inputLeftIcon}
                 />
+                <TextInput
+                  style={styles.pillTextInput}
+                  placeholder="••••••••••••"
+                  placeholderTextColor="rgba(255, 255, 255, 0.45)"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeBtn}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                    size={19}
+                    color="rgba(255, 255, 255, 0.65)"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* SIGN IN PILL BUTTON */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.signInPillButton}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.signInButtonText}>Sign In</Text>
+                  <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* SOCIAL SIGN IN */}
+            <View style={styles.socialContainer}>
+              <Text style={styles.socialPromptText}>or Sign In with</Text>
+
+              <View style={styles.socialRow}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.socialPillBtn}
+                  onPress={handleGoogleLogin}
+                  disabled={loading}
+                >
+                  <Ionicons name="logo-google" size={18} color="#FFFFFF" />
+                  <Text style={styles.socialButtonText}>Google</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.socialPillBtn}
+                  onPress={handleAppleLogin}
+                  disabled={loading}
+                >
+                  <Ionicons name="logo-apple" size={19} color="#FFFFFF" />
+                  <Text style={styles.socialButtonText}>Apple</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* DON'T HAVE ACCOUNT LINK */}
+            <View style={styles.bottomPromptRow}>
+              <Text style={styles.bottomPromptText}>Don't have an account?</Text>
+              <TouchableOpacity activeOpacity={0.7} onPress={onNavigateSignUp}>
+                <Text style={styles.bottomPromptLink}>Sign Up</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity activeOpacity={0.7} style={styles.forgotPasswordButton}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.signInButton}
-              onPress={onLoginSuccess}
-            >
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            </TouchableOpacity>
-
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.googleButton}
-              onPress={onLoginSuccess}
-            >
-              <Ionicons name="logo-google" size={20} color="#EA4335" style={{ marginRight: 10 }} />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+
+      {/* FORGOT PASSWORD MODAL */}
+      <ForgotPasswordModal
+        visible={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+        onSuccess={() => {
+          if (onLoginSuccess) onLoginSuccess();
+        }}
+      />
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  loginContainer: {
+  screenWrapper: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
   },
-  loginScrollContent: {
-    paddingHorizontal: 28,
-    paddingTop: 16,
-    paddingBottom: 32,
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: 'transparent',
+    paddingBottom: 40,
   },
-  loginBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.backgroundSurface,
+  glassmorphismOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  headerContainer: {
+    width: '100%',
+    height: HEADER_HEIGHT,
+    position: 'relative',
+  },
+  headerWaveBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
+    height: HEADER_HEIGHT,
+  },
+  headerSafeArea: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 52,
+  },
+  topNavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Platform.OS === 'android' ? 12 : 6,
+  },
+  backCircleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#0C0103',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  welcomeTitle: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    letterSpacing: -0.8,
-    marginBottom: 8,
-  },
-  signUpPromptRow: {
+  signUpHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 36,
-  },
-  signUpPromptText: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    fontWeight: '400',
-  },
-  signUpLinkText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  formContainer: {
-    width: '100%',
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#444444',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  inputPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 24,
+    gap: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  signUpHeaderText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#000000',
+    letterSpacing: -0.2,
+  },
+  titleWrapper: {
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  signInTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#000000',
+    letterSpacing: -0.4,
+    textAlign: 'center',
+  },
+  darkSection: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },
+  errorAlertContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(211, 47, 47, 0.25)',
+    borderWidth: 1,
+    borderColor: '#D32F2F',
+    borderRadius: 16,
+    padding: 12,
     marginBottom: 16,
   },
-  inputIcon: {
-    marginRight: 10,
-  },
-  textInput: {
+  errorAlertText: {
+    color: '#FFCDD2',
+    fontSize: 13,
+    fontWeight: '600',
     flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary,
-    padding: 0,
   },
-  forgotPasswordButton: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    marginBottom: 28,
+  inputGroup: {
+    marginBottom: 18,
+  },
+  passwordLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginLeft: 4,
   },
   forgotPasswordText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
-  signInButton: {
-    width: '100%',
-    backgroundColor: colors.primary,
+  pillInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 28,
-    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 18,
+    height: 54,
+  },
+  inputLeftIcon: {
+    marginRight: 12,
+  },
+  pillTextInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#FFFFFF',
+    paddingVertical: 0,
+  },
+  eyeBtn: {
+    padding: 6,
+  },
+  signInPillButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
-    shadowColor: colors.primary,
+    backgroundColor: '#DC2626',
+    borderRadius: 28,
+    height: 54,
+    gap: 8,
+    marginTop: 10,
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 6,
   },
   signInButtonText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
-    color: colors.textLight,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  dividerRow: {
+  socialContainer: {
+    alignItems: 'center',
+    marginTop: 26,
+  },
+  socialPromptText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.45)',
+    marginBottom: 16,
+  },
+  socialRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    width: '100%',
+    gap: 12,
   },
-  dividerLine: {
+  socialPillBtn: {
     flex: 1,
-    height: 1,
-    backgroundColor: colors.inputBorder,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-  googleButton: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    borderRadius: 28,
-    paddingVertical: 14,
+    gap: 8,
   },
-  googleButtonText: {
-    fontSize: 15,
+  socialButtonText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  socialCircleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomPromptRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 28,
+    gap: 6,
+  },
+  bottomPromptText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.65)',
+  },
+  bottomPromptLink: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textDecorationLine: 'underline',
   },
 });

@@ -5,6 +5,7 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   Dimensions,
   Modal,
   Image,
@@ -34,7 +35,6 @@ export default function PregnancyScreen({
   onBookDoctor,
 }) {
   const [selectedDateNum, setSelectedDateNum] = useState(27);
-  const [showExitModal, setShowExitModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showSymptomsModal, setShowSymptomsModal] = useState(false);
   const [showWombLifeModal, setShowWombLifeModal] = useState(false);
@@ -107,9 +107,29 @@ export default function PregnancyScreen({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await new Promise((res) => setTimeout(res, 600));
+    setIsRefreshing(false);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#E11D48"
+            colors={['#E11D48', '#FA4A14']}
+            progressBackgroundColor="#FFFFFF"
+          />
+        }
+      >
 
 
       {/* FLO-INSPIRED ATMOSPHERIC HERO CONTAINER */}
@@ -119,7 +139,7 @@ export default function PregnancyScreen({
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.floBackBtn}
-            onPress={() => setShowExitModal(true)}
+            onPress={() => onSwitchToCycleMode && onSwitchToCycleMode()}
           >
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -172,14 +192,14 @@ export default function PregnancyScreen({
           <View style={styles.fetusImageWrapper}>
             <Image source={FETUS_IMAGE} style={styles.fetusImage} resizeMode="cover" />
             <View style={styles.fetusBadge}>
-              <Text style={styles.fetusBadgeText}>WEEK 16 FETAL STAGE</Text>
+              <Text style={styles.fetusBadgeText}>WEEK 16 OF PREGNANCY</Text>
             </View>
           </View>
 
           <View style={styles.fetusInfoRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fetusInfoTitle}>Fetal Development</Text>
-              <Text style={styles.fetusInfoSub}>16 weeks 2 days • 2nd Trimester</Text>
+              <Text style={styles.fetusInfoTitle}>Baby's Growth</Text>
+              <Text style={styles.fetusInfoSub}>16 weeks 2 days • Second Trimester</Text>
             </View>
             <View style={styles.fetusViewPill}>
               <Text style={styles.fetusViewPillText}>View Details</Text>
@@ -248,19 +268,19 @@ export default function PregnancyScreen({
             onPress={() =>
               onBookDoctor &&
               onBookDoctor({
-                name: 'Dr. Sarah Jenkins, MD',
+                name: 'Dr. Mesal Okubor',
                 specialty: 'Obstetrician & Gynecologist',
-                experience: '14 Yrs Exp',
-                nextAvailable: 'Today, 4:00 PM',
-                fee: '$45',
-                avatarBg: '#8E24AA',
+                experience: '12 Yrs Exp',
+                nextAvailable: 'Today, 10:00 AM',
+                fee: '₦15,000',
+                avatarBg: '#008080',
               })
             }
           >
             <View style={[styles.floTagBadge, { backgroundColor: '#8E24AA' }]}>
               <Text style={styles.floTagBadgeText}>Doctor Care</Text>
             </View>
-            <Text style={styles.floInsightCardTitle}>Consult an OB-GYN Specialist</Text>
+            <Text style={styles.floInsightCardTitle}>Talk to a Women's Health Doctor</Text>
             <View style={styles.floInsightCardIconRow}>
               <Ionicons name="videocam-outline" size={40} color="#8E24AA" />
             </View>
@@ -591,51 +611,6 @@ export default function PregnancyScreen({
           </ScrollView>
         </View>
       </Modal>
-
-      {/* CONFIRM EXIT PREGNANCY MODE MODAL */}
-      <Modal
-        visible={showExitModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowExitModal(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.exitModalOverlay}
-          onPress={() => setShowExitModal(false)}
-        >
-          <TouchableOpacity activeOpacity={1} style={styles.exitModalCard}>
-            <View style={styles.exitModalIconCircle}>
-              <Ionicons name="log-out-outline" size={28} color={colors.primary} />
-            </View>
-            <Text style={styles.exitModalTitle}>Exit Pregnancy Mode?</Text>
-            <Text style={styles.exitModalSubTitle}>
-              Are you sure you want to exit Pregnancy Mode and return to standard Cycle Mode tracking?
-            </Text>
-
-            <View style={styles.exitModalActionRow}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.exitModalCancelBtn}
-                onPress={() => setShowExitModal(false)}
-              >
-                <Text style={styles.exitModalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.exitModalConfirmBtn}
-                onPress={() => {
-                  setShowExitModal(false);
-                  onSwitchToCycleMode && onSwitchToCycleMode();
-                }}
-              >
-                <Text style={styles.exitModalConfirmText}>Exit Mode</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
       </ScrollView>
     </View>
   );
@@ -643,7 +618,7 @@ export default function PregnancyScreen({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 0,
+    paddingBottom: 110,
     backgroundColor: '#FFFFFF',
   },
 

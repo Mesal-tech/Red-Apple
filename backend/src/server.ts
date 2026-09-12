@@ -8,6 +8,7 @@ import pregnancyRoutes from './routes/pregnancy.routes';
 import telemedicineRoutes from './routes/telemedicine.routes';
 import notificationRoutes from './routes/notification.routes';
 import campaignRoutes from './routes/campaign.routes';
+import emailRoutes from './routes/email.routes';
 import { errorHandler } from './middleware/error.middleware';
 
 export function createExpressApp(): Application {
@@ -34,6 +35,7 @@ export function createExpressApp(): Application {
   app.use('/api/telemedicine', telemedicineRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/campaigns', campaignRoutes);
+  app.use('/api/emails', emailRoutes);
 
   // Centralized Error Handling Middleware
   app.use(errorHandler);

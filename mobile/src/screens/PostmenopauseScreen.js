@@ -5,6 +5,7 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   Dimensions,
   Modal,
   TextInput,
@@ -53,61 +54,61 @@ function PostmenopauseMilestoneRing() {
 
 const ringStyles = StyleSheet.create({
   ringContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   trackCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     borderWidth: 7,
     borderColor: '#F3E8FF',
     position: 'absolute',
   },
   halfCircleContainerRight: {
-    width: 48,
-    height: 96,
+    width: 52,
+    height: 104,
     position: 'absolute',
     right: 0,
     top: 0,
     overflow: 'hidden',
   },
   halfCircleRight: {
-    width: 48,
-    height: 96,
-    borderTopRightRadius: 48,
-    borderBottomRightRadius: 48,
+    width: 52,
+    height: 104,
+    borderTopRightRadius: 52,
+    borderBottomRightRadius: 52,
     borderWidth: 7,
     borderColor: '#8E24AA',
     borderLeftWidth: 0,
     transformOrigin: 'left center',
   },
   halfCircleContainerLeft: {
-    width: 48,
-    height: 96,
+    width: 52,
+    height: 104,
     position: 'absolute',
     left: 0,
     top: 0,
     overflow: 'hidden',
   },
   halfCircleLeft: {
-    width: 48,
-    height: 96,
-    borderTopLeftRadius: 48,
-    borderBottomLeftRadius: 48,
+    width: 52,
+    height: 104,
+    borderTopLeftRadius: 52,
+    borderBottomLeftRadius: 52,
     borderWidth: 7,
     borderColor: '#8E24AA',
     borderRightWidth: 0,
     transformOrigin: 'right center',
   },
   innerMaskCircle: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -118,7 +119,7 @@ const ringStyles = StyleSheet.create({
     elevation: 2,
   },
   ringMonthNumber: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '900',
     color: '#8E24AA',
   },
@@ -163,56 +164,56 @@ const EDU_ARTICLES = [
     title: 'What happens after menopause?',
     category: 'General Health',
     readTime: '4 min read',
-    content: `Menopause is defined as 12 consecutive months without a menstrual period, marking the end of natural reproductive years. After menopause (the postmenopausal stage), estrogen and progesterone levels stabilize at lower baseline levels. While symptoms such as hot flushes often diminish over time, low estrogen levels continue to influence cardiovascular health, bone density, skin elasticity, and vaginal mucosa. Understanding these long-term physiological changes enables proactive health management through nutrition, physical activity, and targeted medical care.`,
+    content: `Menopause is reached once you have gone 12 full months without a period. In this postmenopausal chapter, your estrogen and progesterone levels settle into a new, lower baseline. While hot flushes often ease over time, lower estrogen continues to affect your bones, heart, skin, and intimate comfort. Simple daily nutrition, gentle movement, and routine checkups help you protect your vitality and feel your best.`,
   },
   {
     id: '2',
-    title: 'Hormone replacement therapy (HRT): Benefits and risks',
+    title: 'Hormone therapy (HRT): What to know',
     category: 'Therapy & Care',
     readTime: '6 min read',
-    content: `Hormone Replacement Therapy (HRT) replaces hormones that the body stops producing during and after menopause. Benefits include significant relief from vasomotor symptoms (hot flushes, night sweats), prevention of bone loss, and improved sleep quality. Risks depend on HRT type (estrogen-only vs. combined estrogen-progestogen), delivery method (transdermal vs. oral), age at initiation, and individual cardiovascular or breast cancer risk factors. Consulting a qualified healthcare provider helps weigh individual benefits against potential risks.`,
+    content: `Hormone Replacement Therapy (HRT) gently supplements the hormones your body produces in lower amounts after menopause. Key benefits include strong relief from hot flushes, night sweats, mood dips, and sleep troubles, as well as protecting your bones from thinning. Because HRT comes in different forms (pills, patches, or creams), talking with your doctor helps you choose what fits your body best.`,
   },
   {
     id: '3',
-    title: 'Osteoporosis prevention and bone strength',
+    title: 'Protecting your bone strength',
     category: 'Bone Health',
     readTime: '5 min read',
-    content: `Estrogen plays a pivotal role in maintaining bone mineral density. Following menopause, bone resorption accelerates, increasing osteoporosis risk. Effective prevention strategies include adequate daily calcium intake (1,200 mg total daily via food and supplements), vitamin D (800-2000 IU daily for absorption), weight-bearing exercises (brisk walking, strength training), avoiding tobacco, and limiting alcohol. Bone density (DEXA) scans monitor bone health over time.`,
+    content: `Estrogen helps keep your bones dense and strong. After your periods stop, your bones can lose calcium faster, which can make them more fragile over time (osteoporosis). You can protect your bones by getting enough calcium in your diet, taking vitamin D, doing weight-bearing exercises like brisk walking, and doing occasional bone density checkups (DEXA scans).`,
   },
   {
     id: '4',
     title: 'Heart health after menopause',
     category: 'Cardiovascular',
     readTime: '5 min read',
-    content: `Estrogen exerts protective effects on vascular elasticity and lipid profiles. Postmenopause, women face an elevated risk for cardiovascular disease. Managing heart health involves regularly tracking blood pressure, lipid panels (cholesterol), and blood glucose levels. Prioritizing a Mediterranean-style diet, achieving 150 minutes of weekly moderate aerobic exercise, managing stress, and maintaining a healthy weight significantly lower cardiac risks.`,
+    content: `Estrogen naturally helps protect your blood vessels and cholesterol balance. After menopause, keeping your heart strong becomes a top priority. Simple, effective ways to care for your heart include checking your blood pressure regularly, eating heart-healthy foods like vegetables, fish, and nuts, taking daily 30-minute walks, and taking time to relax.`,
   },
   {
     id: '5',
-    title: 'Nutrition for healthy ageing',
+    title: 'Nutrition for everyday energy',
     category: 'Nutrition',
     readTime: '4 min read',
-    content: `Nutritional needs evolve during postmenopause. Muscle mass naturally declines, requiring higher protein intake (1.0-1.2g per kg body weight). Focus on calcium-rich foods (dairy, leafy greens, fortified plant milks), fiber for digestive and lipid regulation, phytoestrogen sources (flaxseed, soy), and antioxidant-rich berries and vegetables. Minimizing processed sugars and sodium supports metabolic and vascular health.`,
+    content: `Your nutritional needs shift gracefully after menopause. To protect muscle tone and energy, make sure you enjoy adequate protein (fish, beans, eggs, lean meats). Add calcium-rich foods (greens, dairy, fortified milks) for bone health, fiber for digestion, and colorful fruit for natural antioxidants. Drinking plenty of water also keeps your skin and joints comfortable.`,
   },
   {
     id: '6',
-    title: 'Exercise recommendations for vitality',
+    title: 'Gentle exercise for vitality',
     category: 'Fitness',
     readTime: '4 min read',
-    content: `A balanced postmenopausal exercise routine combines three elements: 1) Resistance training 2-3 times weekly to stimulate bone density and maintain muscle; 2) Aerobic activity (walking, swimming, cycling) for 30 minutes 5 days a week for heart health; 3) Balance and flexibility routines (yoga, Pilates) to prevent falls and preserve joint mobility.`,
+    content: `A simple, enjoyable movement routine gives you energy and protects your body: 1) Light strength training 2–3 times a week keeps your bones and muscles firm; 2) Daily walking for 30 minutes supports your heart and elevates your mood; 3) Gentle stretching or yoga keeps your joints flexible and helps balance.`,
   },
   {
     id: '7',
-    title: 'Sexual health and intimacy',
+    title: 'Comfort, intimacy, and sexual wellness',
     category: 'Sexual Wellness',
     readTime: '5 min read',
-    content: `Reduced estrogen levels can cause genitourinary syndrome of menopause (GSM), leading to vaginal dryness, tissue thinning, and pain during intercourse. Regular use of non-hormonal vaginal moisturizers, water- or silicone-based lubricants during intimacy, or localized low-dose vaginal estrogen prescribed by a doctor can restore comfort and sexual satisfaction.`,
+    content: `Lower estrogen levels commonly lead to intimate dryness and sensitivity during sex. This is completely natural and very treatable. Gentle, hydrating moisturizers, water-based lubricants, or low-dose localized creams from your doctor can quickly restore comfort and confidence in your intimate life.`,
   },
   {
     id: '8',
     title: 'Pelvic floor exercises (Kegels)',
     category: 'Pelvic Health',
     readTime: '3 min read',
-    content: `Strengthening pelvic floor muscles supports the bladder, bowel, and uterus, helping prevent urinary leakage (stress urgency incontinence) and pelvic organ prolapse. Practice contracting the pelvic floor muscles for 3-5 seconds, relaxing for 3-5 seconds, performing 10-15 repetitions 3 times daily.`,
+    content: `Strengthening your pelvic floor muscles gives your bladder firm support, helping prevent accidental leaks when you cough, laugh, or sneeze. Practice gently squeezing your pelvic muscles (as if holding back urine) for 3–5 seconds, relaxing for 3–5 seconds, and repeating 10 times daily.`,
   },
   {
     id: '9',
@@ -255,13 +256,42 @@ const AI_KNOWLEDGE_BASE = {
 export default function PostmenopauseScreen({
   onSwitchToCycleMode,
   onBookDoctor,
+  onOpenDoctorPage,
+  greetingDisplayName = 'Amara',
+  weekDays = [],
+  onOpenSetupWizard,
 }) {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'symptoms' | 'assessments' | 'lifestyle' | 'meds' | 'screenings' | 'learn' | 'ai'
+  const [selectedDateKey, setSelectedDateKey] = useState(() => new Date().toISOString().split('T')[0]);
+
+  const calendarWeekDays = React.useMemo(() => {
+    if (weekDays && weekDays.length > 0) return weekDays;
+    const today = new Date();
+    const currentDayOfWeek = today.getDay(); // 0 = Sun, 1 = Mon ...
+    const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+
+    const singleLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const isToday = d.toDateString() === today.toDateString();
+      days.push({
+        singleLetter: singleLetters[i],
+        dayNum: d.getDate(),
+        dateKey: d.toISOString().split('T')[0],
+        isToday,
+      });
+    }
+    return days;
+  }, [weekDays]);
 
   // Postmenopause Onboarding State
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
 
   // Profile State
   const [profile, setProfile] = useState({
@@ -360,6 +390,15 @@ export default function PostmenopauseScreen({
         setHasCompletedOnboarding(data.hasCompletedOnboarding);
       }
     }
+  };
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadSavedData();
+    await new Promise((res) => setTimeout(res, 500));
+    setIsRefreshing(false);
   };
 
   const persistData = async (updatedFields = {}) => {
@@ -463,12 +502,16 @@ export default function PostmenopauseScreen({
   };
 
   const handleOpenOnboardingWizard = () => {
-    setOnboardingStep(1);
-    setShowOnboardingWizard(true);
+    if (onOpenSetupWizard) {
+      onOpenSetupWizard('postmenopause');
+    } else {
+      setOnboardingStep(1);
+      setShowOnboardingWizard(true);
+    }
   };
 
-  // PRIMARY VIEW: POSTMENOPAUSE ONBOARDING SETUP WIZARD
-  if (!hasCompletedOnboarding || showOnboardingWizard) {
+  // PRIMARY VIEW: POSTMENOPAUSE ONBOARDING SETUP WIZARD (Legacy fallback only if no onOpenSetupWizard)
+  if (!onOpenSetupWizard && (!hasCompletedOnboarding || showOnboardingWizard)) {
     return (
       <ScrollView contentContainerStyle={styles.wizardMainScrollContent} showsVerticalScrollIndicator={false}>
         {/* Top Header */}
@@ -725,177 +768,285 @@ export default function PostmenopauseScreen({
 
   // MAIN DASHBOARD VIEW (ONCE ONBOARDING COMPLETED)
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      {/* Top Life Stage Mode Selector Bar */}
-      <View style={styles.topModeBar}>
-        <View style={styles.modePillContainer}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.modeTabInactive}
-            onPress={onSwitchToCycleMode}
-          >
-            <Text style={styles.modeTabTextInactive}>Cycle Mode</Text>
-          </TouchableOpacity>
-
-          <View style={styles.modeTabActive}>
-            <Ionicons name="sparkles" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
-            <Text style={styles.modeTabTextActive}>Postmenopause</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Main Sub-Tab Pill Bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.subTabBar}
-        contentContainerStyle={styles.subTabBarContent}
-      >
-        {[
-          { id: 'dashboard', label: 'Overview', icon: 'apps-outline' },
-          { id: 'symptoms', label: 'Symptoms', icon: 'pulse-outline' },
-          { id: 'assessments', label: 'Health Scores', icon: 'fitness-outline' },
-          { id: 'lifestyle', label: 'Lifestyle', icon: 'water-outline' },
-          { id: 'meds', label: 'Meds & HRT', icon: 'medical-outline' },
-          { id: 'screenings', label: 'Reminders', icon: 'calendar-outline' },
-          { id: 'learn', label: 'Library', icon: 'book-outline' },
-          { id: 'ai', label: 'Ask AI', icon: 'chatbubbles-outline' },
-        ].map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              activeOpacity={0.75}
-              style={[styles.subTabPill, isActive && styles.subTabPillActive]}
-              onPress={() => setActiveTab(tab.id)}
-            >
-              <Ionicons
-                name={tab.icon}
-                size={15}
-                color={isActive ? '#FFFFFF' : colors.textSecondary}
-                style={{ marginRight: 6 }}
-              />
-              <Text style={[styles.subTabText, isActive && styles.subTabTextActive]}>
-                {tab.label}
+    <ScrollView
+      contentContainerStyle={styles.pageScrollContent}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          tintColor="#D97706"
+          colors={['#D97706', '#FA4A14']}
+          progressBackgroundColor="#FFFFFF"
+        />
+      }
+    >
+      {activeTab === 'dashboard' ? (
+        <>
+          {/* Urgent Red Flag Alert Banner */}
+          {activeRedFlags.length > 0 && (
+            <View style={[styles.redFlagAlertBanner, { marginHorizontal: 16 }]}>
+              <View style={styles.redFlagAlertHeader}>
+                <Ionicons name="warning" size={22} color="#DC2626" />
+                <Text style={styles.redFlagAlertTitle}>Medical Review Advised</Text>
+              </View>
+              <Text style={styles.redFlagAlertBody}>
+                You reported high-priority symptoms requiring clinical evaluation. Postmenopausal symptoms like unexpected bleeding or new breast lumps require direct assessment by a healthcare clinician.
               </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* Urgent Red Flag Alert Banner */}
-      {activeRedFlags.length > 0 && (
-        <View style={styles.redFlagAlertBanner}>
-          <View style={styles.redFlagAlertHeader}>
-            <Ionicons name="warning" size={22} color="#DC2626" />
-            <Text style={styles.redFlagAlertTitle}>Medical Review Advised</Text>
-          </View>
-          <Text style={styles.redFlagAlertBody}>
-            You reported high-priority symptoms requiring clinical evaluation. Postmenopausal symptoms like unexpected bleeding or new breast lumps require direct assessment by a healthcare clinician.
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.redFlagAlertButton}
-            onPress={() => onBookDoctor && onBookDoctor({ name: 'Dr. Sarah Jenkins', spec: 'Gynaecology & Menopause Specialist' })}
-          >
-            <Ionicons name="call-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.redFlagAlertButtonText}>Consult Doctor Care Now</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* TAB CONTENT AREA */}
-
-      {/* 1. OVERVIEW DASHBOARD */}
-      {activeTab === 'dashboard' && (
-        <View style={styles.tabSection}>
-          {/* Signature Hero Card */}
-          <View style={styles.mainHeroCard}>
-            <View style={styles.ringCol}>
-              <PostmenopauseMilestoneRing />
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.redFlagAlertButton}
+                onPress={() => {
+                  if (onOpenDoctorPage) onOpenDoctorPage();
+                  else if (onBookDoctor) onBookDoctor({ name: 'Dr. Mesal Okubor', spec: 'Obstetrics & Gynecological Telemedicine' });
+                }}
+              >
+                <Ionicons name="call-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.redFlagAlertButtonText}>Consult Doctor Care Now</Text>
+              </TouchableOpacity>
             </View>
+          )}
 
-            <View style={styles.heroInfoCol}>
-              <View style={styles.heroHeaderTitleRow}>
-                <Text style={styles.heroSubHeader}>HEALTH SUMMARY</Text>
+          {/* CAL AI STYLE 7-DAY CALENDAR STRIP */}
+          <View style={styles.calAiCalendarRow}>
+            {calendarWeekDays.map((item) => {
+              const isSelected = selectedDateKey === item.dateKey;
+              return (
                 <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.editSetupBtn}
-                  onPress={handleOpenOnboardingWizard}
+                  key={item.dateKey}
+                  activeOpacity={0.75}
+                  style={styles.calAiDayCol}
+                  onPress={() => setSelectedDateKey(item.dateKey)}
                 >
-                  <Ionicons name="settings-outline" size={14} color="#8E24AA" />
-                  <Text style={styles.editSetupBtnText}>Edit Setup</Text>
+                  <View
+                    style={[
+                      styles.calAiCircle,
+                      item.isToday
+                        ? styles.calAiCircleToday
+                        : styles.calAiCircleDashed,
+                      isSelected && !item.isToday && styles.calAiCircleSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.calAiDayLetter,
+                        item.isToday
+                          ? styles.calAiDayLetterToday
+                          : styles.calAiDayLetterNormal,
+                      ]}
+                    >
+                      {item.singleLetter}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.calAiDateNum,
+                      item.isToday && styles.calAiDateNumToday,
+                      isSelected && styles.calAiDateNumSelected,
+                    ]}
+                  >
+                    {item.dayNum}
+                  </Text>
                 </TouchableOpacity>
-              </View>
-
-              <Text style={styles.heroMainTitle}>Postmenopausal Stage</Text>
-              <Text style={styles.heroBadge}>
-                {profile.twelveMonthsPeriodFree ? '12+ Months Period-Free' : 'Monitoring Transition'}
-              </Text>
-
-              <View style={styles.heroMetricsRow}>
-                <View style={styles.heroMetricItem}>
-                  <Text style={styles.heroMetricLabel}>AGE</Text>
-                  <Text style={styles.heroMetricVal}>{profile.currentAge} yrs</Text>
-                </View>
-                <View style={styles.heroMetricItem}>
-                  <Text style={styles.heroMetricLabel}>MENOPAUSE AGE</Text>
-                  <Text style={styles.heroMetricVal}>{profile.menopauseAge} yrs</Text>
-                </View>
-              </View>
-
-              <View style={styles.hrtStatusBadge}>
-                <Ionicons name="shield-checkmark" size={14} color="#8E24AA" style={{ marginRight: 6 }} />
-                <Text style={styles.hrtStatusText}>
-                  HRT: {profile.onHRT} ({profile.menopauseType} Cause)
-                </Text>
-              </View>
-            </View>
+              );
+            })}
           </View>
 
-          {/* Quick Action Grid */}
-          <Text style={styles.sectionHeaderTitle}>Daily Health Management</Text>
-          <View style={styles.quickGrid}>
+          {/* HERO FEATURED WHITE CARD (MATCHING CYCLE SCREEN) */}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={styles.heroCardContainer}
+            onPress={handleOpenOnboardingWizard}
+          >
+            <View style={styles.heroWhiteCard}>
+              {/* Card Top User Header */}
+              <View style={styles.heroTopRow}>
+                <View style={styles.heroUserAvatar}>
+                  <Text style={styles.heroUserAvatarText}>{greetingDisplayName.charAt(0)}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.heroUserName}>{greetingDisplayName} • Postmenopause</Text>
+                  <Text style={styles.heroUserPhase}>
+                    {profile.twelveMonthsPeriodFree ? '12+ Months Period-Free' : 'Monitoring Transition'} • Age {profile.currentAge}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Big Display Headline */}
+              <Text style={styles.heroHeadlineDisplay}>
+                Stay Vibrant, Strong{"\n"}& Hormonally Balanced.
+              </Text>
+
+              {/* Functional Ring & Key Health Details */}
+              <View style={styles.heroRingRow}>
+                <PostmenopauseMilestoneRing />
+                <View style={styles.heroMetricsCol}>
+                  <View style={styles.metricItemRow}>
+                    <View style={[styles.metricDot, { backgroundColor: '#8E24AA' }]} />
+                    <Text style={styles.metricItemText}>
+                      Status: <Text style={{ fontWeight: '800', color: '#111827' }}>12+ Mo Period-Free</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.metricItemRow}>
+                    <View style={[styles.metricDot, { backgroundColor: '#0284C7' }]} />
+                    <Text style={styles.metricItemText}>
+                      Bone & Heart: <Text style={{ fontWeight: '700', color: '#111827' }}>Optimal vitality</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.metricItemRow}>
+                    <View style={[styles.metricDot, { backgroundColor: '#D97706' }]} />
+                    <Text style={styles.metricItemText}>
+                      HRT Support: <Text style={{ fontWeight: '700', color: '#111827' }}>{profile.onHRT}</Text> ({profile.menopauseType})
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Card Footer */}
+              <View style={styles.heroFooterRow}>
+                <Text style={styles.heroFooterMeta}>Personalized for your vitality & hormone health</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* FEATURED CARD: TALK TO A DOCTOR (MATCHING CYCLE SCREEN) */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={styles.doctorFeaturedCard}
+            onPress={() => {
+              if (onOpenDoctorPage) {
+                onOpenDoctorPage();
+              } else if (onBookDoctor) {
+                onBookDoctor({ name: 'Dr. Mesal Okubor', spec: 'Obstetrics & Gynecological Telemedicine' });
+              }
+            }}
+          >
+            <View style={styles.doctorFeaturedTopRow}>
+              <View style={styles.doctorBadgeIconLarge}>
+                <Ionicons name="videocam" size={26} color="#008080" />
+              </View>
+              <View style={styles.doctorActionPill}>
+                <Text style={styles.doctorActionPillText}>Consult</Text>
+                <Ionicons name="arrow-forward" size={13} color="#008080" />
+              </View>
+            </View>
+            <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
+            <Text style={styles.doctorFeaturedSubtitle}>
+              Book an HD video consultation with a certified menopause & hormone specialist.
+            </Text>
+          </TouchableOpacity>
+
+          {/* 2-COLUMN BENTO GRID: CYCLE MODE & SYMPTOMS */}
+          <View style={styles.bentoSectionGrid}>
             <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.quickCard, { backgroundColor: '#F3E8FF' }]}
+              activeOpacity={0.88}
+              style={styles.bentoWhiteCard}
+              onPress={onSwitchToCycleMode}
+            >
+              <View style={[styles.bentoIconSquare, { backgroundColor: '#FFE5E9' }]}>
+                <Ionicons name="sparkles" size={22} color="#DC2626" />
+              </View>
+              <Text style={styles.bentoCardHeading}>Cycle Mode</Text>
+              <Text style={styles.bentoCardSub}>Fertile & period tracker</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.88}
+              style={styles.bentoWhiteCard}
               onPress={() => setActiveTab('symptoms')}
             >
-              <Ionicons name="pulse" size={24} color="#8E24AA" />
-              <Text style={styles.quickCardTitle}>Log Symptoms</Text>
-              <Text style={styles.quickCardSub}>{loggedSymptoms.length} logged today</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.quickCard, { backgroundColor: '#E0F2FE' }]}
-              onPress={() => setActiveTab('assessments')}
-            >
-              <Ionicons name="fitness" size={24} color="#0284C7" />
-              <Text style={styles.quickCardTitle}>Bone & Heart</Text>
-              <Text style={styles.quickCardSub}>Assess health risks</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.quickCard, { backgroundColor: '#FEF3C7' }]}
-              onPress={() => setActiveTab('lifestyle')}
-            >
-              <Ionicons name="water" size={24} color="#D97706" />
-              <Text style={styles.quickCardTitle}>Lifestyle</Text>
-              <Text style={styles.quickCardSub}>{lifestyle.waterGlasses} glasses water</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.quickCard, { backgroundColor: '#DCFCE7' }]}
-              onPress={() => setActiveTab('ai')}
-            >
-              <Ionicons name="chatbubbles" size={24} color="#15803D" />
-              <Text style={styles.quickCardTitle}>Ask AI</Text>
-              <Text style={styles.quickCardSub}>Instant answers</Text>
+              <View style={[styles.bentoIconSquare, { backgroundColor: '#F3E5F5' }]}>
+                <Ionicons name="flower" size={22} color="#8E24AA" />
+              </View>
+              <Text style={styles.bentoCardHeading}>Symptoms</Text>
+              <Text style={styles.bentoCardSub}>{loggedSymptoms.length} logged today</Text>
             </TouchableOpacity>
           </View>
+
+          {/* UPCOMING SCREENINGS & MILESTONES SECTION */}
+          <View style={styles.predictionsContainer}>
+            <Text style={styles.sectionHeaderLabelDark}>UPCOMING SCREENINGS & MILESTONES</Text>
+            <View style={{ gap: 12 }}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.upcomingPredictionCardClean}
+                onPress={() => setActiveTab('screenings')}
+              >
+                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#F3E8FF' }]}>
+                  <Ionicons name="fitness" size={22} color="#8E24AA" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={styles.upcomingCardMainTitle}>DEXA Bone Density Scan</Text>
+                  <Text style={styles.upcomingCardSubTitle}>Annual bone mineral density review</Text>
+                </View>
+                <View style={styles.upcomingPillPurple}>
+                  <Text style={styles.upcomingPillPurpleText}>Due Oct</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.upcomingPredictionCardClean}
+                onPress={() => setActiveTab('assessments')}
+              >
+                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="heart" size={22} color="#0284C7" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={styles.upcomingCardMainTitle}>Cardiovascular Health Review</Text>
+                  <Text style={styles.upcomingCardSubTitle}>Lipids, blood pressure & arterial vitality</Text>
+                </View>
+                <View style={styles.upcomingPillBlue}>
+                  <Text style={styles.upcomingPillBlueText}>Annual</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.upcomingPredictionCardClean}
+                onPress={() => setActiveTab('screenings')}
+              >
+                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="shield-checkmark" size={22} color="#D97706" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={styles.upcomingCardMainTitle}>Mammogram Screening</Text>
+                  <Text style={styles.upcomingCardSubTitle}>Routine annual breast wellness check</Text>
+                </View>
+                <View style={[styles.upcomingPillPurple, { backgroundColor: '#FEF3C7' }]}>
+                  <Text style={[styles.upcomingPillPurpleText, { color: '#B45309' }]}>Upcoming</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* CLINICAL TOOLKITS PILLS */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <Text style={styles.sectionHeaderLabelDark}>HEALTH TOOLKITS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {[
+                { id: 'symptoms', label: 'Symptoms', icon: 'pulse-outline' },
+                { id: 'assessments', label: 'Scores', icon: 'fitness-outline' },
+                { id: 'lifestyle', label: 'Lifestyle', icon: 'water-outline' },
+                { id: 'meds', label: 'Meds & HRT', icon: 'medical-outline' },
+                { id: 'screenings', label: 'Reminders', icon: 'calendar-outline' },
+                { id: 'learn', label: 'Library', icon: 'book-outline' },
+                { id: 'ai', label: 'Ask AI', icon: 'chatbubbles-outline' },
+              ].map((tool) => (
+                <TouchableOpacity
+                  key={tool.id}
+                  activeOpacity={0.75}
+                  style={styles.toolkitChip}
+                  onPress={() => setActiveTab(tool.id)}
+                >
+                  <Ionicons name={tool.icon} size={15} color="#8E24AA" style={{ marginRight: 6 }} />
+                  <Text style={styles.toolkitChipText}>{tool.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={{ paddingHorizontal: 16 }}>
 
           {/* Clinical Red Flag Checklist Card */}
           <View style={styles.card}>
@@ -962,8 +1113,18 @@ export default function PostmenopauseScreen({
               </View>
             </View>
           </View>
-        </View>
-      )}
+          </View>
+        </>
+      ) : (
+        <View style={{ paddingHorizontal: 16 }}>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={styles.backToDashboardHeader}
+            onPress={() => setActiveTab('dashboard')}
+          >
+            <Ionicons name="arrow-back" size={20} color="#111827" />
+            <Text style={styles.backToDashboardHeaderText}>Back to Overview</Text>
+          </TouchableOpacity>
 
       {/* 2. SYMPTOM TRACKER */}
       {activeTab === 'symptoms' && (
@@ -1396,6 +1557,8 @@ export default function PostmenopauseScreen({
           </View>
         </View>
       )}
+        </View>
+      )}
 
       {/* Article Modal Reader */}
       <Modal
@@ -1473,10 +1636,367 @@ export default function PostmenopauseScreen({
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+  pageScrollContent: {
     paddingBottom: 48,
+    paddingTop: 6,
+  },
+
+  /* Cal AI Style 7-Day Calendar Strip */
+  calAiCalendarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 16,
+  },
+  calAiDayCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  calAiCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  calAiCircleDashed: {
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+  },
+  calAiCircleToday: {
+    backgroundColor: '#8E24AA',
+    shadowColor: '#8E24AA',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  calAiCircleSelected: {
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1.5,
+    borderColor: '#8E24AA',
+  },
+  calAiDayLetter: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  calAiDayLetterNormal: {
+    color: '#6B7280',
+  },
+  calAiDayLetterToday: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  calAiDateNum: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  calAiDateNumToday: {
+    color: '#111827',
+    fontWeight: '900',
+  },
+  calAiDateNumSelected: {
+    color: '#8E24AA',
+    fontWeight: '900',
+  },
+
+  /* Hero Featured White Card */
+  heroCardContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  heroWhiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 32,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  heroUserAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroUserAvatarText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#8E24AA',
+  },
+  heroUserName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  heroUserPhase: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  heroHeadlineDisplay: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+    letterSpacing: -0.5,
+    lineHeight: 28,
+    marginBottom: 16,
+  },
+  heroRingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  heroMetricsCol: {
+    flex: 1,
+    marginLeft: 18,
+    gap: 10,
+  },
+  metricItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metricDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  metricItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  heroFooterRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 12,
+    marginTop: 2,
+  },
+  heroFooterMeta: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+
+  /* Doctor Featured Card */
+  doctorFeaturedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 22,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  doctorFeaturedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  doctorBadgeIconLarge: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: '#E0F2F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doctorFeaturedTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  doctorFeaturedSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  doctorActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2F1',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  doctorActionPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#008080',
+  },
+
+  /* 2-Column Bento Grid */
+  bentoSectionGrid: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 16,
+  },
+  bentoWhiteCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 26,
+    padding: 18,
+    minHeight: 140,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  bentoIconSquare: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bentoCardHeading: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+    marginTop: 12,
+    marginBottom: 2,
+  },
+  bentoCardSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+
+  /* Upcoming Predictions / Milestones Container */
+  predictionsContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  sectionHeaderLabelDark: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#6B7280',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  upcomingPredictionCardClean: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  upcomingIconSquircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upcomingPillPurple: {
+    backgroundColor: '#F3E8FF',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  upcomingPillPurpleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#8E24AA',
+  },
+  upcomingPillBlue: {
+    backgroundColor: '#E0F2FE',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  upcomingPillBlueText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  upcomingCardMainTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  upcomingCardSubTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+
+  /* Toolkits Chip Row */
+  toolkitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  toolkitChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+
+  /* Back to Dashboard Navigation Header */
+  backToDashboardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 8,
+    marginBottom: 8,
+  },
+  backToDashboardHeaderText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
   },
 
   /* Top Mode Selector Pill matching PregnancyScreen */

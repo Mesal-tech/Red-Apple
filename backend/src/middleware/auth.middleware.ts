@@ -1,36 +1,78 @@
 import { Request, Response, NextFunction } from 'express';
+import { verifyAccessToken } from '../utils/token';
+import { UserRole } from '../models/user.model';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
-    role: 'user' | 'admin' | 'clinic_staff';
+    email: string;
+    role: UserRole;
   };
 }
 
+/**
+ * Strict authentication middleware.
+ * Rejects any request that does not provide a cryptographically valid JWT access token.
+ * No mock bypasses or fallbacks allowed.
+ */
 export function authenticateToken(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    // Return mock user identity for local testing
-    req.user = { userId: 'usr_mock_123', role: 'user' };
-    return next();
+  if (!authHeader) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required. Authorization header missing.',
+    });
   }
 
-  // Token validation logic (e.g. jwt.verify)
-  req.user = { userId: 'usr_mock_123', role: 'user' };
-  next();
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication format invalid. Expected "Bearer <token>".',
+    });
+  }
+
+  const token = parts[1];
+
+  try {
+    const payload = verifyAccessToken(token);
+    req.user = {
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role as UserRole,
+    };
+    next();
+  } catch (err: any) {
+    return res.status(401).json({
+      success: false,
+      error: err.message || 'Invalid or expired access token.',
+    });
+  }
 }
 
-export function requireRole(role: 'admin' | 'clinic_staff') {
+/**
+ * Role-based access control middleware.
+ */
+export function requireRole(...allowedRoles: UserRole[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user || req.user.role !== role) {
-      return res.status(403).json({ error: 'Access forbidden: Insufficient permissions' });
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required.',
+      });
     }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: `Access forbidden. Required role: ${allowedRoles.join(' or ')}.`,
+      });
+    }
+
     next();
   };
 }

@@ -12,7 +12,7 @@ export async function getArticles(req: Request, res: Response, next: NextFunctio
           category: 'Fertility',
           readTime: '4 min read',
           summary: 'Discover how luteinizing hormone triggers egg release.',
-          medicalReviewedBy: 'Dr. Elena Rostova, MD',
+          medicalReviewedBy: 'Dr. Mesal Okubor, MBBS, FWACS',
         },
         {
           id: 'art2',
@@ -20,7 +20,7 @@ export async function getArticles(req: Request, res: Response, next: NextFunctio
           category: 'Nutrition',
           readTime: '6 min read',
           summary: 'Adjusting iron and healthy fat intake across your cycle.',
-          medicalReviewedBy: 'Dr. Sarah Jenkins',
+          medicalReviewedBy: 'Dr. Mesal Okubor, MBBS, FWACS',
         },
       ],
     });
@@ -39,7 +39,7 @@ export async function getArticleById(req: Request, res: Response, next: NextFunc
         title: 'Understanding Your LH Surge & Peak Ovulation Window',
         category: 'Fertility',
         content: 'Full article body content...',
-        medicalReviewedBy: 'Dr. Elena Rostova, MD',
+        medicalReviewedBy: 'Dr. Mesal Okubor, MBBS, FWACS',
       },
     });
   } catch (error) {

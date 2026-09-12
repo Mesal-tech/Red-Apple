@@ -5,461 +5,506 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  TextInput,
+  RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const ALL_ARTICLES = [
+  {
+    id: '1',
+    title: 'Sex for Pregnancy Guide',
+    category: 'FERTILITY',
+    readTime: '4 min read',
+    readers: '12.4k',
+    author: 'Dr. Mesal Okubor, MBBS, FWACS • Fertility Specialist',
+    summary: 'The best days for intimacy when you are trying to conceive.',
+    bullets: [
+      'Track ovulation with morning body temp and test strips.',
+      'Your highest chance of getting pregnant is 1–2 days before ovulation.',
+      'Stay hydrated and keep stress levels manageable.',
+    ],
+    icon: 'heart',
+    iconBg: '#FFE5E9',
+    iconColor: '#DC2626',
+    featured: true,
+  },
+  {
+    id: '2',
+    title: 'Early Signs of Pregnancy',
+    category: 'PREGNANCY',
+    readTime: '5 min read',
+    readers: '9.8k',
+    author: 'Dr. Mesal Okubor, MBBS, FWACS • Obstetrician & Gynecologist',
+    summary: 'Recognizing early body changes in the first few weeks of pregnancy.',
+    bullets: [
+      'Spotting vs your regular period: how to tell the difference.',
+      'Hormone changes causing tiredness and tender breasts.',
+      'The best time to take a home pregnancy test for accurate results.',
+    ],
+    icon: 'fitness',
+    iconBg: '#E8F5E9',
+    iconColor: '#2E7D32',
+  },
+  {
+    id: '3',
+    title: 'How to Get Pregnant Faster',
+    category: 'CONCEPTION',
+    readTime: '6 min read',
+    readers: '14.2k',
+    author: 'Dr. Mesal Okubor, MBBS, FWACS • Reproductive Health Lead',
+    summary: 'Practical tips on cycle tracking, healthy lifestyle habits, and timing intimacy.',
+    bullets: [
+      'Understanding discharge changes when you are most fertile.',
+      'Taking essential prenatal vitamins like Folic Acid early.',
+      'Sharing fertile window updates with your partner in Red Apple.',
+    ],
+    icon: 'sparkles',
+    iconBg: '#FFF3E0',
+    iconColor: '#E65100',
+  },
+  {
+    id: '4',
+    title: 'Vaginal Discharge Color Guide',
+    category: 'HEALTH GUIDE',
+    readTime: '3 min read',
+    readers: '8.5k',
+    author: 'Dr. Mesal Okubor, MBBS, FWACS • Lead Consultant',
+    summary: 'Your daily discharge is a healthy signal that changes naturally with your cycle.',
+    bullets: [
+      'Clear & stretchy (like egg white): Your most fertile days.',
+      'Creamy & white: Normal discharge after ovulation (pre-period).',
+      'Thick, clumpy white with itching: Worth checking with a doctor for a yeast infection.',
+    ],
+    icon: 'water',
+    iconBg: '#F3E8FF',
+    iconColor: '#7C3AED',
+  },
+  {
+    id: '5',
+    title: '9 Life-Changing Wellness Tips',
+    category: 'WELLNESS',
+    readTime: '5 min read',
+    readers: '11.1k',
+    author: 'Maya Lin • Holistic Women Health Coach',
+    summary: 'Daily self-care habits to help you reduce stress and ease hormone swings.',
+    bullets: [
+      'Get extra restful sleep the week before your period.',
+      'Eat nourishing foods like fish, berries, beans, and dark greens.',
+      'Choose gentle walking or stretching over intense workouts when feeling crampy.',
+    ],
+    icon: 'leaf',
+    iconBg: '#E0F2F1',
+    iconColor: '#00897B',
+  },
+  {
+    id: '6',
+    title: 'Period Pain Relief Yoga',
+    category: 'CRAMP RELIEF',
+    readTime: '8 min video',
+    readers: '16.7k',
+    author: 'Aria Ross • Prenatal & Pelvic Yoga Instructor',
+    summary: 'Gentle stretches and relaxing poses to ease period cramps and calm lower belly muscles.',
+    bullets: [
+      'Child Pose: Eases lower back tightness and belly pressure.',
+      'Cat-Cow Stretch: Gently loosens your spine and relieves cramp aches.',
+      'Reclining Stretch: Deeply relaxes tight pelvic and lower belly muscles.',
+    ],
+    icon: 'play-circle',
+    iconBg: '#FFF8E1',
+    iconColor: '#F57F17',
+  },
+];
+
+const TOPICS_LIST = [
+  { id: 't1', title: 'Ovulation', count: '14 Articles', icon: 'egg-outline', color: '#DC2626', bg: '#FFE5E9' },
+  { id: 't2', title: 'Conception', count: '9 Articles', icon: 'heart-outline', color: '#E65100', bg: '#FFF3E0' },
+  { id: 't3', title: 'Period Cramps', count: '12 Articles', icon: 'water-outline', color: '#7C3AED', bg: '#F3E8FF' },
+  { id: 't4', title: 'Hormones', count: '8 Articles', icon: 'pulse-outline', color: '#00897B', bg: '#E0F2F1' },
+  { id: 't5', title: 'Fertility Food', count: '11 Articles', icon: 'nutrition-outline', color: '#2E7D32', bg: '#E8F5E9' },
+  { id: 't6', title: 'Yoga & Body', count: '7 Videos', icon: 'body-outline', color: '#D81B60', bg: '#FCE4EC' },
+  { id: 't7', title: 'Mental Wellness', count: '6 Guides', icon: 'sparkles-outline', color: '#F57F17', bg: '#FFF8E1' },
+  { id: 't8', title: 'Partner Sync', count: '5 Guides', icon: 'people-outline', color: '#1E88E5', bg: '#E3F2FD' },
+  { id: 't9', title: 'Cycle Irregularity', count: '10 Articles', icon: 'medical-outline', color: '#C2185B', bg: '#F8BBD0' },
+  { id: 't10', title: 'Pregnancy Prep', count: '15 Articles', icon: 'flower-outline', color: '#8E24AA', bg: '#F3E5F5' },
+  { id: 't11', title: 'Postmenopause', count: '8 Articles', icon: 'shield-checkmark-outline', color: '#5E35B1', bg: '#EDE7F6' },
+  { id: 't12', title: 'Doctor QA', count: '20 Videos', icon: 'videocam-outline', color: '#008080', bg: '#E0F2F1' },
+];
+
 export default function LearnScreen({ openArticleDetails }) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('guides');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await new Promise((res) => setTimeout(res, 600));
+    setIsRefreshing(false);
+  };
+
+  const featured = ALL_ARTICLES.find((a) => a.featured) || ALL_ARTICLES[0];
+  const gridArticles = ALL_ARTICLES.filter((a) => a.id !== featured?.id);
 
   return (
-    <ScrollView contentContainerStyle={styles.pageScrollContentNoPadding} showsVerticalScrollIndicator={false}>
-      <View style={[styles.searchBarRow, { marginHorizontal: 20 }]}>
-        <Ionicons name="search-outline" size={20} color="#888888" style={{ marginRight: 10 }} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search articles, guides, topics..."
-          placeholderTextColor="#A0A0A0"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color="#888888" />
-          </TouchableOpacity>
+    <View style={styles.screenContainer}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary, '#E11D48']}
+            progressBackgroundColor="#FFFFFF"
+          />
+        }
+      >
+        {/* PILL SEGMENTED SWITCHER (MATCHING REFERENCE MOCKUP 2) */}
+        <View style={styles.segmentedSwitcherWrapper}>
+          <View style={styles.segmentedSwitcher}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.segmentTab, activeTab === 'guides' && styles.segmentTabActive]}
+              onPress={() => setActiveTab('guides')}
+            >
+              <Text
+                style={[
+                  styles.segmentTabText,
+                  activeTab === 'guides' && styles.segmentTabTextActive,
+                ]}
+              >
+                Guides
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.segmentTab, activeTab === 'topics' && styles.segmentTabActive]}
+              onPress={() => setActiveTab('topics')}
+            >
+              <Text
+                style={[
+                  styles.segmentTabText,
+                  activeTab === 'topics' && styles.segmentTabTextActive,
+                ]}
+              >
+                Topics
+              </Text>
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>12</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {activeTab === 'guides' ? (
+          <>
+            {/* HERO FEATURED WHITE CARD (MATCHING CASPIAN DRAKE CARD IN MOCKUP 2) */}
+            {featured && (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.heroFeaturedCard}
+                onPress={() =>
+                  openArticleDetails(
+                    featured.title,
+                    featured.category,
+                    featured.readTime,
+                    featured.author,
+                    featured.summary,
+                    featured.bullets
+                  )
+                }
+              >
+                <View style={[styles.heroThumbnailContainer, { backgroundColor: featured.iconBg }]}>
+                  <Ionicons name={featured.icon} size={38} color={featured.iconColor} />
+                </View>
+
+                <Text style={styles.heroCardTitle}>{featured.title}</Text>
+
+                <View style={styles.heroCardMetaRow}>
+                  <Ionicons name="people-outline" size={15} color="#6B7280" style={{ marginRight: 5 }} />
+                  <Text style={styles.heroCardMetaText}>
+                    {featured.readers} readers • {featured.readTime}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* 2-COLUMN BENTO GRID OF WHITE CARDS (MATCHING MOCKUP 2) */}
+            <View style={styles.bentoGrid}>
+              {gridArticles.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.88}
+                  style={styles.bentoCard}
+                  onPress={() =>
+                    openArticleDetails(
+                      item.title,
+                      item.category,
+                      item.readTime,
+                      item.author,
+                      item.summary,
+                      item.bullets
+                    )
+                  }
+                >
+                  <View style={[styles.bentoCardThumbnail, { backgroundColor: item.iconBg }]}>
+                    <Ionicons name={item.icon} size={28} color={item.iconColor} />
+                  </View>
+
+                  <Text style={styles.bentoCardTitle} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+
+                  <View style={styles.bentoCardMetaRow}>
+                    <Ionicons name="people-outline" size={13} color="#6B7280" style={{ marginRight: 4 }} />
+                    <Text style={styles.bentoCardMetaText}>{item.readers}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : (
+          /* ALL TOPICS GRID */
+          <View style={styles.bentoGrid}>
+            {TOPICS_LIST.map((topic) => (
+              <TouchableOpacity
+                key={topic.id}
+                activeOpacity={0.88}
+                style={styles.bentoCard}
+                onPress={() => {
+                  const match = ALL_ARTICLES.find(
+                    (a) =>
+                      a.category.toLowerCase().includes(topic.title.toLowerCase()) ||
+                      a.title.toLowerCase().includes(topic.title.toLowerCase())
+                  );
+                  if (match) {
+                    openArticleDetails(
+                      match.title,
+                      match.category,
+                      match.readTime,
+                      match.author,
+                      match.summary,
+                      match.bullets
+                    );
+                  }
+                }}
+              >
+                <View style={[styles.bentoCardThumbnail, { backgroundColor: topic.bg }]}>
+                  <Ionicons name={topic.icon} size={28} color={topic.color} />
+                </View>
+                <Text style={styles.bentoCardTitle}>{topic.title}</Text>
+                <Text style={styles.bentoCardMetaText}>{topic.count}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
-      </View>
 
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.categoryBadgeCard}
-          onPress={() => openArticleDetails(
-            'Sex for Pregnancy Guide',
-            'FERTILITY',
-            '4 min read',
-            'Dr. Elena Vance • Reproductive Endocrinologist',
-            'Optimizing conception involves timing intercourse during your peak fertile window.',
-            [
-              'Track ovulation via basal body temperature and LH surge strips.',
-              'The highest probability of conception occurs 1-2 days before ovulation.',
-              'Maintain healthy hydration and stress management routines.',
-            ]
-          )}
-        >
-          <View style={styles.categoryBadgeIconCircle}>
-            <Ionicons name="heart-outline" size={22} color={colors.primary} />
-          </View>
-          <Text style={styles.categoryBadgeText}>Sex for{'\n'}pregnancy</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.categoryBadgeCard}
-          onPress={() => openArticleDetails(
-            'Early Signs of Pregnancy',
-            'PREGNANCY',
-            '5 min read',
-            'Dr. Michael Chen • Obstetrician',
-            'Recognizing the subtle physiological shifts that occur within the first weeks of conception.',
-            [
-              'Implantation spotting vs regular menstrual flow differences.',
-              'Hormonal surges triggering mild fatigue and tender breast tissue.',
-              'Optimal timing for taking at-home hCG pregnancy tests.',
-            ]
-          )}
-        >
-          <View style={styles.categoryBadgeIconCircle}>
-            <Ionicons name="fitness-outline" size={22} color={colors.primary} />
-          </View>
-          <Text style={styles.categoryBadgeText}>Early signs{'\n'}of pregnancy</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.categoryBadgeCard}
-          onPress={() => openArticleDetails(
-            'How to Get Pregnant Faster',
-            'CONCEPTION',
-            '6 min read',
-            'Dr. Clara Adams • Fertility Specialist',
-            'A comprehensive roadmap detailing cycle monitoring, lifestyle tweaks, and partner synchronization.',
-            [
-              'Understanding cervical mucus texture shifts near ovulation.',
-              'Supplementing essential prenatal vitamins like Folic Acid.',
-              'Syncing tracking data with your partner in Red Apple.',
-            ]
-          )}
-        >
-          <View style={styles.categoryBadgeIconCircle}>
-            <Ionicons name="body-outline" size={22} color={colors.primary} />
-          </View>
-          <Text style={styles.categoryBadgeText}>How to get{'\n'}pregnant</Text>
-        </TouchableOpacity>
+        <View style={{ height: 90 }} />
       </ScrollView>
-
-      <Text style={[styles.learnSectionTitle, { marginHorizontal: 20 }]}>Trending now</Text>
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.trendingCardPurple}
-          onPress={() => openArticleDetails(
-            'Vaginal Discharge Color Guide',
-            'HEALTH GUIDE',
-            '3 min read',
-            'Dr. Sarah Jenkins, MD • Gynecologist',
-            'Your cervical fluid provides critical real-time insight into your hormonal health and fertility phase.',
-            [
-              'Clear & Stretchy (Egg White): Peak fertility window.',
-              'Creamy & White: Normal post-ovulation luteal phase.',
-              'Thick or Clumpy White: Possible yeast imbalance consultation recommended.',
-            ]
-          )}
-        >
-          <View style={styles.cardHeaderTagRow}>
-            <Text style={styles.cardTagText}>GUIDE</Text>
-          </View>
-          <Text style={styles.trendingCardTitle}>Vaginal discharge color guide</Text>
-          <Text style={styles.trendingCardMeta}>3 min read • Medically Reviewed</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.trendingCardPink}
-          onPress={() => openArticleDetails(
-            '9 Life-Changing Wellness & Self-Care Tips',
-            'WELLNESS',
-            '5 min read',
-            'Maya Lin • Holisitic Women Health Coach',
-            'Actionable self-care practices designed to balance cortisol and relieve hormonal tension.',
-            [
-              'Prioritize restorative sleep during the pre-menstrual luteal phase.',
-              'Incorporate anti-inflammatory foods like berries, salmon, and leafy greens.',
-              'Engage in gentle movement like yoga rather than high-intensity cardio when cramping.',
-            ]
-          )}
-        >
-          <View style={styles.cardHeaderTagRow}>
-            <Text style={styles.cardTagText}>WELLNESS</Text>
-          </View>
-          <Text style={styles.trendingCardTitle}>9 life-changing wellness & self-care tips</Text>
-          <Text style={styles.trendingCardMeta}>5 min read • Expert Approved</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      <Text style={[styles.learnSectionTitle, { marginHorizontal: 20 }]}>When to have conception sex</Text>
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.courseCardPeach}
-          onPress={() => openArticleDetails(
-            'Sex for Pregnancy Video Course',
-            'VIDEO COURSE',
-            '12 mins',
-            'Dr. Elena Vance • Reproductive Endocrinologist',
-            '4 video lessons covering optimal conception timing, position comfort, and ovulation tracking.',
-            [
-              'Lesson 1: Identifying your 6-day fertile window.',
-              'Lesson 2: Sperm lifespan and ovulation synchronization.',
-              'Lesson 3: Post-intercourse rest and myths debunked.',
-              'Lesson 4: Maintaining emotional closeness while trying to conceive.',
-            ]
-          )}
-        >
-          <View style={styles.videoBadge}>
-            <Ionicons name="play-circle" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.videoBadgeText}>Video Course</Text>
-          </View>
-          <Text style={styles.courseCardTitle}>Sex for pregnancy</Text>
-          <Text style={styles.courseCardSub}>4 lessons • 12 mins</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.courseCardSky}
-          onPress={() => openArticleDetails(
-            'How Long Does Ovulation Last?',
-            'OVULATION',
-            '4 min read',
-            'Dr. Clara Adams • Fertility Specialist',
-            'An unfertilized egg survives for 12 to 24 hours after release from the ovary.',
-            [
-              'Though ovulation lasts 12-24 hours, sperm can survive inside up to 5 days.',
-              'This creates a total 6-day fertile window per menstrual cycle.',
-              'Tracking LH surges helps pinpoint the exact 24-36 hour pre-ovulation window.',
-            ]
-          )}
-        >
-          <View style={styles.articleBadgeSky}>
-            <Text style={styles.skyBadgeText}>OVULATION</Text>
-          </View>
-          <Text style={styles.courseCardTitle}>How long does ovulation last?</Text>
-          <Text style={styles.courseCardSub}>4 min read</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      <Text style={[styles.learnSectionTitle, { marginHorizontal: 20 }]}>Menstrual cramps relief</Text>
-      <ScrollView
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.reliefCardYellow}
-          onPress={() => openArticleDetails(
-            'Period Pain Relief Yoga & Stretches',
-            'CRAMP RELIEF',
-            '8 mins',
-            'Aria Ross • Certified Prenatal & Pelvic Yoga Instructor',
-            'Gentle pelvic tilts and child pose stretches engineered to relieve uterine muscle contractions.',
-            [
-              'Child Pose: Relieves lower back tension and sacral pressure.',
-              'Cat-Cow Stretch: Increases pelvic blood flow and reduces cramping intensity.',
-              'Reclined Bound Angle: Deeply relaxes pelvic floor muscles.',
-            ]
-          )}
-        >
-          <View style={styles.playIconOverlay}>
-            <Ionicons name="play" size={18} color={colors.primary} />
-          </View>
-          <Text style={styles.reliefCardTitle}>Period pain relief yoga & stretches</Text>
-          <Text style={styles.reliefCardMeta}>8 mins • Guided Video</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.reliefCardOrange}
-          onPress={() => openArticleDetails(
-            'Foot Massage for Cramp Relief',
-            'REFLEXOLOGY',
-            '5 mins',
-            'Dr. Marcus Thorne • Reflexologist',
-            'Targeted acupressure on Spleen-6 (SP6) and Kidney points to alleviate menstrual cramps.',
-            [
-              'Locate SP6 four finger-widths above the inner ankle bone.',
-              'Apply firm, circular pressure for 2-3 minutes per leg.',
-              'Pair acupressure with warm herbal compresses for optimal relief.',
-            ]
-          )}
-        >
-          <View style={styles.playIconOverlay}>
-            <Ionicons name="play" size={18} color={colors.primary} />
-          </View>
-          <Text style={styles.reliefCardTitle}>Foot massage for cramp relief</Text>
-          <Text style={styles.reliefCardMeta}>5 mins • Step-by-Step</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  pageScrollContentNoPadding: {
-    paddingTop: 8,
-    paddingBottom: 32,
+  screenContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF', // Pure white theme
   },
-  searchBarRow: {
+  scrollContent: {
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  topSearchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchBarGlass: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F8',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#EBEBEF',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: colors.textPrimary,
+    color: '#111827',
     padding: 0,
   },
-  categoryBadgeCard: {
-    width: 124,
+  segmentedSwitcherWrapper: {
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    marginRight: 12,
+    marginBottom: 18,
   },
-  categoryBadgeIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  categoryBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  learnSectionTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    marginBottom: 14,
-    letterSpacing: -0.4,
-  },
-  trendingCardPurple: {
-    width: 190,
-    height: 170,
-    backgroundColor: '#F3E8FF',
+  segmentedSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#E5E7EB',
     borderRadius: 24,
-    padding: 16,
-    justifyContent: 'space-between',
-    marginRight: 12,
+    padding: 4,
   },
-  trendingCardPink: {
-    width: 190,
-    height: 170,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 24,
-    padding: 16,
-    justifyContent: 'space-between',
-    marginRight: 12,
-  },
-  cardHeaderTagRow: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  cardTagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.5,
-  },
-  trendingCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    lineHeight: 20,
-  },
-  trendingCardMeta: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  courseCardPeach: {
-    width: 190,
-    height: 160,
-    backgroundColor: '#FFEDD5',
-    borderRadius: 24,
-    padding: 16,
-    justifyContent: 'space-between',
-    marginRight: 12,
-  },
-  videoBadge: {
+  segmentTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 22,
+    borderRadius: 20,
   },
-  videoBadgeText: {
-    fontSize: 11,
+  segmentTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  segmentTabTextActive: {
+    color: '#111827',
     fontWeight: '800',
+  },
+  tabBadge: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  tabBadgeText: {
     color: '#FFFFFF',
-  },
-  courseCardTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    lineHeight: 21,
-  },
-  courseCardSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  courseCardSky: {
-    width: 190,
-    height: 160,
-    backgroundColor: '#E0F2FE',
-    borderRadius: 24,
-    padding: 16,
-    justifyContent: 'space-between',
-    marginRight: 12,
-  },
-  articleBadgeSky: {
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  skyBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#FFFFFF',
   },
-  reliefCardYellow: {
-    width: 190,
-    height: 150,
-    backgroundColor: '#FEF08A',
-    borderRadius: 24,
-    padding: 16,
-    justifyContent: 'space-between',
-    marginRight: 12,
-  },
-  reliefCardOrange: {
-    width: 190,
-    height: 150,
-    backgroundColor: '#FFEDD5',
-    borderRadius: 24,
-    padding: 16,
-    justifyContent: 'space-between',
-    marginRight: 12,
-  },
-  playIconOverlay: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  heroFeaturedCard: {
     backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 24,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  heroThumbnailContainer: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
   },
-  reliefCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    lineHeight: 19,
+  heroCardTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+    letterSpacing: -0.4,
+    marginBottom: 8,
   },
-  reliefCardMeta: {
-    fontSize: 11,
+  heroCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroCardMetaText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#6B7280',
+  },
+  bentoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  bentoCard: {
+    width: (SCREEN_WIDTH - 36) / 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  bentoCardThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  bentoCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.2,
+    marginBottom: 6,
+    minHeight: 38,
+  },
+  bentoCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bentoCardMetaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  floatingActionStack: {
+    position: 'absolute',
+    right: 16,
+    bottom: 24,
+    alignItems: 'center',
+    gap: 10,
+  },
+  floatingActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#111827', // Crisp dark floating buttons for high contrast matching mockup
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  floatingBtnBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  floatingBtnBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
   },
 });

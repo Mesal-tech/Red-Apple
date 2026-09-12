@@ -1,26 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, StatusBar, TouchableOpacity, Image } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  StatusBar,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function OnboardingScreen({ onNavigateLogin, onNavigateSetup }) {
+export default function OnboardingScreen({ onNavigateLogin, onNavigateSignUp }) {
   const [slideIndex, setSlideIndex] = useState(0);
 
   const slides = [
     {
-      title: 'Every Cycle Stage\nGets Tracked.',
-      subtitle: 'Real health data to empower your body',
-      image: require('../../assets/hero_woman.png'),
+      titlePrefix: 'Every Cycle Stage\nGets ',
+      accent: 'Tracked.',
+      subtitle: 'Real health data to empower your body.\nPersonalized insights. Better life.',
     },
     {
-      title: 'Predict Fertile\nWindows Accurately.',
-      subtitle: 'Smart algorithms tailored to your body',
-      image: require('../../assets/slide2_fertile.png'),
+      titlePrefix: 'Predict Fertile\nWindows ',
+      accent: 'Accurately.',
+      subtitle: 'Smart algorithms tailored to your body.\nPrecise timing. Deeper clarity.',
     },
     {
-      title: 'Personalized Health\n& Pregnancy Care.',
-      subtitle: 'Tailored insights for every step of your journey',
-      image: require('../../assets/slide3_doctor.png'),
+      titlePrefix: 'Personalized Health\n& Pregnancy ',
+      accent: 'Care.',
+      subtitle: 'Tailored insights for every step of your journey.\nAdvanced support. Better wellness.',
     },
   ];
 
@@ -35,206 +43,170 @@ export default function OnboardingScreen({ onNavigateLogin, onNavigateSetup }) {
   const currentSlide = slides[slideIndex];
 
   return (
-    <SafeAreaView style={styles.onboardingContainer} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+    <LinearGradient
+      colors={['#880E18', '#540810', '#220306', '#0C0103']}
+      locations={[0, 0.35, 0.72, 1]}
+      style={styles.screenWrapper}
+    >
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <View style={styles.heroSection}>
-        <Text style={styles.headlineTitle}>{currentSlide.title}</Text>
-        <Text style={styles.headlineSubtitle}>{currentSlide.subtitle}</Text>
-
-        <View style={styles.paginationRow}>
-          {slides.map((_, idx) => (
-            <TouchableOpacity
-              key={idx}
-              activeOpacity={0.8}
-              onPress={() => setSlideIndex(idx)}
-              style={[
-                styles.paginationDot,
-                idx === slideIndex ? styles.paginationDotActive : styles.paginationDotInactive,
-              ]}
+      <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right', 'bottom']}>
+        {/* TOP BRAND HEADER */}
+        <View style={styles.topBrandHeader}>
+          <View style={styles.logoRow}>
+            <Image
+              source={require('../../assets/logo_white.png')}
+              style={styles.headerLogoImage}
+              resizeMode="contain"
             />
-          ))}
+            <View style={styles.brandTitleCol}>
+              <Text style={styles.brandMainTitle}>RedApple</Text>
+              <Text style={styles.brandSubTitle}>WELLNESS & CARE</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.imageContainer}>
-          <Image
-            key={slideIndex}
-            source={currentSlide.image}
-            style={styles.heroImage}
-            resizeMode="contain"
-          />
+        {/* LOWER CONTENT: TYPOGRAPHY & COPY */}
+        <View style={styles.contentSection}>
+          <Text style={styles.headlineTitle}>
+            {currentSlide.titlePrefix}
+            <Text style={styles.accentText}>{currentSlide.accent}</Text>
+          </Text>
+
+          <Text style={styles.headlineSubtitle}>{currentSlide.subtitle}</Text>
+
+          {/* BOTTOM ACTION BAR */}
+          <View style={styles.bottomBarRow}>
+            {/* Primary Pill Button: Get Started / Sign Up */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.signUpPillButton}
+              onPress={onNavigateSignUp || onNavigateLogin}
+            >
+              <Text style={styles.signUpButtonText}>Get Started</Text>
+              <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            {/* Secondary Pill Button: Login */}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.loginPillButton}
+              onPress={onNavigateLogin}
+            >
+              <Text style={styles.loginButtonText}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-
-      <View style={styles.bottomSheet}>
-        <View style={styles.brandContainer}>
-          <Text style={styles.brandName}>Red Apple</Text>
-        </View>
-
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.primaryPillButton}
-          onPress={onNavigateSetup}
-        >
-          <Text style={styles.primaryButtonText}>Start My Journey</Text>
-          <Text style={styles.primaryButtonSubText}>New to Red Apple</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.secondaryPillButton}
-          onPress={onNavigateLogin}
-        >
-          <Text style={styles.secondaryButtonText}>I Have an Account</Text>
-          <Text style={styles.secondaryButtonSubText}>Sign in to restore</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.linkButton}
-          onPress={() => alert('Partner Access')}
-        >
-          <Text style={styles.linkButtonText}>Partner Access</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  onboardingContainer: {
+  screenWrapper: {
     flex: 1,
-    backgroundColor: colors.primary,
   },
-  heroSection: {
+  safeContainer: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 52,
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+  },
+
+  /* TOP BRAND HEADER */
+  topBrandHeader: {
+    paddingTop: 12,
+    alignItems: 'center',
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerLogoImage: {
+    width: 28,
+    height: 28,
+  },
+  brandTitleCol: {
+    flexDirection: 'column',
+  },
+  brandMainTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  brandSubTitle: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.65)',
+    letterSpacing: 2,
+    marginTop: -1,
+  },
+  /* TYPOGRAPHY & CONTENT SECTION */
+  contentSection: {
+    paddingBottom: 20,
   },
   headlineTitle: {
     fontSize: 34,
-    fontWeight: '900',
-    color: colors.textLight,
-    lineHeight: 40,
-    letterSpacing: -0.8,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 42,
+    letterSpacing: -0.6,
+  },
+  accentText: {
+    color: '#EF4444', // Highlighted crimson accent matching reference design
   },
   headlineSubtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textLightSubtle,
-    marginTop: 10,
-    marginBottom: 16,
+    fontSize: 14.5,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.65)',
+    lineHeight: 22,
+    marginTop: 14,
+    marginBottom: 28,
   },
-  paginationRow: {
+
+  /* BOTTOM ACTION BAR */
+  bottomBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 12,
   },
-  paginationDot: {
-    height: 8,
-    borderRadius: 4,
-  },
-  paginationDotActive: {
-    width: 28,
-    backgroundColor: colors.textLight,
-  },
-  paginationDotInactive: {
-    width: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  imageContainer: {
-    flex: 1,
+  signUpPillButton: {
+    flex: 1.2,
+    height: 58,
+    backgroundColor: '#DC2626',
+    borderRadius: 29,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    zIndex: 1,
-    marginTop: 4,
+    gap: 8,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  bottomSheet: {
-    backgroundColor: colors.backgroundLight,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 36,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
-    zIndex: 2,
-  },
-  brandContainer: {
-    marginBottom: 18,
-  },
-  brandName: {
-    fontSize: 22,
+  signUpButtonText: {
+    fontSize: 15,
     fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: -0.4,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  primaryPillButton: {
-    width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 28,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  primaryButtonText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.textLight,
-  },
-  primaryButtonSubText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textLightSubtle,
-    marginTop: 1,
-  },
-  secondaryPillButton: {
-    width: '100%',
-    backgroundColor: colors.backgroundSurface,
+  loginPillButton: {
+    flex: 0.8,
+    height: 58,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 29,
     borderWidth: 1,
-    borderColor: '#E8E8EE',
-    borderRadius: 28,
-    paddingVertical: 14,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
   },
-  secondaryButtonText: {
-    fontSize: 17,
+  loginButtonText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  secondaryButtonSubText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#757575',
-    marginTop: 1,
-  },
-  linkButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  linkButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
-    textDecorationLine: 'underline',
+    color: '#FFFFFF',
   },
 });
