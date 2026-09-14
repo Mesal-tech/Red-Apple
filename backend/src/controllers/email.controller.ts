@@ -59,3 +59,74 @@ export async function sendEmail(req: Request, res: Response, next: NextFunction)
     next(error);
   }
 }
+
+export async function getReceivedEmails(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = (req.headers['x-resend-api-key'] as string) || process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Missing RESEND_API_KEY' });
+    }
+
+    const response = await fetch('https://api.resend.com/emails/receiving', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getReceivedEmailDetail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = (req.headers['x-resend-api-key'] as string) || process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Missing RESEND_API_KEY' });
+    }
+
+    const { id } = req.params;
+    const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getSentEmails(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = (req.headers['x-resend-api-key'] as string) || process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Missing RESEND_API_KEY' });
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getSentEmailDetail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = (req.headers['x-resend-api-key'] as string) || process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: 'Missing RESEND_API_KEY' });
+    }
+
+    const { id } = req.params;
+    const response = await fetch(`https://api.resend.com/emails/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+

@@ -1,4 +1,12 @@
-import type { EmailPayload, ResendSettings, SendEmailResponse, SentEmailRecord } from '../types/email';
+import type {
+  EmailPayload,
+  ResendSettings,
+  SendEmailResponse,
+  SentEmailRecord,
+  ReceivedEmailSummary,
+  ReceivedEmailDetail,
+  ResendSentEmail,
+} from '../types/email';
 
 const STORAGE_KEYS = {
   API_KEY: 'redapple_resend_api_key',
@@ -299,3 +307,96 @@ export async function sendEmailViaResend(
 
   throw lastError || new Error('Failed to dispatch email via Resend API.');
 }
+
+/**
+ * Generic GET helper to query Resend endpoints via Proxy or Direct
+ */
+async function fetchResendGet<T>(path: string, customSettings?: ResendSettings): Promise<T> {
+  const currentSettings = customSettings || getResendSettings();
+  const apiKey = currentSettings.apiKey?.trim();
+
+  if (!apiKey) {
+    throw new Error('Resend API key is missing. Please configure it in .env.local or settings.');
+  }
+
+  const endpoints = [
+    `/api/resend${path}`,
+    `https://api.resend.com${path}`,
+  ];
+
+  let lastError: Error | null = null;
+
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${response.status} ${response.statusText}`);
+      }
+
+      return (await response.json()) as T;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  throw lastError || new Error(`Failed to fetch from Resend at ${path}`);
+}
+
+/**
+ * Fetch received (inbound) emails list
+ */
+export async function getReceivedEmails(settings?: ResendSettings): Promise<ReceivedEmailSummary[]> {
+  try {
+    const result = await fetchResendGet<{ data: ReceivedEmailSummary[] }>('/emails/receiving', settings);
+    return Array.isArray(result.data) ? result.data : [];
+  } catch (error) {
+    console.error('Error fetching received emails:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch a single received email with full HTML/text body
+ */
+export async function getReceivedEmailDetail(id: string, settings?: ResendSettings): Promise<ReceivedEmailDetail> {
+  try {
+    return await fetchResendGet<ReceivedEmailDetail>(`/emails/receiving/${encodeURIComponent(id)}`, settings);
+  } catch (error) {
+    console.error(`Error fetching received email detail for ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch sent (outbound) emails directly from Resend
+ */
+export async function getResendSentEmails(settings?: ResendSettings): Promise<ResendSentEmail[]> {
+  try {
+    const result = await fetchResendGet<{ data: ResendSentEmail[] }>('/emails', settings);
+    return Array.isArray(result.data) ? result.data : [];
+  } catch (error) {
+    console.error('Error fetching sent emails from Resend:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch a single sent email's details from Resend
+ */
+export async function getResendSentEmailDetail(id: string, settings?: ResendSettings): Promise<ResendSentEmail> {
+  try {
+    return await fetchResendGet<ResendSentEmail>(`/emails/${encodeURIComponent(id)}`, settings);
+  } catch (error) {
+    console.error(`Error fetching sent email detail for ${id}:`, error);
+    throw error;
+  }
+}
+

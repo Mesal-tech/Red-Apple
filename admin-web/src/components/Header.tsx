@@ -1,18 +1,24 @@
 import React from 'react';
-import { History } from 'lucide-react';
+import { Edit3, Inbox, Send } from 'lucide-react';
+
+export type AdminView = 'compose' | 'inbox' | 'sent';
 
 interface HeaderProps {
-  historyCount: number;
-  onOpenHistory: () => void;
+  currentView: AdminView;
+  onViewChange: (view: AdminView) => void;
+  inboxCount?: number;
+  sentCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  historyCount,
-  onOpenHistory,
+  currentView,
+  onViewChange,
+  inboxCount = 0,
+  sentCount = 0,
 }) => {
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5 sm:px-6 lg:px-8">
         {/* Left: Brand Logo & Title */}
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-red-100 shadow-2xs">
@@ -32,18 +38,58 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right: Sent Log */}
-        <div className="flex items-center gap-2">
+        {/* Center / Right: View Navigation Tabs */}
+        <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-100/70 p-1 shadow-2xs">
+          {/* Write / Compose */}
           <button
             type="button"
-            onClick={onOpenHistory}
-            className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 hover:border-zinc-300 transition-colors cursor-pointer"
+            onClick={() => onViewChange('compose')}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              currentView === 'compose'
+                ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
+            }`}
           >
-            <History className="h-3.5 w-3.5 text-zinc-500" />
-            <span>Sent Log</span>
-            {historyCount > 0 && (
-              <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-100 px-1 text-[10px] font-bold text-red-600">
-                {historyCount}
+            <Edit3 className={`h-3.5 w-3.5 ${currentView === 'compose' ? 'text-red-600' : 'text-zinc-500'}`} />
+            <span>Write</span>
+          </button>
+
+          {/* Inbox (Received) */}
+          <button
+            type="button"
+            onClick={() => onViewChange('inbox')}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              currentView === 'inbox'
+                ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
+            }`}
+          >
+            <Inbox className={`h-3.5 w-3.5 ${currentView === 'inbox' ? 'text-red-600' : 'text-zinc-500'}`} />
+            <span>Inbox</span>
+            {inboxCount > 0 && (
+              <span className={`flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+                currentView === 'inbox' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'
+              }`}>
+                {inboxCount}
+              </span>
+            )}
+          </button>
+
+          {/* Sent */}
+          <button
+            type="button"
+            onClick={() => onViewChange('sent')}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+              currentView === 'sent'
+                ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
+            }`}
+          >
+            <Send className={`h-3.5 w-3.5 ${currentView === 'sent' ? 'text-red-600' : 'text-zinc-500'}`} />
+            <span>Sent</span>
+            {sentCount > 0 && (
+              <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-zinc-200/80 px-1 text-[10px] font-bold text-zinc-700">
+                {sentCount}
               </span>
             )}
           </button>
@@ -52,3 +98,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

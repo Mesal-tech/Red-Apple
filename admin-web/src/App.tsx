@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Header } from './components/Header';
+import { Header, type AdminView } from './components/Header';
 import { EmailComposer } from './components/EmailComposer';
 import { EmailPreview } from './components/EmailPreview';
+import { EmailInboxView } from './components/EmailInboxView';
+import { EmailSentView } from './components/EmailSentView';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { SentHistoryModal } from './components/SentHistoryModal';
 import { ToastNotification, type ToastData } from './components/ToastNotification';
@@ -14,11 +16,18 @@ import {
   sendEmailViaResend,
   saveEmailDraft,
   loadEmailDraft,
+  getReceivedEmails,
+  getResendSentEmails,
 } from './services/emailService';
 import type { ResendSettings, SentEmailRecord } from './types/email';
 import { Edit3, Eye } from 'lucide-react';
 
 export function App() {
+  // Navigation & View State
+  const [currentView, setCurrentView] = useState<AdminView>('compose');
+  const [inboxCount, setInboxCount] = useState<number>(0);
+  const [sentCount, setSentCount] = useState<number>(0);
+
   // Settings
   const [settings, setSettings] = useState<ResendSettings>(getResendSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -72,6 +81,34 @@ export function App() {
     }, 1000);
     return () => clearTimeout(timer);
   }, [to, subject, html, fromName, fromEmail, replyTo]);
+
+  // Load badge counts on mount
+  useEffect(() => {
+    getReceivedEmails(settings)
+      .then((emails) => setInboxCount(emails.length))
+      .catch(() => {});
+
+    getResendSentEmails(settings)
+      .then((sent) => setSentCount(Math.max(sent.length, sentHistory.length)))
+      .catch(() => setSentCount(sentHistory.length));
+  }, [settings, sentHistory.length]);
+
+  // Handle Reply from Inbox View
+  const handleReplyFromInbox = ({ to: replyToEmail, subject: replySubject }: { to: string; subject: string }) => {
+    setTo(replyToEmail);
+    setSubject(replySubject);
+    setCurrentView('compose');
+    addToast('info', 'Reply Started', `Composing reply to ${replyToEmail}`);
+  };
+
+  // Handle Reuse from Sent View
+  const handleReuseFromSent = ({ to: sentTo, subject: sentSubject, html: sentHtml }: { to: string; subject: string; html: string }) => {
+    if (sentTo) setTo(sentTo);
+    if (sentSubject) setSubject(sentSubject);
+    if (sentHtml) setHtml(sentHtml);
+    setCurrentView('compose');
+    addToast('info', 'Draft Loaded', `Loaded "${sentSubject || 'email'}" into composer`);
+  };
 
   // Toast Helper
   const addToast = (type: 'success' | 'error' | 'info', title: string, message: string, resendId?: string) => {
@@ -193,89 +230,111 @@ export function App() {
     <div className="min-h-screen bg-zinc-50 flex flex-col selection:bg-red-500 selection:text-white">
       {/* Header */}
       <Header
-        historyCount={sentHistory.length}
-        onOpenHistory={() => setIsHistoryOpen(true)}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        inboxCount={inboxCount}
+        sentCount={sentCount}
       />
 
       {/* Main Workspace */}
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 flex flex-col">
-        {/* Mobile Tab Switcher */}
-        <div className="lg:hidden flex items-center justify-center mb-4">
-          <div className="flex w-full max-w-xs rounded-xl border border-zinc-200 bg-white p-1 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setActiveTab('composer')}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-all ${
-                activeTab === 'composer'
-                  ? 'bg-red-600 text-white shadow-2xs'
-                  : 'text-zinc-600 hover:text-zinc-900'
-              }`}
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-              Editor
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('preview')}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-all ${
-                activeTab === 'preview'
-                  ? 'bg-red-600 text-white shadow-2xs'
-                  : 'text-zinc-600 hover:text-zinc-900'
-              }`}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Preview
-            </button>
-          </div>
-        </div>
+        {currentView === 'compose' && (
+          <>
+            {/* Mobile Tab Switcher */}
+            <div className="lg:hidden flex items-center justify-center mb-4">
+              <div className="flex w-full max-w-xs rounded-xl border border-zinc-200 bg-white p-1 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('composer')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-all ${
+                    activeTab === 'composer'
+                      ? 'bg-red-600 text-white shadow-2xs'
+                      : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  Editor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-all ${
+                    activeTab === 'preview'
+                      ? 'bg-red-600 text-white shadow-2xs'
+                      : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  Preview
+                </button>
+              </div>
+            </div>
 
-        {/* Dual Split Workspace on Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 items-stretch">
-          {/* Left Column: Email Composer */}
-          <div
-            className={`lg:col-span-6 xl:col-span-7 flex flex-col ${
-              activeTab === 'composer' ? 'block' : 'hidden lg:flex'
-            }`}
-          >
-            <EmailComposer
-              to={to}
-              setTo={setTo}
-              fromName={fromName}
-              setFromName={setFromName}
-              fromEmail={fromEmail}
-              setFromEmail={setFromEmail}
-              replyTo={replyTo}
-              setReplyTo={setReplyTo}
-              subject={subject}
-              setSubject={setSubject}
-              html={html}
-              setHtml={setHtml}
-              cc={cc}
-              setCc={setCc}
-              bcc={bcc}
-              setBcc={setBcc}
-              isSending={isSending}
-              onSend={handleSendEmail}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              settings={settings}
-            />
-          </div>
+            {/* Dual Split Workspace on Desktop */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 items-stretch">
+              {/* Left Column: Email Composer */}
+              <div
+                className={`lg:col-span-6 xl:col-span-7 flex flex-col ${
+                  activeTab === 'composer' ? 'block' : 'hidden lg:flex'
+                }`}
+              >
+                <EmailComposer
+                  to={to}
+                  setTo={setTo}
+                  fromName={fromName}
+                  setFromName={setFromName}
+                  fromEmail={fromEmail}
+                  setFromEmail={setFromEmail}
+                  replyTo={replyTo}
+                  setReplyTo={setReplyTo}
+                  subject={subject}
+                  setSubject={setSubject}
+                  html={html}
+                  setHtml={setHtml}
+                  cc={cc}
+                  setCc={setCc}
+                  bcc={bcc}
+                  setBcc={setBcc}
+                  isSending={isSending}
+                  onSend={handleSendEmail}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
+                  settings={settings}
+                />
+              </div>
 
-          {/* Right Column: Live Responsive Preview */}
-          <div
-            className={`lg:col-span-6 xl:col-span-5 flex flex-col ${
-              activeTab === 'preview' ? 'block' : 'hidden lg:flex'
-            }`}
-          >
-            <EmailPreview
-              fromName={fromName}
-              fromEmail={fromEmail}
-              to={to}
-              subject={subject}
-              html={html}
-            />
-          </div>
-        </div>
+              {/* Right Column: Live Responsive Preview */}
+              <div
+                className={`lg:col-span-6 xl:col-span-5 flex flex-col ${
+                  activeTab === 'preview' ? 'block' : 'hidden lg:flex'
+                }`}
+              >
+                <EmailPreview
+                  fromName={fromName}
+                  fromEmail={fromEmail}
+                  to={to}
+                  subject={subject}
+                  html={html}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {currentView === 'inbox' && (
+          <EmailInboxView
+            settings={settings}
+            onReply={handleReplyFromInbox}
+            onUpdateBadgeCount={setInboxCount}
+          />
+        )}
+
+        {currentView === 'sent' && (
+          <EmailSentView
+            settings={settings}
+            onReuse={handleReuseFromSent}
+            onUpdateBadgeCount={setSentCount}
+          />
+        )}
       </main>
 
       {/* Footer */}
