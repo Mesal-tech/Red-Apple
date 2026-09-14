@@ -53,10 +53,13 @@ export const EmailSentView: React.FC<EmailSentViewProps> = ({
         onUpdateBadgeCount(totalCount);
       }
 
-      if (remote.length > 0 && !selectedEmailId) {
-        setSelectedEmailId(remote[0].id);
-      } else if (local.length > 0 && !selectedEmailId) {
-        setSelectedEmailId(local[0].id);
+      // Auto-select on desktop ONLY (screen width >= 1024)
+      if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+        if (remote.length > 0 && !selectedEmailId) {
+          setSelectedEmailId(remote[0].id);
+        } else if (local.length > 0 && !selectedEmailId) {
+          setSelectedEmailId(local[0].id);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load sent emails from Resend';
@@ -64,13 +67,15 @@ export const EmailSentView: React.FC<EmailSentViewProps> = ({
       // Fallback to local history
       const local = getSentHistory();
       setLocalRecords(local);
-      if (local.length > 0 && !selectedEmailId) {
-        setSelectedEmailId(local[0].id);
+      if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+        if (local.length > 0 && !selectedEmailId) {
+          setSelectedEmailId(local[0].id);
+        }
       }
     } finally {
       setIsLoading(false);
     }
-  }, [settings, onUpdateBadgeCount, selectedEmailId]);
+  }, [settings, onUpdateBadgeCount]);
 
   useEffect(() => {
     fetchSent();
@@ -216,65 +221,67 @@ export const EmailSentView: React.FC<EmailSentViewProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
       {/* Top Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3.5 bg-zinc-50/70">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 px-3.5 sm:px-5 py-3 sm:py-3.5 bg-zinc-50/70">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200/60 shadow-2xs">
-            <Send className="h-4.5 w-4.5" />
+          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200/60 shadow-2xs shrink-0">
+            <Send className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-zinc-900">Sent Emails</h2>
-              <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
+              <h2 className="text-sm sm:text-base font-bold text-zinc-900 truncate">Sent Emails</h2>
+              <span className="rounded-full bg-red-100 px-2 py-0.2 text-[10px] sm:text-xs font-bold text-red-700">
                 {allSentList.length}
               </span>
             </div>
-            <p className="text-xs text-zinc-500">
-              Emails dispatched from Red Apple Health via Resend API
+            <p className="text-[11px] sm:text-xs text-zinc-500 truncate">
+              Dispatched via Resend API
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
           {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+          <div className="relative flex-1 sm:flex-initial">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search recipient, subject..."
-              className="h-8.5 w-48 sm:w-64 rounded-lg border border-zinc-200 bg-white pl-8.5 pr-3 text-xs text-zinc-800 placeholder-zinc-400 focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500/20"
+              className="h-8.5 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white pl-8 pr-3 text-xs text-zinc-800 placeholder-zinc-400 focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500/20"
             />
           </div>
 
-          {/* Refresh Button */}
-          <button
-            type="button"
-            onClick={fetchSent}
-            disabled={isLoading}
-            className="inline-flex h-8.5 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer disabled:opacity-50"
-            title="Refresh Sent Log"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-red-600' : 'text-zinc-500'}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
-
-          {localRecords.length > 0 && (
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Refresh Button */}
             <button
               type="button"
-              onClick={handleClear}
-              className="inline-flex h-8.5 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-500 shadow-2xs hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-              title="Clear local browser records"
+              onClick={fetchSent}
+              disabled={isLoading}
+              className="inline-flex h-8.5 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 sm:px-3 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer disabled:opacity-50"
+              title="Refresh Sent Log"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Clear Local</span>
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-red-600' : 'text-zinc-500'}`} />
+              <span className="hidden sm:inline">Refresh</span>
             </button>
-          )}
+
+            {localRecords.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="inline-flex h-8.5 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 sm:px-3 text-xs font-medium text-zinc-500 shadow-2xs hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                title="Clear local browser records"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Clear Local</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Content Area: Split List & Reader Pane */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-[620px] overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-[500px] sm:min-h-[620px] overflow-hidden">
         {/* Left Column: List of Messages */}
         <div className={`lg:col-span-5 xl:col-span-4 border-r border-zinc-200 flex flex-col bg-zinc-50/40 ${selectedEmailId ? 'hidden lg:flex' : 'flex'}`}>
           {isLoading ? (
@@ -374,24 +381,24 @@ export const EmailSentView: React.FC<EmailSentViewProps> = ({
           ) : selectedDetail ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               {/* Email Reader Header */}
-              <div className="border-b border-zinc-200 p-5 bg-white">
+              <div className="border-b border-zinc-200 p-3.5 sm:p-5 bg-white">
                 {/* Mobile back button */}
                 <button
                   type="button"
                   onClick={() => setSelectedEmailId(null)}
-                  className="lg:hidden mb-3 inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 cursor-pointer"
+                  className="lg:hidden mb-3 inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:text-zinc-900 transition-colors cursor-pointer"
                 >
-                  ← Back to list
+                  <span>← Back to Sent</span>
                 </button>
 
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg font-bold text-zinc-900 tracking-tight leading-snug">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h3 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight leading-snug break-words">
                         {selectedDetail.subject || '(No Subject)'}
                       </h3>
                       {selectedDetail.last_event && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold border rounded-full px-2.5 py-0.5 capitalize bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold border rounded-full px-2 sm:px-2.5 py-0.5 capitalize bg-emerald-50 text-emerald-700 border-emerald-200">
                           <CheckCircle2 className="h-3 w-3" />
                           {selectedDetail.last_event}
                         </span>
@@ -400,22 +407,22 @@ export const EmailSentView: React.FC<EmailSentViewProps> = ({
 
                     <div className="mt-2 space-y-1 text-xs">
                       <div className="flex items-center gap-2 text-zinc-700">
-                        <span className="font-semibold text-zinc-500 w-14 shrink-0">To:</span>
+                        <span className="font-semibold text-zinc-500 w-12 sm:w-14 shrink-0">To:</span>
                         <span className="font-mono text-zinc-900 break-all">{selectedDetail.to?.join(', ')}</span>
                       </div>
                       <div className="flex items-center gap-2 text-zinc-600">
-                        <span className="font-semibold text-zinc-500 w-14 shrink-0">From:</span>
+                        <span className="font-semibold text-zinc-500 w-12 sm:w-14 shrink-0">From:</span>
                         <span className="font-medium text-zinc-800 break-all">{selectedDetail.from}</span>
                       </div>
                       <div className="flex items-center gap-2 text-zinc-500">
-                        <span className="font-semibold text-zinc-500 w-14 shrink-0">Sent:</span>
-                        <span>{new Date(selectedDetail.created_at).toLocaleString()}</span>
+                        <span className="font-semibold text-zinc-500 w-12 sm:w-14 shrink-0">Sent:</span>
+                        <span className="text-[11px] sm:text-xs">{new Date(selectedDetail.created_at).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions: Reuse & Copy ID */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
                     <button
                       type="button"
                       onClick={() =>

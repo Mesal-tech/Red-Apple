@@ -237,11 +237,11 @@ export function App() {
       />
 
       {/* Main Workspace */}
-      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8 flex flex-col">
+      <main className="flex-1 mx-auto w-full max-w-7xl px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 flex flex-col">
         {currentView === 'compose' && (
           <>
             {/* Mobile Tab Switcher */}
-            <div className="lg:hidden flex items-center justify-center mb-4">
+            <div className="lg:hidden flex items-center justify-center mb-3">
               <div className="flex w-full max-w-xs rounded-xl border border-zinc-200 bg-white p-1 shadow-2xs">
                 <button
                   type="button"
@@ -271,7 +271,7 @@ export function App() {
             </div>
 
             {/* Dual Split Workspace on Desktop */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 flex-1 items-stretch">
               {/* Left Column: Email Composer */}
               <div
                 className={`lg:col-span-6 xl:col-span-7 flex flex-col ${
@@ -338,15 +338,15 @@ export function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 bg-white py-3.5 mt-auto">
-        <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-6 lg:px-8 text-xs text-zinc-500">
+      <footer className="border-t border-zinc-200 bg-white py-3 mt-auto">
+        <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2 px-3 sm:px-6 lg:px-8 text-xs text-zinc-500">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-zinc-800">Red Apple Admin</span>
             <span>&bull;</span>
-            <span>Email Dispatch</span>
+            <span>Email Center</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-zinc-400">
+          <div className="hidden sm:flex items-center gap-4">
+            <span className="text-zinc-400 text-[11px]">
               Press <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-mono text-zinc-600">Ctrl</kbd> + <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-mono text-zinc-600">Enter</kbd> to send
             </span>
           </div>

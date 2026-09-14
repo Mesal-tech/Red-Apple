@@ -46,8 +46,8 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
       if (onUpdateBadgeCount) {
         onUpdateBadgeCount(data.length);
       }
-      // Auto-select first email on desktop if none selected
-      if (data.length > 0 && !selectedEmailId) {
+      // Auto-select first email on desktop ONLY (screen width >= 1024)
+      if (data.length > 0 && !selectedEmailId && typeof window !== 'undefined' && window.innerWidth >= 1024) {
         setSelectedEmailId(data[0].id);
       }
     } catch (err) {
@@ -56,7 +56,7 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [settings, onUpdateBadgeCount, selectedEmailId]);
+  }, [settings, onUpdateBadgeCount]);
 
   useEffect(() => {
     fetchEmails();
@@ -129,34 +129,34 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-white rounded-2xl border border-zinc-200 shadow-xs overflow-hidden">
       {/* Top Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-3.5 bg-zinc-50/70">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 px-3.5 sm:px-5 py-3 sm:py-3.5 bg-zinc-50/70">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200/60 shadow-2xs">
-            <Inbox className="h-4.5 w-4.5" />
+          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-red-50 text-red-600 ring-1 ring-red-200/60 shadow-2xs shrink-0">
+            <Inbox className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-zinc-900">Received Emails (Inbox)</h2>
-              <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
+              <h2 className="text-sm sm:text-base font-bold text-zinc-900 truncate">Received Emails (Inbox)</h2>
+              <span className="rounded-full bg-red-100 px-2 py-0.2 text-[10px] sm:text-xs font-bold text-red-700">
                 {emails.length}
               </span>
             </div>
-            <p className="text-xs text-zinc-500">
-              Incoming messages routed via your domain (support@arkclinicwarri.com)
+            <p className="text-[11px] sm:text-xs text-zinc-500 truncate">
+              support@arkclinicwarri.com
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+          <div className="relative flex-1 sm:flex-initial">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search sender, subject..."
-              className="h-8.5 w-48 sm:w-64 rounded-lg border border-zinc-200 bg-white pl-8.5 pr-3 text-xs text-zinc-800 placeholder-zinc-400 focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500/20"
+              className="h-8.5 w-full sm:w-64 rounded-lg border border-zinc-200 bg-white pl-8 pr-3 text-xs text-zinc-800 placeholder-zinc-400 focus:border-red-500 focus:outline-hidden focus:ring-1 focus:ring-red-500/20"
             />
           </div>
 
@@ -165,7 +165,7 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
             type="button"
             onClick={fetchEmails}
             disabled={isLoading}
-            className="inline-flex h-8.5 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer disabled:opacity-50"
+            className="inline-flex h-8.5 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 sm:px-3 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
             title="Refresh Inbox"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-red-600' : 'text-zinc-500'}`} />
@@ -175,7 +175,7 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
       </div>
 
       {/* Main Content Area: Split List & Reader Pane */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-[620px] overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-[500px] sm:min-h-[620px] overflow-hidden">
         {/* Left Column: List of Messages */}
         <div className={`lg:col-span-5 xl:col-span-4 border-r border-zinc-200 flex flex-col bg-zinc-50/40 ${selectedEmailId ? 'hidden lg:flex' : 'flex'}`}>
           {isLoading ? (
@@ -270,40 +270,40 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
           ) : selectedDetail ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               {/* Email Reader Header */}
-              <div className="border-b border-zinc-200 p-5 bg-white">
+              <div className="border-b border-zinc-200 p-3.5 sm:p-5 bg-white">
                 {/* Mobile back button */}
                 <button
                   type="button"
                   onClick={() => setSelectedEmailId(null)}
-                  className="lg:hidden mb-3 inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 cursor-pointer"
+                  className="lg:hidden mb-3 inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:text-zinc-900 transition-colors cursor-pointer"
                 >
-                  ← Back to list
+                  <span>← Back to Inbox</span>
                 </button>
 
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-zinc-900 tracking-tight leading-snug">
+                    <h3 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight leading-snug break-words">
                       {selectedDetail.subject || '(No Subject)'}
                     </h3>
 
-                    <div className="mt-2.5 space-y-1 text-xs">
+                    <div className="mt-2 space-y-1 text-xs">
                       <div className="flex items-center gap-2 text-zinc-700">
-                        <span className="font-semibold text-zinc-500 w-14 shrink-0">From:</span>
+                        <span className="font-semibold text-zinc-500 w-12 sm:w-14 shrink-0">From:</span>
                         <span className="font-medium text-zinc-900 break-all">{selectedDetail.from}</span>
                       </div>
                       <div className="flex items-center gap-2 text-zinc-600">
-                        <span className="font-semibold text-zinc-500 w-14 shrink-0">To:</span>
+                        <span className="font-semibold text-zinc-500 w-12 sm:w-14 shrink-0">To:</span>
                         <span className="font-mono text-zinc-800 break-all">{selectedDetail.to?.join(', ')}</span>
                       </div>
                       <div className="flex items-center gap-2 text-zinc-500">
-                        <span className="font-semibold text-zinc-500 w-14 shrink-0">Date:</span>
-                        <span>{new Date(selectedDetail.created_at).toLocaleString()}</span>
+                        <span className="font-semibold text-zinc-500 w-12 sm:w-14 shrink-0">Date:</span>
+                        <span className="text-[11px] sm:text-xs">{new Date(selectedDetail.created_at).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions: Reply & Copy ID */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
                     <button
                       type="button"
                       onClick={() =>
@@ -342,7 +342,7 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
                 </div>
 
                 {/* View Format Selector (HTML vs Plain Text) */}
-                <div className="flex items-center justify-between border-t border-zinc-100 mt-4 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 mt-3.5 pt-3">
                   <div className="flex items-center gap-1.5 bg-zinc-100/80 p-0.5 rounded-lg">
                     <button
                       type="button"
@@ -379,14 +379,14 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
                       download
                     >
                       <ExternalLink className="h-3 w-3" />
-                      Download Raw (.eml)
+                      <span>Download .eml</span>
                     </a>
                   )}
                 </div>
               </div>
 
               {/* Email Content Body */}
-              <div className="flex-1 overflow-y-auto p-6 bg-zinc-50/50">
+              <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 bg-zinc-50/50">
                 {viewFormat === 'html' && selectedDetail.html ? (
                   <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-2xs min-h-[300px]">
                     <div

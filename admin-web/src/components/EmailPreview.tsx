@@ -131,7 +131,7 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
         <div className="flex items-center gap-2 text-xs text-zinc-600">
           <span className="font-semibold text-zinc-800 shrink-0">From:</span>
           <span className="truncate text-zinc-700">
-            {fromName || 'Red Apple'} &lt;{fromEmail || 'onboarding@resend.dev'}&gt;
+            {fromName || 'Red Apple'} &lt;{fromEmail || 'notifications@arkclinicwarri.com'}&gt;
           </span>
         </div>
 
@@ -144,16 +144,16 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
       </div>
 
       {/* Email Body Stage */}
-      <div className="flex-1 overflow-auto bg-zinc-100/70 p-4 sm:p-6 flex justify-center">
+      <div className="flex-1 overflow-auto bg-zinc-100/70 p-2.5 sm:p-6 flex justify-center">
         {viewSource ? (
-          <div className="w-full rounded-xl border border-zinc-300 bg-zinc-900 p-4 font-mono text-xs text-zinc-200 overflow-auto shadow-inner">
+          <div className="w-full rounded-xl border border-zinc-300 bg-zinc-900 p-3 sm:p-4 font-mono text-xs text-zinc-200 overflow-auto shadow-inner">
             <pre className="whitespace-pre-wrap break-words">{renderedHtml}</pre>
           </div>
         ) : (
           <div
             className={`transition-all duration-300 ${
               device === 'mobile'
-                ? 'w-[375px] max-w-full rounded-2xl shadow-xl ring-8 ring-zinc-800/10 overflow-hidden bg-white my-auto'
+                ? 'w-[375px] max-w-full rounded-2xl shadow-xl ring-2 sm:ring-8 ring-zinc-800/10 overflow-hidden bg-white my-auto'
                 : 'w-full max-w-[620px] rounded-xl shadow-xs bg-white'
             }`}
             style={{ minHeight: device === 'mobile' ? '640px' : '520px' }}

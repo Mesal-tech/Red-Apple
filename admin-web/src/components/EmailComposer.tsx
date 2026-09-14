@@ -382,28 +382,28 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
       )}
 
       {/* Bottom Actions Bar */}
-      <div className="border-t border-zinc-100 bg-white p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+      <div className="border-t border-zinc-100 bg-white p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center justify-between w-full sm:w-auto">
           <button
             type="button"
             onClick={handleReset}
             className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 transition-colors shadow-2xs cursor-pointer"
           >
             <RotateCcw className="h-3.5 w-3.5 text-zinc-400" />
-            Reset
+            Reset Form
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-end">
           {/* Test Send Button */}
           <button
             type="button"
             disabled={isSending}
             onClick={() => validateAndSubmit(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-xs font-bold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-50 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 sm:px-4 py-2.5 text-xs font-bold text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:border-zinc-300 disabled:opacity-50 transition-all cursor-pointer truncate"
             title="Dispatch a test email to your own address"
           >
-            Send Test to Me
+            Send Test
           </button>
 
           {/* Primary Send Button */}
@@ -411,7 +411,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
             type="button"
             disabled={isSending}
             onClick={() => validateAndSubmit(false)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-red-600 px-4 sm:px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer truncate"
           >
             {isSending ? (
               <>
