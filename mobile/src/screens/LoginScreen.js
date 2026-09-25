@@ -29,8 +29,8 @@ export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess }
   const { login, loginApple, loginGoogle } = useAuth();
   const { showError, showSuccess } = useToast();
 
-  const [email, setEmail] = useState('amara@redapple.health');
-  const [password, setPassword] = useState('Amara@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -168,11 +168,6 @@ export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess }
                   <Text style={styles.signUpHeaderText}>Sign Up</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* TITLE "Sign In" */}
-              <View style={styles.titleWrapper}>
-                <Text style={styles.signInTitle}>Sign In</Text>
-              </View>
             </SafeAreaView>
           </View>
 
@@ -181,7 +176,7 @@ export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess }
 
             {/* EMAIL INPUT */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.inputLabel}>Email Address</Text>
               <View style={styles.pillInputContainer}>
                 <Ionicons
                   name="mail-outline"
@@ -381,17 +376,6 @@ const styles = StyleSheet.create({
     color: '#000000',
     letterSpacing: -0.2,
   },
-  titleWrapper: {
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  signInTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#000000',
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
   darkSection: {
     paddingHorizontal: 24,
     paddingTop: 16,
@@ -413,7 +397,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginBottom: 7,
+    marginLeft: 4,
   },
   passwordLabelRow: {
     flexDirection: 'row',
@@ -421,18 +412,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
     paddingHorizontal: 4,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginLeft: 4,
-  },
-  forgotPasswordText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
   pillInputContainer: {
     flexDirection: 'row',
@@ -442,7 +421,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.16)',
     paddingHorizontal: 18,
-    height: 54,
+    height: 52,
   },
   inputLeftIcon: {
     marginRight: 12,
@@ -455,6 +434,12 @@ const styles = StyleSheet.create({
   },
   eyeBtn: {
     padding: 6,
+  },
+  forgotPasswordText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   signInPillButton: {
     flexDirection: 'row',

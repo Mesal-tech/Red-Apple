@@ -175,10 +175,6 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess 
                   <Text style={styles.signInHeaderText}>Sign In</Text>
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.titleWrapper}>
-                <Text style={styles.signUpTitle}>Create Account</Text>
-              </View>
             </SafeAreaView>
           </View>
 
@@ -416,17 +412,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#000000',
     letterSpacing: -0.2,
-  },
-  titleWrapper: {
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  signUpTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#000000',
-    letterSpacing: -0.4,
-    textAlign: 'center',
   },
   darkSection: {
     paddingHorizontal: 24,

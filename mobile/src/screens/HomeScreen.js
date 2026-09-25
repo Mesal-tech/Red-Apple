@@ -19,6 +19,7 @@ import DoctorCareScreen from './DoctorCareScreen';
 import LearnScreen from './LearnScreen';
 import PregnancyScreen from './PregnancyScreen';
 import PostmenopauseScreen from './PostmenopauseScreen';
+import ProfileScreen from './ProfileScreen';
 import SettingsScreen from './SettingsScreen';
 import PrivacyPolicyDetailScreen from './PrivacyPolicyDetailScreen';
 import TermsOfUseDetailScreen from './TermsOfUseDetailScreen';
@@ -667,17 +668,18 @@ function TopProfileHeader({
   isDoctorAccount,
   userName,
   userSubtitle,
+  onOpenProfile,
   onOpenSettings,
   onOpenNotifications,
   unreadNotificationsCount,
 }) {
   return (
     <View style={styles.headerRow}>
-      {/* User Profile Avatar & Name */}
+      {/* User Profile Avatar & Name - Opens Profile Screen */}
       <TouchableOpacity
         activeOpacity={0.8}
         style={styles.userInfoRow}
-        onPress={onOpenSettings}
+        onPress={onOpenProfile || onOpenSettings}
       >
         <Image
           source={{
@@ -700,19 +702,32 @@ function TopProfileHeader({
         </View>
       </TouchableOpacity>
 
-      {/* Standard App Notification Button */}
-      <TouchableOpacity
-        activeOpacity={0.75}
-        style={styles.bellBtnDark}
-        onPress={onOpenNotifications}
-      >
-        <Ionicons name="notifications-outline" size={22} color="#111827" />
-        {unreadNotificationsCount > 0 && (
-          <View style={styles.bellBadgeGlow}>
-            <Text style={styles.bellBadgeGlowText}>{unreadNotificationsCount}</Text>
-          </View>
+      {/* Right Action Icons: Settings Gear & Notifications */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {onOpenSettings && (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={styles.bellBtnDark}
+            onPress={onOpenSettings}
+          >
+            <Ionicons name="settings-outline" size={19} color="#111827" />
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
+
+        {/* Standard App Notification Button */}
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={styles.bellBtnDark}
+          onPress={onOpenNotifications}
+        >
+          <Ionicons name="notifications-outline" size={22} color="#111827" />
+          {unreadNotificationsCount > 0 && (
+            <View style={styles.bellBadgeGlow}>
+              <Text style={styles.bellBadgeGlowText}>{unreadNotificationsCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -724,7 +739,6 @@ export default function HomeScreen({
   onRedoSetup,
 }) {
   const { user, updateProfile } = useAuth();
-  const greetingDisplayName = user?.name ? user.name.split(' ')[0] : 'Amara';
 
   const isDoctorAccount =
     user?.role === 'doctor' ||
@@ -732,7 +746,11 @@ export default function HomeScreen({
 
   const userName = isDoctorAccount
     ? (user?.name && user?.name !== 'mesalokubor63' ? user.name : 'Dr. Mesal Okubor')
-    : (user?.name || 'Denise Smith');
+    : (user?.name || 'Amara Okonkwo');
+
+  const greetingDisplayName = isDoctorAccount
+    ? (userName.startsWith('Dr.') ? userName : `Dr. ${userName}`)
+    : (user?.name ? user.name.split(' ')[0] : (userName ? userName.split(' ')[0] : 'Amara'));
 
   const userSubtitle = isDoctorAccount
     ? 'Doctor / Telemedicine Specialist'
@@ -1019,48 +1037,25 @@ export default function HomeScreen({
   const displayCycleLength = activeCycleProfile.cycleLength || 28;
   const displayPeriodDuration = activeCycleProfile.periodDuration || 5;
 
-  const heroPhaseInfo = useMemo(() => {
-    const day = displayCurrentDay;
-    const len = displayCycleLength;
-    const dur = displayPeriodDuration;
-    const daysUntilNext = Math.max(len - day + 1, 0);
-
-    if (day <= dur) {
-      return {
-        phase: `Period Phase • Day ${day} of ${dur}`,
-        headline: 'Track Your Flow & Rest Today.',
-      };
+  const parseDateSafe = (dateStr) => {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return dateStr;
+    const parts = String(dateStr).split('T')[0].split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      return new Date(y, m, d);
     }
-    const ovulationDay = Math.max(len - 14, 1);
-    if (day === ovulationDay) {
-      return {
-        phase: 'Ovulation Day • Peak Fertility',
-        headline: 'Peak Fertility & Vital Energy.',
-      };
-    }
-    if (day >= ovulationDay - 5 && day <= ovulationDay + 1) {
-      return {
-        phase: 'Fertile Window • High Chance',
-        headline: 'Know Your Fertile Days & Rhythm.',
-      };
-    }
-    if (daysUntilNext <= 4) {
-      return {
-        phase: `Pre-Period Phase • Period in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'}`,
-        headline: 'Know Your Fertile Days & Next Period.',
-      };
-    }
-    return {
-      phase: 'Follicular Phase • Rising Energy',
-      headline: 'Know Your Fertile Days & Next Period.',
-    };
-  }, [displayCurrentDay, displayCycleLength, displayPeriodDuration]);
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
 
   const formatShortDateStr = (dateStr) => {
     if (!dateStr) return '';
     try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
+      const d = parseDateSafe(dateStr);
+      if (!d) return dateStr;
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${months[d.getMonth()]} ${d.getDate()}`;
     } catch {
@@ -1068,15 +1063,137 @@ export default function HomeScreen({
     }
   };
 
-  const nextPeriodFormatted = formatShortDateStr(cyclePrediction.nextPeriodStartDate) || 'Sep 6';
-  const ovulationFormatted = formatShortDateStr(cyclePrediction.estimatedOvulationDate) || 'Aug 23';
-  const isOvulationPast = cyclePrediction.estimatedOvulationDate && new Date(cyclePrediction.estimatedOvulationDate) < new Date();
+  const formatDateRange = (d1, d2) => {
+    if (!d1 || !d2) return '';
+    const date1 = parseDateSafe(d1);
+    const date2 = parseDateSafe(d2);
+    if (!date1 || !date2) return '';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (date1.getMonth() === date2.getMonth()) {
+      return `${months[date1.getMonth()]} ${date1.getDate()}–${date2.getDate()}`;
+    }
+    return `${months[date1.getMonth()]} ${date1.getDate()} – ${months[date2.getMonth()]} ${date2.getDate()}`;
+  };
+
+  // Detailed dynamic upcoming predictions calculation
+  const upcomingPredictions = useMemo(() => {
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const cycleLen = displayCycleLength;
+    const periodDur = displayPeriodDuration;
+
+    // 1. Next Period Prediction
+    let nextPeriodDate = parseDateSafe(cyclePrediction.nextPeriodStartDate);
+    if (!nextPeriodDate) {
+      const remainingDays = Math.max(cycleLen - displayCurrentDay + 1, 1);
+      nextPeriodDate = new Date(todayMidnight.getTime() + remainingDays * 24 * 60 * 60 * 1000);
+    }
+
+    const diffPeriodMs = nextPeriodDate.getTime() - todayMidnight.getTime();
+    const daysUntilPeriod = Math.round(diffPeriodMs / (1000 * 60 * 60 * 24));
+
+    let periodPill = `${daysUntilPeriod} days`;
+    let periodSubTitle = `${daysUntilPeriod} days from today • Cycle Day 1`;
+
+    if (daysUntilPeriod === 0) {
+      periodPill = 'Today';
+      periodSubTitle = 'Expected today • Cycle Day 1';
+    } else if (daysUntilPeriod === 1) {
+      periodPill = 'Tomorrow';
+      periodSubTitle = 'Expected tomorrow • Cycle Day 1';
+    } else if (daysUntilPeriod < 0) {
+      const lateDays = Math.abs(daysUntilPeriod);
+      periodPill = `${lateDays}d late`;
+      periodSubTitle = `${lateDays} day${lateDays > 1 ? 's' : ''} past expected • Check in`;
+    }
+
+    const periodMainTitle = `Period expected ${formatShortDateStr(nextPeriodDate)}`;
+
+    // 2. Fertile Window Prediction
+    let fStart = parseDateSafe(cyclePrediction.fertileWindowStart);
+    let fEnd = parseDateSafe(cyclePrediction.fertileWindowEnd);
+
+    const ovDay = Math.max(cycleLen - 14, 1);
+    const fStartDay = Math.max(ovDay - 5, 1);
+    const fEndDay = ovDay + 1;
+
+    if (!fStart || !fEnd) {
+      const cycleStart = new Date(todayMidnight.getTime() - (displayCurrentDay - 1) * 24 * 60 * 60 * 1000);
+      fStart = new Date(cycleStart.getTime() + (fStartDay - 1) * 24 * 60 * 60 * 1000);
+      fEnd = new Date(cycleStart.getTime() + (fEndDay - 1) * 24 * 60 * 60 * 1000);
+    }
+
+    let fertileMainTitle = '';
+    let fertileSubTitle = '';
+    let fertilePill = '';
+    let isFertileActiveNow = false;
+
+    if (todayMidnight > fEnd) {
+      // Current cycle's fertile window is in the past -> show next cycle's fertile window
+      const nextCycleStart = nextPeriodDate;
+      const nextFStart = new Date(nextCycleStart.getTime() + (fStartDay - 1) * 24 * 60 * 60 * 1000);
+      const nextFEnd = new Date(nextCycleStart.getTime() + (fEndDay - 1) * 24 * 60 * 60 * 1000);
+
+      fertileMainTitle = `Fertile window ${formatDateRange(nextFStart, nextFEnd)}`;
+      fertileSubTitle = 'Next cycle • High chance';
+      fertilePill = 'Next cycle';
+    } else if (todayMidnight >= fStart && todayMidnight <= fEnd) {
+      isFertileActiveNow = true;
+      fertileMainTitle = `Fertile window ${formatDateRange(fStart, fEnd)}`;
+      fertileSubTitle = cyclePrediction.currentPhase === 'ovulatory'
+        ? 'Peak fertility today • Ovulation'
+        : 'High chance of conception today';
+      fertilePill = 'Active now';
+    } else {
+      const diffMs = fStart.getTime() - todayMidnight.getTime();
+      const daysUntilFertile = Math.max(Math.round(diffMs / (1000 * 60 * 60 * 24)), 1);
+      fertileMainTitle = `Fertile window ${formatDateRange(fStart, fEnd)}`;
+      fertileSubTitle = `${daysUntilFertile} day${daysUntilFertile === 1 ? '' : 's'} away • High chance`;
+      fertilePill = `${daysUntilFertile} days`;
+    }
+
+    return {
+      nextPeriodDate,
+      daysUntilPeriod,
+      periodPill,
+      periodMainTitle,
+      periodSubTitle,
+      fertileMainTitle,
+      fertileSubTitle,
+      fertilePill,
+      isFertileActiveNow,
+    };
+  }, [cyclePrediction, displayCycleLength, displayPeriodDuration, displayCurrentDay]);
+
+  const nextPeriodFormatted = formatShortDateStr(cyclePrediction.nextPeriodStartDate) || formatShortDateStr(upcomingPredictions.nextPeriodDate);
+  const ovulationFormatted = formatShortDateStr(cyclePrediction.estimatedOvulationDate) || formatShortDateStr(new Date(Date.now() + (Math.max(displayCycleLength - 14, 1) - displayCurrentDay) * 24 * 60 * 60 * 1000));
+  const isOvulationPast = cyclePrediction.estimatedOvulationDate && parseDateSafe(cyclePrediction.estimatedOvulationDate) < new Date();
   const ovulationLabel = `${isOvulationPast ? 'Ovulation was' : 'Ovulation is'} ${ovulationFormatted}`;
+
+  const displayNotifications = useMemo(() => {
+    return notificationsList.map((item) => {
+      if (item.id === '1') {
+        const periodDetail = upcomingPredictions.daysUntilPeriod === 0
+          ? 'today'
+          : upcomingPredictions.daysUntilPeriod === 1
+          ? 'tomorrow'
+          : upcomingPredictions.daysUntilPeriod < 0
+          ? `${Math.abs(upcomingPredictions.daysUntilPeriod)} days ago`
+          : `in ${upcomingPredictions.daysUntilPeriod} days`;
+        return {
+          ...item,
+          body: `Your period is expected ${periodDetail} (${nextPeriodFormatted}). Tap to review predictions.`,
+        };
+      }
+      return item;
+    });
+  }, [notificationsList, upcomingPredictions, nextPeriodFormatted]);
 
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [isFullReadingMode, setIsFullReadingMode] = useState(false);
 
   const [selectedDoctorForBooking, setSelectedDoctorForBooking] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -1339,6 +1456,7 @@ export default function HomeScreen({
             isDoctorAccount={isDoctorAccount}
             userName={userName}
             userSubtitle={userSubtitle}
+            onOpenProfile={() => setShowProfileModal(true)}
             onOpenSettings={() => setShowSettingsModal(true)}
             onOpenNotifications={handleOpenNotifications}
             unreadNotificationsCount={unreadNotificationsCount}
@@ -1357,6 +1475,15 @@ export default function HomeScreen({
               />
             }
           >
+            <View style={styles.welcomeSection}>
+              <Text style={styles.welcomeGreeting}>
+                Welcome, <Text style={styles.welcomeNameText}>{greetingDisplayName}</Text> 👋
+              </Text>
+              <Text style={styles.welcomeSubtitle}>
+                Here's your cycle & health overview for today
+              </Text>
+            </View>
+
             {/* HERO FEATURED WHITE CARD */}
             <TouchableOpacity
               activeOpacity={0.92}
@@ -1364,22 +1491,6 @@ export default function HomeScreen({
               onPress={() => scrollToPage(1)}
             >
               <View style={styles.heroWhiteCard}>
-                {/* Card Top User Header */}
-                <View style={styles.heroTopRow}>
-                  <View style={styles.heroUserAvatar}>
-                    <Text style={styles.heroUserAvatarText}>{greetingDisplayName.charAt(0)}</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.heroUserName}>{greetingDisplayName} • Day {displayCurrentDay}</Text>
-                    <Text style={styles.heroUserPhase}>{heroPhaseInfo.phase}</Text>
-                  </View>
-                </View>
-
-                {/* Big Display Headline */}
-                <Text style={styles.heroHeadlineDisplay}>
-                  {heroPhaseInfo.headline}
-                </Text>
-
                 {/* Functional Ring & Cycle Details */}
                 <View style={styles.heroRingRow}>
                   <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
@@ -1399,11 +1510,6 @@ export default function HomeScreen({
                       <Text style={styles.metricItemText}>{ovulationLabel}</Text>
                     </View>
                   </View>
-                </View>
-
-                {/* Card Footer */}
-                <View style={styles.heroFooterRow}>
-                  <Text style={styles.heroFooterMeta}>Personalized for your body & rhythm</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -1465,11 +1571,11 @@ export default function HomeScreen({
                     <Ionicons name="water" size={22} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={styles.upcomingCardMainTitle}>Period expected Sep 6</Text>
-                    <Text style={styles.upcomingCardSubTitle}>3 days from today • Cycle Day 1</Text>
+                    <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
+                    <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
                   </View>
                   <View style={styles.upcomingPillRed}>
-                    <Text style={styles.upcomingPillRedText}>3 days</Text>
+                    <Text style={styles.upcomingPillRedText}>{upcomingPredictions.periodPill}</Text>
                   </View>
                 </View>
 
@@ -1478,11 +1584,11 @@ export default function HomeScreen({
                     <Ionicons name="leaf" size={22} color="#00A88F" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={styles.upcomingCardMainTitle}>Fertile window Sep 18–21</Text>
-                    <Text style={styles.upcomingCardSubTitle}>Next cycle • High chance</Text>
+                    <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.fertileMainTitle}</Text>
+                    <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.fertileSubTitle}</Text>
                   </View>
                   <View style={styles.upcomingPillGreen}>
-                    <Text style={styles.upcomingPillGreenText}>Next cycle</Text>
+                    <Text style={styles.upcomingPillGreenText}>{upcomingPredictions.fertilePill}</Text>
                   </View>
                 </View>
               </View>
@@ -1501,6 +1607,7 @@ export default function HomeScreen({
                 isDoctorAccount={isDoctorAccount}
                 userName={userName}
                 userSubtitle={userSubtitle}
+                onOpenProfile={() => setShowProfileModal(true)}
                 onOpenSettings={() => setShowSettingsModal(true)}
                 onOpenNotifications={handleOpenNotifications}
                 unreadNotificationsCount={unreadNotificationsCount}
@@ -1520,6 +1627,7 @@ export default function HomeScreen({
                 isDoctorAccount={isDoctorAccount}
                 userName={userName}
                 userSubtitle={userSubtitle}
+                onOpenProfile={() => setShowProfileModal(true)}
                 onOpenSettings={() => setShowSettingsModal(true)}
                 onOpenNotifications={handleOpenNotifications}
                 unreadNotificationsCount={unreadNotificationsCount}
@@ -1541,6 +1649,7 @@ export default function HomeScreen({
                 isDoctorAccount={isDoctorAccount}
                 userName={userName}
                 userSubtitle={userSubtitle}
+                onOpenProfile={() => setShowProfileModal(true)}
                 onOpenSettings={() => setShowSettingsModal(true)}
                 onOpenNotifications={handleOpenNotifications}
                 unreadNotificationsCount={unreadNotificationsCount}
@@ -1727,6 +1836,7 @@ export default function HomeScreen({
             isDoctorAccount={isDoctorAccount}
             userName={userName}
             userSubtitle={userSubtitle}
+            onOpenProfile={() => setShowProfileModal(true)}
             onOpenSettings={() => setShowSettingsModal(true)}
             onOpenNotifications={handleOpenNotifications}
             unreadNotificationsCount={unreadNotificationsCount}
@@ -1878,7 +1988,7 @@ export default function HomeScreen({
           </View>
 
           <ScrollView contentContainerStyle={styles.articleDetailScrollContent} showsVerticalScrollIndicator={false}>
-            {notificationsList.map((item) => (
+            {displayNotifications.map((item) => (
               <View key={item.id} style={styles.notificationItemRow}>
                 <View style={[styles.notificationIconCircle, { backgroundColor: item.iconBg }]}>
                   <Ionicons name={item.icon} size={22} color={item.iconColor} />
@@ -1913,7 +2023,7 @@ export default function HomeScreen({
               <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
 
-            <Text style={{ fontSize: 20, fontWeight: '900', color: colors.textPrimary }}>Cycle Day 26</Text>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: colors.textPrimary }}>Cycle Day {displayCurrentDay}</Text>
 
             <TouchableOpacity activeOpacity={0.7} style={styles.closeDetailButton}>
               <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
@@ -1922,13 +2032,13 @@ export default function HomeScreen({
 
           <ScrollView contentContainerStyle={styles.articleDetailScrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.expandedRingHeaderCard}>
-              <FunctionalCycleRing currentDay={26} totalDays={28} />
+              <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
               <View style={{ flex: 1, marginLeft: 16 }}>
-                <Text style={styles.expandedRingTitle}>Day 26 of 28</Text>
-                <Text style={styles.expandedRingSub}>93% through current cycle</Text>
+                <Text style={styles.expandedRingTitle}>Day {displayCurrentDay} of {displayCycleLength}</Text>
+                <Text style={styles.expandedRingSub}>{Math.min(Math.round((displayCurrentDay / displayCycleLength) * 100), 100)}% through current cycle</Text>
                 <View style={styles.nextPeriodBadge}>
                   <Ionicons name="water-outline" size={14} color={colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.nextPeriodBadgeText}>Next Period: Sep 6 (3 days)</Text>
+                  <Text style={styles.nextPeriodBadgeText}>Next Period: {nextPeriodFormatted} ({upcomingPredictions.periodPill})</Text>
                 </View>
               </View>
             </View>
@@ -2244,6 +2354,34 @@ export default function HomeScreen({
         />
       </Modal>
 
+      {/* SNAPCHAT-INSPIRED PROFILE & HEALTH RECORDS MODAL */}
+      <Modal
+        visible={showProfileModal}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <ProfileScreen
+          onClose={() => setShowProfileModal(false)}
+          onOpenSettings={() => {
+            setShowProfileModal(false);
+            setShowSettingsModal(true);
+          }}
+          currentMode={isPregnancyMode ? 'pregnancy' : isPostmenopauseMode ? 'postmenopause' : 'cycle'}
+          cyclePrediction={cyclePrediction}
+          activeCycleProfile={activeCycleProfile}
+          cycleLogs={cycleLogs}
+          onBookDoctor={() => {
+            setShowProfileModal(false);
+            scrollToPage(3);
+          }}
+          onLogSymptoms={() => {
+            setShowProfileModal(false);
+            scrollToPage(1);
+          }}
+        />
+      </Modal>
+
       {/* SETTINGS & PREFERENCES MODAL */}
       <Modal
         visible={showSettingsModal}
@@ -2268,6 +2406,17 @@ export default function HomeScreen({
           }}
           onOpenPrivacyPolicy={() => setShowPrivacyPolicyModal(true)}
           onOpenTermsOfUse={() => setShowTermsModal(true)}
+          cyclePrediction={cyclePrediction}
+          activeCycleProfile={activeCycleProfile}
+          cycleLogs={cycleLogs}
+          onBookDoctor={() => {
+            setShowSettingsModal(false);
+            scrollToPage(3);
+          }}
+          onLogSymptoms={() => {
+            setShowSettingsModal(false);
+            scrollToPage(1);
+          }}
         />
       </Modal>
 
@@ -2693,6 +2842,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  /* Welcome Message Section (Just on top of the Cycle Card) */
+  welcomeSection: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 14,
+  },
+  welcomeGreeting: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.4,
+  },
+  welcomeNameText: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#6B7280',
+    marginTop: 3,
+  },
+
   /* Hero Featured White Card (Matching Mockup 1: Spacious, Uncluttered) */
   heroCardContainer: {
     marginHorizontal: 16,
@@ -2709,6 +2881,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 14,
     elevation: 3,
+  },
+  heroCardPhaseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  heroPhasePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFE5E9',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 20,
+    gap: 6,
+  },
+  heroPhasePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  heroDayBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 20,
+  },
+  heroDayBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -2739,14 +2942,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
-  heroHeadlineDisplay: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#111827',
-    letterSpacing: -0.5,
-    lineHeight: 28,
-    marginBottom: 16,
-  },
   heroRingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2771,12 +2966,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#4B5563',
-  },
-  heroFooterRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-    marginTop: 2,
   },
   heroFooterMeta: {
     fontSize: 12,

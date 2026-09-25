@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,6 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import {
+  getHealthProfileSafe,
+  saveHealthProfileSafe,
+} from '../utils/storage';
 
 export default function SettingsScreen({
   onClose,
@@ -24,13 +28,28 @@ export default function SettingsScreen({
   onSwitchMode,
   onOpenPrivacyPolicy,
   onOpenTermsOfUse,
+  activeCycleProfile = null,
 }) {
   const { user } = useAuth();
-  const displayName = user?.name || 'Amara Okonkwo';
-  const displayEmail = user?.email || 'amara@redapple.health';
+
+  const isDoctor =
+    user?.role === 'doctor' || user?.email?.toLowerCase() === 'mesalokubor63@gmail.com';
+  const displayName = isDoctor
+    ? (user?.name && user?.name !== 'mesalokubor63' ? user.name : 'Dr. Mesal Okubor')
+    : (user?.name || 'Amara Okonkwo');
+  const displayEmail = user?.email || (isDoctor ? 'mesalokubor63@gmail.com' : 'amara@redapple.health');
   const memberSince = user?.created_at
     ? `Member since ${new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
     : 'Member since January 2026';
+
+  // Cycle Parameters
+  const [cycleLength, setCycleLength] = useState(
+    activeCycleProfile?.cycleLength || 28
+  );
+  const [periodLength, setPeriodLength] = useState(
+    activeCycleProfile?.periodDuration || 5
+  );
+  const [showCycleParamModal, setShowCycleParamModal] = useState(false);
 
   // Notification States
   const [periodAlerts, setPeriodAlerts] = useState(true);
@@ -42,13 +61,42 @@ export default function SettingsScreen({
   const [passcodeLock, setPasscodeLock] = useState(false);
   const [anonymousMode, setAnonymousMode] = useState(false);
 
-  // Cycle Parameters
-  const [cycleLength, setCycleLength] = useState(28);
-  const [periodLength, setPeriodLength] = useState(5);
-  const [showCycleParamModal, setShowCycleParamModal] = useState(false);
-
   // Export State
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Load stored cycle lengths on mount
+  useEffect(() => {
+    async function loadStoredProfile() {
+      try {
+        const stored = await getHealthProfileSafe();
+        if (stored) {
+          if (stored.cycleLength) setCycleLength(Number(stored.cycleLength));
+          if (stored.periodDuration) setPeriodLength(Number(stored.periodDuration));
+        }
+      } catch (err) {
+        console.warn('[SettingsScreen] Load profile error:', err);
+      }
+    }
+    loadStoredProfile();
+  }, []);
+
+  // Save cycle parameters
+  const handleSaveCycleParams = async () => {
+    try {
+      const currentStored = (await getHealthProfileSafe()) || {};
+      const updated = {
+        ...currentStored,
+        cycleLength,
+        periodDuration: periodLength,
+      };
+      await saveHealthProfileSafe(updated);
+      setShowCycleParamModal(false);
+      Alert.alert('Saved', 'Cycle parameters updated successfully.');
+    } catch (err) {
+      setShowCycleParamModal(false);
+    }
+  };
 
   const handleExportData = () => {
     setIsExporting(true);
@@ -58,25 +106,27 @@ export default function SettingsScreen({
         'Export Complete',
         'Your encrypted health records have been exported successfully to your downloads directory.'
       );
-    }, 1500);
+    }, 1200);
   };
-
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await new Promise((res) => setTimeout(res, 600));
+    await new Promise((res) => setTimeout(res, 500));
     setIsRefreshing(false);
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.backgroundLight} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity activeOpacity={0.7} style={styles.closeBtn} onPress={onClose}>
-          <Ionicons name="close-outline" size={26} color={colors.textPrimary} />
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.backBtn}
+          onPress={onClose}
+        >
+          <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings & Preferences</Text>
         <View style={{ width: 40 }} />
@@ -95,21 +145,18 @@ export default function SettingsScreen({
           />
         }
       >
-        {/* USER PROFILE CARD */}
+        {/* USER ACCOUNT MINI CARD */}
         <View style={styles.profileCard}>
           <View style={styles.avatarCircle}>
-            <Ionicons name="person" size={28} color="#FFFFFF" />
-            <View style={styles.editAvatarBadge}>
-              <Ionicons name="camera" size={10} color="#FFFFFF" />
-            </View>
+            <Text style={styles.avatarLetter}>{displayName.charAt(0)}</Text>
           </View>
 
           <View style={styles.profileInfoCol}>
             <View style={styles.nameBadgeRow}>
               <Text style={styles.profileName}>{displayName}</Text>
               <View style={styles.premiumBadge}>
-                <Ionicons name="checkmark-circle" size={12} color="#FFFFFF" style={{ marginRight: 3 }} />
-                <Text style={styles.premiumBadgeText}>PREMIUM</Text>
+                <Ionicons name="sparkles" size={10} color="#FFFFFF" style={{ marginRight: 3 }} />
+                <Text style={styles.premiumBadgeText}>CARE+</Text>
               </View>
             </View>
             <Text style={styles.profileEmail}>{displayEmail}</Text>
@@ -117,7 +164,7 @@ export default function SettingsScreen({
           </View>
         </View>
 
-        {/* LIFE STAGE & TRACKING MODE */}
+        {/* SECTION 1: LIFE STAGE & TRACKING MODE */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeaderTitle}>TRACKING MODE & LIFE STAGE</Text>
 
@@ -142,8 +189,8 @@ export default function SettingsScreen({
                   <View style={[styles.modeIconCircle, isSelected && styles.modeIconCircleActive]}>
                     <Ionicons
                       name={modeItem.icon}
-                      size={20}
-                      color={isSelected ? colors.primary : colors.textSecondary}
+                      size={19}
+                      color={isSelected ? colors.primary : '#6B7280'}
                     />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
@@ -154,7 +201,7 @@ export default function SettingsScreen({
                   </View>
                   <Ionicons
                     name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={22}
+                    size={20}
                     color={isSelected ? colors.primary : '#D1D5DB'}
                   />
                 </TouchableOpacity>
@@ -163,24 +210,26 @@ export default function SettingsScreen({
 
             <TouchableOpacity
               activeOpacity={0.7}
-              style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 8 }]}
+              style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 4 }]}
               onPress={() => onRedoSetup && onRedoSetup()}
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="sparkles-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="sparkles" size={16} color={colors.primary} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Retake Health Onboarding</Text>
                   <Text style={styles.settingSubText}>Change stage, due dates, or health goals</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={17} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* CYCLE PARAMETERS */}
+        {/* SECTION 2: CYCLE BASELINE PARAMETERS */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionHeaderTitle}>CYCLE PARAMETERS</Text>
+          <Text style={styles.sectionHeaderTitle}>CYCLE BASELINE PARAMETERS</Text>
 
           <View style={styles.cardGroup}>
             <TouchableOpacity
@@ -189,15 +238,17 @@ export default function SettingsScreen({
               onPress={() => setShowCycleParamModal(true)}
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="calendar-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Average Cycle Length</Text>
                   <Text style={styles.settingSubText}>Normal range: 21 to 35 days</Text>
                 </View>
               </View>
               <View style={styles.settingValuePill}>
                 <Text style={styles.settingValueText}>{cycleLength} days</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={15} color="#9CA3AF" />
               </View>
             </TouchableOpacity>
 
@@ -207,29 +258,33 @@ export default function SettingsScreen({
               onPress={() => setShowCycleParamModal(true)}
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="water-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="water-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Average Period Duration</Text>
                   <Text style={styles.settingSubText}>Typical period bleeding days</Text>
                 </View>
               </View>
               <View style={styles.settingValuePill}>
                 <Text style={styles.settingValueText}>{periodLength} days</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={15} color="#9CA3AF" />
               </View>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* NOTIFICATIONS & REMINDERS */}
+        {/* SECTION 3: NOTIFICATIONS & ALERTS */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeaderTitle}>NOTIFICATIONS & ALERTS</Text>
 
           <View style={styles.cardGroup}>
             <View style={[styles.settingRow, styles.rowBorderBottom]}>
               <View style={styles.settingLabelRow}>
-                <Ionicons name="notifications-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="notifications-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Period & Ovulation Alerts</Text>
                   <Text style={styles.settingSubText}>Reminders 3 days before predicted period</Text>
                 </View>
@@ -244,8 +299,10 @@ export default function SettingsScreen({
 
             <View style={[styles.settingRow, styles.rowBorderBottom]}>
               <View style={styles.settingLabelRow}>
-                <Ionicons name="medical-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#E0F2F1' }]}>
+                  <Ionicons name="medical-outline" size={16} color="#008080" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Daily Medication & Pill</Text>
                   <Text style={styles.settingSubText}>Daily reminder at 8:00 AM</Text>
                 </View>
@@ -260,8 +317,10 @@ export default function SettingsScreen({
 
             <View style={[styles.settingRow, styles.rowBorderBottom]}>
               <View style={styles.settingLabelRow}>
-                <Ionicons name="sparkles-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#F3E5F5' }]}>
+                  <Ionicons name="sparkles-outline" size={16} color="#7C3AED" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Weekly Growth Updates</Text>
                   <Text style={styles.settingSubText}>Fetal development & milestone summaries</Text>
                 </View>
@@ -276,8 +335,10 @@ export default function SettingsScreen({
 
             <View style={styles.settingRow}>
               <View style={styles.settingLabelRow}>
-                <Ionicons name="fitness-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="fitness-outline" size={16} color="#2563EB" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Hydration Reminders</Text>
                   <Text style={styles.settingSubText}>Gentle drink water reminders</Text>
                 </View>
@@ -292,15 +353,17 @@ export default function SettingsScreen({
           </View>
         </View>
 
-        {/* SECURITY & PRIVACY */}
+        {/* SECTION 4: PRIVACY & DATA SECURITY */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeaderTitle}>PRIVACY & DATA SECURITY</Text>
 
           <View style={styles.cardGroup}>
             <View style={[styles.settingRow, styles.rowBorderBottom]}>
               <View style={styles.settingLabelRow}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#F3F4F6' }]}>
+                  <Ionicons name="lock-closed-outline" size={16} color="#374151" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Passcode & Face ID Lock</Text>
                   <Text style={styles.settingSubText}>Require biometric check on app launch</Text>
                 </View>
@@ -315,8 +378,10 @@ export default function SettingsScreen({
 
             <View style={[styles.settingRow, styles.rowBorderBottom]}>
               <View style={styles.settingLabelRow}>
-                <Ionicons name="eye-off-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#F3F4F6' }]}>
+                  <Ionicons name="eye-off-outline" size={16} color="#374151" />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Anonymous Mode</Text>
                   <Text style={styles.settingSubText}>Decouple email identity from health records</Text>
                 </View>
@@ -336,13 +401,15 @@ export default function SettingsScreen({
               disabled={isExporting}
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="cloud-download-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <View>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="cloud-download-outline" size={16} color={colors.primary} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
                   <Text style={styles.settingTitle}>Export Health Data</Text>
                   <Text style={styles.settingSubText}>Download encrypted PDF / CSV records</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -351,10 +418,12 @@ export default function SettingsScreen({
               onPress={onOpenPrivacyPolicy}
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <Text style={styles.settingTitle}>Privacy Policy</Text>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#F3F4F6' }]}>
+                  <Ionicons name="shield-checkmark-outline" size={16} color="#374151" />
+                </View>
+                <Text style={[styles.settingTitle, { marginLeft: 12 }]}>Privacy Policy</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -363,15 +432,17 @@ export default function SettingsScreen({
               onPress={onOpenTermsOfUse}
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="document-text-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <Text style={styles.settingTitle}>Terms of Service</Text>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#F3F4F6' }]}>
+                  <Ionicons name="document-text-outline" size={16} color="#374151" />
+                </View>
+                <Text style={[styles.settingTitle, { marginLeft: 12 }]}>Terms of Service</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* HELP & APP INFO */}
+        {/* SECTION 5: SUPPORT & ACCOUNT */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeaderTitle}>SUPPORT & ACCOUNT</Text>
 
@@ -379,27 +450,52 @@ export default function SettingsScreen({
             <TouchableOpacity
               activeOpacity={0.7}
               style={[styles.settingRow, styles.rowBorderBottom]}
-              onPress={() => Alert.alert('OB-GYN Support', 'Support team is available 24/7. Email us at support@redapple.health')}
+              onPress={() =>
+                Alert.alert(
+                  'OB-GYN Support Desk',
+                  'Support team is available 24/7. Email us at support@redapple.health'
+                )
+              }
             >
               <View style={styles.settingLabelRow}>
-                <Ionicons name="help-buoy-outline" size={20} color={colors.primary} style={styles.settingIcon} />
-                <Text style={styles.settingTitle}>Help & Support Center</Text>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="help-buoy-outline" size={16} color={colors.primary} />
+                </View>
+                <Text style={[styles.settingTitle, { marginLeft: 12 }]}>Help & Support Center</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
             </TouchableOpacity>
 
             <TouchableOpacity
               activeOpacity={0.75}
-              style={styles.signOutRow}
+              style={styles.settingRow}
               onPress={onSignOut}
             >
-              <Ionicons name="log-out-outline" size={20} color="#EF4444" style={styles.settingIcon} />
-              <Text style={styles.signOutTitle}>Sign Out of RedApple</Text>
+              <View style={styles.settingLabelRow}>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="log-out-outline" size={16} color="#EF4444" />
+                </View>
+                <Text style={[styles.settingTitle, { marginLeft: 12, color: '#EF4444', fontWeight: '700' }]}>
+                  Sign Out of RedApple
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#EF4444" />
             </TouchableOpacity>
           </View>
         </View>
 
-        <Text style={styles.appVersionText}>RedApple Health v2.4.0 (Build 184) • Zero-Knowledge Encrypted</Text>
+        {/* BRAND SEAL */}
+        <View style={styles.brandSealContainer}>
+          <View style={styles.brandLogoBox}>
+            <Ionicons name="flower" size={20} color={colors.primary} />
+          </View>
+          <Text style={styles.brandSealName}>RedApple Health Settings</Text>
+          <Text style={styles.appVersionText}>
+            v2.4.0 (Build 192) • Zero-Knowledge Encrypted
+          </Text>
+        </View>
+
+        <View style={{ height: 30 }} />
       </ScrollView>
 
       {/* CYCLE PARAMETER EDIT MODAL */}
@@ -435,7 +531,7 @@ export default function SettingsScreen({
                 <TouchableOpacity
                   activeOpacity={0.7}
                   style={styles.counterBtn}
-                  onPress={() => setCycleLength(Math.min(cycleLength + 1, 40))}
+                  onPress={() => setCycleLength(Math.min(cycleLength + 1, 45))}
                 >
                   <Text style={styles.counterBtnText}>+</Text>
                 </TouchableOpacity>
@@ -465,9 +561,9 @@ export default function SettingsScreen({
             </View>
 
             <TouchableOpacity
-              activeOpacity={0.85}
+              activeOpacity={0.88}
               style={styles.saveParamBtn}
-              onPress={() => setShowCycleParamModal(false)}
+              onPress={handleSaveCycleParams}
             >
               <Text style={styles.saveParamBtnText}>Save Parameters</Text>
             </TouchableOpacity>
@@ -481,72 +577,66 @@ export default function SettingsScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E8DFD8',
-    backgroundColor: colors.backgroundLight,
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
   },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#111827',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
 
-  /* PROFILE CARD */
+  /* PROFILE MINI CARD */
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 22,
     padding: 16,
-    marginBottom: 24,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: '#E8DFD8',
+    borderColor: '#E5E7EB',
   },
   avatarCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFE5E9',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
-  editAvatarBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  avatarLetter: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.primary,
   },
   profileInfoCol: {
     flex: 1,
@@ -555,103 +645,63 @@ const styles = StyleSheet.create({
   nameBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#111827',
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#D97706',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    backgroundColor: colors.primary,
     borderRadius: 10,
-    marginLeft: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
   premiumBadgeText: {
     fontSize: 9,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
   },
   profileEmail: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: '#6B7280',
     marginTop: 2,
   },
   profileSubText: {
     fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 4,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
 
   /* SECTION CONTAINERS */
   sectionContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionHeaderTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
+    color: '#6B7280',
+    letterSpacing: 0.5,
     marginBottom: 10,
-    marginLeft: 4,
+    paddingHorizontal: 4,
   },
   cardGroup: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E8DFD8',
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 6,
-    elevation: 2,
-  },
-  rowBorderBottom: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    elevation: 1,
   },
 
-  /* MODE OPTION ROWS */
-  modeOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modeOptionRowActive: {
-    backgroundColor: '#FFF5F5',
-  },
-  modeIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeIconCircleActive: {
-    backgroundColor: '#FFEBEE',
-  },
-  modeOptionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  modeOptionTitleActive: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  modeOptionDesc: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-
-  /* SETTING ROWS */
+  /* SETTING ROW */
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -659,136 +709,185 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
+  rowBorderBottom: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
   settingLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 12,
   },
-  settingIcon: {
-    marginRight: 12,
+  miniIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   settingTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
   },
   settingSubText: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: '#6B7280',
     marginTop: 2,
   },
   settingValuePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    gap: 4,
   },
   settingValueText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.primary,
-    marginRight: 4,
+    color: '#374151',
   },
 
-  /* SIGN OUT ROW */
-  signOutRow: {
+  /* TRACKING MODE ROW */
+  modeOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
-  signOutTitle: {
-    fontSize: 15,
+  modeOptionRowActive: {
+    backgroundColor: '#FFF5F6',
+  },
+  modeIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeIconCircleActive: {
+    backgroundColor: '#FFE5E9',
+  },
+  modeOptionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  modeOptionTitleActive: {
     fontWeight: '800',
-    color: '#EF4444',
+    color: colors.primary,
   },
-  appVersionText: {
+  modeOptionDesc: {
     fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 32,
+    color: '#6B7280',
+    marginTop: 2,
   },
 
-  /* MODAL STYLES */
+  /* BRAND SEAL */
+  brandSealContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  brandLogoBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFE5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  brandSealName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  appVersionText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+
+  /* PARAMETERS MODAL */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    padding: 20,
   },
   paramModalCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 26,
+    padding: 22,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
   },
   paramModalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 6,
+    color: '#111827',
   },
   paramModalSubTitle: {
     fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 20,
-    lineHeight: 18,
+    color: '#6B7280',
+    marginTop: 4,
+    marginBottom: 16,
   },
   paramRow: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   paramLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 8,
+    color: '#111827',
   },
   counterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 18,
+    padding: 4,
   },
   counterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    elevation: 1,
   },
   counterBtnText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  counterValueText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.primary,
   },
+  counterValueText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#111827',
+    paddingHorizontal: 10,
+  },
   saveParamBtn: {
     backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 20,
+    paddingVertical: 13,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 20,
   },
   saveParamBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
   },

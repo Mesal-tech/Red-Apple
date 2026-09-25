@@ -265,6 +265,28 @@ export const ImpactSection: React.FC = () => {
             }
           );
         }
+
+        // C. Pin Screen 3 while the light section slides up over it
+        ScrollTrigger.create({
+          trigger: screen3Ref.current,
+          start: 'top top',
+          end: '+=100%',
+          pin: true,
+          pinSpacing: false,
+        });
+
+        // D. Parallax depth & dimming on Screen 3 as the light section ushers in
+        gsap.to(screen3Ref.current, {
+          scale: 0.95,
+          opacity: 0.3,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: screen3Ref.current,
+            start: 'top top',
+            end: '+=100%',
+            scrub: true,
+          },
+        });
       }
     },
     { scope: containerRef }
