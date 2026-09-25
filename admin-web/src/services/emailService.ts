@@ -5,6 +5,7 @@ import type {
   SentEmailRecord,
   ReceivedEmailSummary,
   ReceivedEmailDetail,
+  ReceivedEmailAttachment,
   ResendSentEmail,
 } from '../types/email';
 
@@ -364,13 +365,72 @@ export async function getReceivedEmails(settings?: ResendSettings): Promise<Rece
 }
 
 /**
- * Fetch a single received email with full HTML/text body
+ * Fetch a single received email with full HTML/text body and enriched attachment download URLs
  */
 export async function getReceivedEmailDetail(id: string, settings?: ResendSettings): Promise<ReceivedEmailDetail> {
   try {
-    return await fetchResendGet<ReceivedEmailDetail>(`/emails/receiving/${encodeURIComponent(id)}`, settings);
+    const detail = await fetchResendGet<ReceivedEmailDetail>(
+      `/emails/receiving/${encodeURIComponent(id)}`,
+      settings
+    );
+
+    // If the email has attachments, fetch the signed download_url for each attachment from Resend's Attachments API
+    if (detail.attachments && detail.attachments.length > 0) {
+      try {
+        const enrichedAttachments = await getReceivedEmailAttachments(id, settings);
+        if (enrichedAttachments.length > 0) {
+          const urlMap = new Map(enrichedAttachments.map((a) => [a.id, a]));
+          detail.attachments = detail.attachments.map((att) => {
+            const enriched = urlMap.get(att.id);
+            return enriched ? { ...att, ...enriched } : att;
+          });
+        }
+      } catch (attErr) {
+        console.warn(`Could not pre-fetch attachment download URLs for email ${id}:`, attErr);
+      }
+    }
+
+    return detail;
   } catch (error) {
     console.error(`Error fetching received email detail for ${id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch all attachments (including signed download_url) for a specific received email
+ */
+export async function getReceivedEmailAttachments(
+  emailId: string,
+  settings?: ResendSettings
+): Promise<ReceivedEmailAttachment[]> {
+  try {
+    const result = await fetchResendGet<{ data: ReceivedEmailAttachment[] }>(
+      `/emails/receiving/${encodeURIComponent(emailId)}/attachments`,
+      settings
+    );
+    return Array.isArray(result.data) ? result.data : [];
+  } catch (error) {
+    console.error(`Error fetching attachments for received email ${emailId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch a single attachment (with fresh signed download_url) for a received email
+ */
+export async function getReceivedEmailAttachment(
+  emailId: string,
+  attachmentId: string,
+  settings?: ResendSettings
+): Promise<ReceivedEmailAttachment> {
+  try {
+    return await fetchResendGet<ReceivedEmailAttachment>(
+      `/emails/receiving/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      settings
+    );
+  } catch (error) {
+    console.error(`Error fetching attachment ${attachmentId} for email ${emailId}:`, error);
     throw error;
   }
 }

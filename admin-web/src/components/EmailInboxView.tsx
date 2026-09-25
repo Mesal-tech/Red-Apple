@@ -12,9 +12,19 @@ import {
   Code,
   FileText,
   ExternalLink,
+  Download,
 } from 'lucide-react';
-import type { ReceivedEmailSummary, ReceivedEmailDetail, ResendSettings } from '../types/email';
-import { getReceivedEmails, getReceivedEmailDetail } from '../services/emailService';
+import type {
+  ReceivedEmailSummary,
+  ReceivedEmailDetail,
+  ReceivedEmailAttachment,
+  ResendSettings,
+} from '../types/email';
+import {
+  getReceivedEmails,
+  getReceivedEmailDetail,
+  getReceivedEmailAttachment,
+} from '../services/emailService';
 
 interface EmailInboxViewProps {
   settings: ResendSettings;
@@ -36,6 +46,7 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
   const [isLoadingDetail, setIsLoadingDetail] = useState<boolean>(false);
   const [viewFormat, setViewFormat] = useState<'html' | 'text'>('html');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
 
   const fetchEmails = useCallback(async () => {
     setIsLoading(true);
@@ -116,6 +127,70 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
   const extractEmail = (fromStr: string) => {
     const match = fromStr.match(/<([^>]+)>/);
     return match ? match[1] : fromStr.trim();
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (!bytes || bytes < 0) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleDownloadAttachment = async (
+    att: ReceivedEmailAttachment,
+    e?: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>
+  ) => {
+    if (!selectedDetail) return;
+
+    const isUrlValid =
+      att.download_url &&
+      (!att.expires_at || new Date(att.expires_at).getTime() > Date.now() + 60_000);
+
+    // If the anchor already has a valid signed URL, let the native browser click download it
+    if (isUrlValid && e && e.currentTarget instanceof HTMLAnchorElement) {
+      return;
+    }
+
+    if (e) {
+      e.preventDefault();
+    }
+
+    setDownloadingAttachmentId(att.id);
+    try {
+      const freshAttachment = await getReceivedEmailAttachment(
+        selectedDetail.id,
+        att.id,
+        settings
+      );
+
+      if (freshAttachment.download_url) {
+        // Update local state with fresh download URL
+        setSelectedDetail((prev) => {
+          if (!prev || !prev.attachments) return prev;
+          return {
+            ...prev,
+            attachments: prev.attachments.map((item) =>
+              item.id === att.id ? { ...item, ...freshAttachment } : item
+            ),
+          };
+        });
+
+        // Trigger download
+        const link = document.createElement('a');
+        link.href = freshAttachment.download_url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.download = att.filename || 'attachment';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.error('Failed to download attachment:', err);
+      alert('Could not generate download link for this attachment. Please try again.');
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
   };
 
   const filteredEmails = emails.filter((item) => {
@@ -403,22 +478,55 @@ export const EmailInboxView: React.FC<EmailInboxViewProps> = ({
                 {/* Attachments Section if any */}
                 {selectedDetail.attachments && selectedDetail.attachments.length > 0 && (
                   <div className="mt-5 rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs">
-                    <h4 className="text-xs font-bold text-zinc-900 mb-2 flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-zinc-900 mb-2.5 flex items-center gap-1.5">
                       <Paperclip className="h-3.5 w-3.5 text-zinc-500" />
                       Attachments ({selectedDetail.attachments.length})
                     </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {selectedDetail.attachments.map((att) => (
-                        <div
-                          key={att.id}
-                          className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-2.5 text-xs"
-                        >
-                          <span className="truncate font-medium text-zinc-800">{att.filename}</span>
-                          <span className="text-[10px] text-zinc-600 shrink-0 font-mono">
-                            {Math.round(att.size / 1024)} KB
-                          </span>
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {selectedDetail.attachments.map((att) => {
+                        const isDownloading = downloadingAttachmentId === att.id;
+                        return (
+                          <a
+                            key={att.id}
+                            href={att.download_url || '#'}
+                            target={att.download_url ? '_blank' : undefined}
+                            rel={att.download_url ? 'noopener noreferrer' : undefined}
+                            download={att.filename}
+                            onClick={(e) => handleDownloadAttachment(att, e)}
+                            className="group flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50/80 hover:bg-red-50/40 hover:border-red-300 p-3 text-xs transition-all cursor-pointer"
+                            title={`Download ${att.filename}`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white border border-zinc-200 text-zinc-600 group-hover:border-red-200 group-hover:text-red-600 transition-colors">
+                                <FileText className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-zinc-800 group-hover:text-red-950">
+                                  {att.filename}
+                                </p>
+                                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                  {formatFileSize(att.size)}
+                                  {att.content_type ? ` • ${att.content_type.split('/')[1]?.toUpperCase() || att.content_type}` : ''}
+                                </p>
+                              </div>
+                            </div>
+
+                            <span className="inline-flex h-7 items-center gap-1 rounded-lg bg-white group-hover:bg-red-600 px-2.5 text-[11px] font-semibold text-zinc-700 group-hover:text-white border border-zinc-200 group-hover:border-red-600 shadow-2xs transition-colors shrink-0">
+                              {isDownloading ? (
+                                <>
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                  <span>Loading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3" />
+                                  <span>Download</span>
+                                </>
+                              )}
+                            </span>
+                          </a>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

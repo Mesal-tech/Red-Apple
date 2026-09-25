@@ -66,7 +66,10 @@ export interface ReceivedEmailAttachment {
   filename: string;
   size: number;
   content_type: string;
+  content_id?: string;
+  content_disposition?: string;
   download_url?: string;
+  expires_at?: string;
 }
 
 export interface ReceivedEmailSummary {
