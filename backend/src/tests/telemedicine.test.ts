@@ -149,7 +149,7 @@ async function runTelemedicineTests() {
         'POST /telemedicine/book with auth creates booking with encrypted video room URL',
         res.status === 201 &&
           body.success === true &&
-          body.booking.status === 'confirmed' &&
+          body.booking.status === 'requested' &&
           body.booking.doctor_id === firstDoctorId &&
           body.booking.video_room_url.includes('https://telehealth.redapple.health/room_')
       );

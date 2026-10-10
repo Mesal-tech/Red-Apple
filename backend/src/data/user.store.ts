@@ -31,7 +31,7 @@ class UserStore {
           if (u.email?.toLowerCase() === 'mesalokubor63@gmail.com') {
             u.role = 'doctor';
             if (!u.name || u.name === 'mesalokubor63') {
-              u.name = 'Dr. Mesal Okubor';
+              u.name = 'Dr. Chioma Nwachukwu';
             }
             foundMesal = true;
           }
@@ -42,7 +42,7 @@ class UserStore {
           const docHash = await bcrypt.hash('Doctor@2026', saltRounds);
           const mesalUser: User = {
             user_id: 'fb5e54b9-7b39-41af-9a77-6a34e0471b18',
-            name: 'Dr. Mesal Okubor',
+            name: 'Dr. Chioma Nwachukwu',
             email: 'mesalokubor63@gmail.com',
             phone: '+2348033334444',
             password_hash: docHash,
@@ -106,7 +106,7 @@ class UserStore {
       },
       {
         user_id: 'fb5e54b9-7b39-41af-9a77-6a34e0471b18',
-        name: 'Dr. Mesal Okubor',
+        name: 'Dr. Chioma Nwachukwu',
         email: 'mesalokubor63@gmail.com',
         phone: '+2348033334444',
         password_hash: amaraPasswordHash,

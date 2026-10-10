@@ -70,12 +70,9 @@ export const AboutVisionSection: React.FC = () => {
 
           {/* Right Editorial Image Frame */}
           <div className="lg:col-span-5 relative">
-            <div className="relative w-full aspect-[4/5] bg-neutral-900 border border-neutral-800 p-2 overflow-hidden shadow-2xl">
-              <img
-                src="/red-apple-family.jpg"
-                alt="Red Apple Maternal Care Vision"
-                className="w-full h-full object-cover filter grayscale contrast-125 brightness-95"
-              />
+            <div className="relative w-full aspect-[4/5] bg-neutral-900 border border-neutral-800 p-2 overflow-hidden shadow-2xl group">
+              {/* Blank Placeholder */}
+              <div className="w-full h-full bg-neutral-900" />
               <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur-xs p-3 font-mono text-[9px] text-neutral-300 uppercase tracking-widest border border-white/10 flex justify-between items-center">
                 <span>[ MATERNAL DIGNITY // PAN-AFRICA ]</span>
                 <span className="text-crimson font-bold">2026</span>

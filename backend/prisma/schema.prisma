@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model User {
+  user_id        String    @id @default(uuid()) @map("user_id")
+  name           String    @db.VarChar(120)
+  email          String?   @unique @db.VarChar(160)
+  phone          String?   @unique @db.VarChar(20)
+  password_hash  String    @map("password_hash")
+  date_of_birth  DateTime? @map("date_of_birth") @db.Date
+  pregnancy_mode Boolean   @default(false) @map("pregnancy_mode")
+  role           String    @default("user") @db.VarChar(20)
+  health_profile Json?     @map("health_profile")
+  created_at     DateTime  @default(now()) @map("created_at")
+  updated_at     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  cycle_logs        CycleLog[]
+  pregnancy_tracker PregnancyTracker?
+  bookings          Booking[]
+  payments          Payment[]
+  reminders         Reminder[]
+  push_tokens       PushToken[]
+
+  @@map("users")
+}
+
+model CycleLog {
+  log_id         String    @id @default(uuid()) @map("log_id")
+  user_id        String    @map("user_id")
+  start_date     DateTime  @map("start_date") @db.Date
+  end_date       DateTime? @map("end_date") @db.Date
+  flow_intensity String?   @map("flow_intensity") @db.VarChar(20)
+  symptoms       Json?     @default("[]")
+  notes          String?
+  is_period_day  Boolean   @default(false) @map("is_period_day")
+  client_uuid    String?   @map("client_uuid")
+  created_at     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("cycle_logs")
+}
+
+model PregnancyTracker {
+  tracker_id       String    @id @default(uuid()) @map("tracker_id")
+  user_id          String    @unique @map("user_id")
+  conception_date  DateTime? @map("conception_date") @db.Date
+  lmp_date         DateTime? @map("lmp_date") @db.Date
+  current_week     Int?      @map("current_week")
+  due_date         DateTime? @map("due_date") @db.Date
+  kick_sessions    Json?     @default("[]") @map("kick_sessions")
+  contraction_logs Json?     @default("[]") @map("contraction_logs")
+  created_at       DateTime  @default(now()) @map("created_at")
+  updated_at       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("pregnancy_trackers")
+}
+
+model Category {
+  category_id String             @id @default(uuid()) @map("category_id")
+  name        String             @unique @db.VarChar(100)
+  articles    EducationArticle[]
+
+  @@map("categories")
+}
+
+model EducationArticle {
+  article_id   String   @id @default(uuid()) @map("article_id")
+  title        String   @db.VarChar(200)
+  category_id  String?  @map("category_id")
+  category     String   @default("FERTILITY") @db.VarChar(50)
+  excerpt      String?
+  content      String
+  read_time    String?  @map("read_time") @db.VarChar(50)
+  author       String?  @db.VarChar(100)
+  status       String   @default("published") @db.VarChar(20)
+  reviewed_by  String?  @map("reviewed_by")
+  last_updated DateTime @default(now()) @map("last_updated")
+
+  category_rel Category? @relation(fields: [category_id], references: [category_id])
+
+  @@map("education_articles")
+}
+
+model Clinic {
+  clinic_id     String   @id @default(uuid()) @map("clinic_id")
+  name          String   @db.VarChar(160)
+  location      String?  @db.VarChar(200)
+  address       String?
+  contact_email String?  @map("contact_email") @db.VarChar(160)
+  contact_phone String?  @map("contact_phone") @db.VarChar(20)
+  latitude      Float?
+  longitude     Float?
+  created_at    DateTime @default(now()) @map("created_at")
+
+  doctors  Doctor[]
+  bookings Booking[]
+
+  @@map("clinics")
+}
+
+model Doctor {
+  doctor_id        String   @id @default(uuid()) @map("doctor_id")
+  clinic_id        String   @map("clinic_id")
+  name             String   @db.VarChar(120)
+  specialty        String   @db.VarChar(100)
+  subspecialty     String?  @db.VarChar(100)
+  rating           Float    @default(4.9)
+  consultation_fee Int      @default(15000) @map("consultation_fee")
+  avatar_url       String?  @map("avatar_url")
+  available_days   Json?    @default("[\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\"]") @map("available_days")
+  created_at       DateTime @default(now()) @map("created_at")
+
+  clinic             Clinic             @relation(fields: [clinic_id], references: [clinic_id], onDelete: Cascade)
+  availability_slots AvailabilitySlot[]
+  bookings           Booking[]
+
+  @@map("doctors")
+}
+
+model AvailabilitySlot {
+  slot_id    String   @id @default(uuid()) @map("slot_id")
+  doctor_id  String   @map("doctor_id")
+  start_time DateTime @map("start_time")
+  end_time   DateTime @map("end_time")
+  is_booked  Boolean  @default(false) @map("is_booked")
+
+  doctor   Doctor    @relation(fields: [doctor_id], references: [doctor_id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([doctor_id, start_time])
+  @@map("availability_slots")
+}
+
+model Booking {
+  booking_id     String   @id @default(uuid()) @map("booking_id")
+  user_id        String   @map("user_id")
+  clinic_id      String   @map("clinic_id")
+  doctor_id      String   @map("doctor_id")
+  slot_id        String?  @map("slot_id")
+  scheduled_time String   @map("scheduled_time")
+  status         String   @default("requested") @db.VarChar(20)
+  reason         String?
+  created_at     DateTime @default(now()) @map("created_at")
+
+  user     User              @relation(fields: [user_id], references: [user_id])
+  clinic   Clinic            @relation(fields: [clinic_id], references: [clinic_id])
+  doctor   Doctor            @relation(fields: [doctor_id], references: [doctor_id])
+  slot     AvailabilitySlot? @relation(fields: [slot_id], references: [slot_id])
+  payments Payment[]
+
+  @@index([user_id])
+  @@index([status])
+  @@map("bookings")
+}
+
+model Payment {
+  payment_id String    @id @default(uuid()) @map("payment_id")
+  booking_id String    @map("booking_id")
+  user_id    String    @map("user_id")
+  reference  String    @unique
+  amount     Int
+  currency   String    @default("NGN") @db.VarChar(10)
+  status     String    @default("pending") @db.VarChar(20)
+  channel    String?   @db.VarChar(50)
+  paid_at    DateTime? @map("paid_at")
+  created_at DateTime  @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [user_id], references: [user_id])
+  booking Booking @relation(fields: [booking_id], references: [booking_id])
+
+  @@map("payments")
+}
+
+model Reminder {
+  reminder_id  String   @id @default(uuid()) @map("reminder_id")
+  user_id      String   @map("user_id")
+  type         String   @db.VarChar(40)
+  title        String?
+  body         String
+  trigger_time DateTime @map("trigger_time")
+  sent         Boolean  @default(false)
+  created_at   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("reminders")
+}
+
+model PushToken {
+  id         String   @id @default(uuid())
+  user_id    String   @map("user_id")
+  token      String   @unique
+  platform   String?  @db.VarChar(20)
+  updated_at DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("push_tokens")
+}

@@ -52,14 +52,14 @@ export function ToastProvider({ children }) {
   }, [translateY, opacity, scale]);
 
   const showToast = useCallback(
-    ({ message, type = 'error', duration = 3800 }) => {
+    ({ title, message, type = 'error', duration = 3800 }) => {
       if (!message) return;
 
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
 
-      setToast({ id: Date.now(), message, type });
+      setToast({ id: Date.now(), title, message, type });
 
       // Spring down with gooey/liquid bounce feel
       translateY.setValue(-100);
@@ -113,7 +113,7 @@ export function ToastProvider({ children }) {
       case 'success':
         return {
           icon: 'checkmark-circle',
-          iconColor: '#10B981',
+          iconColor: '#C81E3A',
           borderColor: 'rgba(16, 185, 129, 0.45)',
           glowColor: 'rgba(16, 185, 129, 0.15)',
           badgeBg: 'rgba(16, 185, 129, 0.16)',
@@ -172,9 +172,14 @@ export function ToastProvider({ children }) {
               <Ionicons name={config.icon} size={20} color={config.iconColor} />
             </View>
 
-            <Text style={styles.toastMessage} numberOfLines={3}>
-              {toast.message}
-            </Text>
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              {toast.title ? (
+                <Text style={styles.toastTitle}>{toast.title}</Text>
+              ) : null}
+              <Text style={styles.toastMessage} numberOfLines={3}>
+                {toast.message}
+              </Text>
+            </View>
 
             <TouchableOpacity
               onPress={hideToast}
@@ -231,12 +236,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  toastMessage: {
-    flex: 1,
-    fontSize: 13.5,
-    fontWeight: '600',
+  toastTitle: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#FFFFFF',
-    lineHeight: 18,
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  toastMessage: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#CBD5E1',
+    lineHeight: 17,
     letterSpacing: -0.2,
   },
   closeBtn: {

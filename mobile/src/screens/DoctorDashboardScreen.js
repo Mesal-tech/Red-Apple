@@ -57,8 +57,8 @@ const THEME = {
 
 export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView }) {
   const { user } = useAuth();
-  const doctorName = user?.name && user?.name !== 'mesalokubor63' ? user.name : 'Dr. Mesal Okubor';
-  const doctorEmail = user?.email || 'mesalokubor63@gmail.com';
+  const doctorName = user?.name || 'Consulting Doctor';
+  const doctorEmail = user?.email || 'doctor@redapple.health';
 
   // Active Tab: 'queue' | 'slots' | 'records'
   const [activeTab, setActiveTab] = useState('queue');

@@ -8,27 +8,41 @@
     "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "ts-node src/tests/auth.test.ts && ts-node src/tests/telemedicine.test.ts",
+    "test": "ts-node src/tests/auth.test.ts && ts-node src/tests/telemedicine.test.ts && ts-node src/tests/payment.test.ts && ts-node src/tests/notification.test.ts",
+    "test:ai": "ts-node src/tests/ai.test.ts",
     "test:auth": "ts-node src/tests/auth.test.ts",
-    "test:telemedicine": "ts-node src/tests/telemedicine.test.ts"
+    "test:telemedicine": "ts-node src/tests/telemedicine.test.ts",
+    "test:payment": "ts-node src/tests/payment.test.ts",
+    "test:notifications": "ts-node src/tests/notification.test.ts",
+    "test:p0_p1": "ts-node src/tests/p0_p1_integration.test.ts"
   },
   "dependencies": {
+    "@langchain/core": "^1.2.17",
+    "@langchain/google-genai": "^2.3.2",
+    "@langchain/langgraph": "^1.4.21",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "@stream-io/node-sdk": "^0.8.5",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.1",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@prisma/config": "^7.10.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.11.0",
+    "@types/pg": "^8.23.1",
     "@types/uuid": "^9.0.8",
     "nodemon": "^3.1.0",
+    "prisma": "^7.10.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }

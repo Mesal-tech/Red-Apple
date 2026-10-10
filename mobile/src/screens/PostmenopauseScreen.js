@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { getPostmenopauseDataSafe, savePostmenopauseDataSafe } from '../utils/storage';
+import ArticleCarousel from '../components/ArticleCarousel';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -66,7 +67,7 @@ const ringStyles = StyleSheet.create({
     height: 104,
     borderRadius: 52,
     borderWidth: 7,
-    borderColor: '#F3E8FF',
+    borderColor: '#FFEBEE',
     position: 'absolute',
   },
   halfCircleContainerRight: {
@@ -83,7 +84,7 @@ const ringStyles = StyleSheet.create({
     borderTopRightRadius: 52,
     borderBottomRightRadius: 52,
     borderWidth: 7,
-    borderColor: '#8E24AA',
+    borderColor: '#DC2626',
     borderLeftWidth: 0,
     transformOrigin: 'left center',
   },
@@ -101,7 +102,7 @@ const ringStyles = StyleSheet.create({
     borderTopLeftRadius: 52,
     borderBottomLeftRadius: 52,
     borderWidth: 7,
-    borderColor: '#8E24AA',
+    borderColor: '#DC2626',
     borderRightWidth: 0,
     transformOrigin: 'right center',
   },
@@ -121,7 +122,7 @@ const ringStyles = StyleSheet.create({
   ringMonthNumber: {
     fontSize: 26,
     fontWeight: '900',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   ringMonthTotal: {
     fontSize: 11,
@@ -129,24 +130,6 @@ const ringStyles = StyleSheet.create({
     color: colors.textMuted,
   },
 });
-
-const ALL_SYMPTOMS = [
-  'Hot flushes',
-  'Night sweats',
-  'Vaginal dryness',
-  'Pain during intercourse',
-  'Low libido',
-  'Mood changes',
-  'Anxiety',
-  'Depression',
-  'Sleep problems',
-  'Brain fog or memory issues',
-  'Fatigue',
-  'Joint and muscle pain',
-  'Headaches',
-  'Weight gain',
-  'Urinary urgency or leakage',
-];
 
 const RED_FLAGS = [
   { id: 'bleeding', title: 'Vaginal bleeding after menopause', subtitle: 'Any postmenopausal bleeding requires prompt clinical evaluation' },
@@ -261,7 +244,7 @@ export default function PostmenopauseScreen({
   weekDays = [],
   onOpenSetupWizard,
 }) {
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'symptoms' | 'assessments' | 'lifestyle' | 'meds' | 'screenings' | 'learn' | 'ai'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'assessments' | 'lifestyle' | 'meds' | 'screenings' | 'learn' | 'ai'
   const [selectedDateKey, setSelectedDateKey] = useState(() => new Date().toISOString().split('T')[0]);
 
   const calendarWeekDays = React.useMemo(() => {
@@ -301,13 +284,6 @@ export default function PostmenopauseScreen({
     menopauseType: 'Natural',
     onHRT: 'No',
   });
-
-  // Symptom Tracker State
-  const [loggedSymptoms, setLoggedSymptoms] = useState([
-    { name: 'Hot flushes', intensity: 'Moderate' },
-    { name: 'Sleep problems', intensity: 'Mild' },
-    { name: 'Joint and muscle pain', intensity: 'Mild' },
-  ]);
 
   // Health Assessments State
   const [boneHealth, setBoneHealth] = useState({
@@ -379,7 +355,6 @@ export default function PostmenopauseScreen({
     const data = await getPostmenopauseDataSafe();
     if (data) {
       if (data.profile) setProfile(data.profile);
-      if (data.loggedSymptoms) setLoggedSymptoms(data.loggedSymptoms);
       if (data.boneHealth) setBoneHealth(data.boneHealth);
       if (data.heartHealth) setHeartHealth(data.heartHealth);
       if (data.lifestyle) setLifestyle(data.lifestyle);
@@ -404,7 +379,6 @@ export default function PostmenopauseScreen({
   const persistData = async (updatedFields = {}) => {
     const payload = {
       profile,
-      loggedSymptoms,
       boneHealth,
       heartHealth,
       lifestyle,
@@ -427,25 +401,6 @@ export default function PostmenopauseScreen({
     }
     setActiveRedFlags(updated);
     persistData({ activeRedFlags: updated });
-  };
-
-  // Symptom Add / Toggle
-  const handleToggleSymptom = (symptomName) => {
-    const existing = loggedSymptoms.find((s) => s.name === symptomName);
-    let updated;
-    if (existing) {
-      updated = loggedSymptoms.filter((s) => s.name !== symptomName);
-    } else {
-      updated = [...loggedSymptoms, { name: symptomName, intensity: 'Moderate' }];
-    }
-    setLoggedSymptoms(updated);
-    persistData({ loggedSymptoms: updated });
-  };
-
-  const handleSetSymptomIntensity = (symptomName, intensity) => {
-    const updated = loggedSymptoms.map((s) => (s.name === symptomName ? { ...s, intensity } : s));
-    setLoggedSymptoms(updated);
-    persistData({ loggedSymptoms: updated });
   };
 
   // AI Ask Handler
@@ -550,7 +505,7 @@ export default function PostmenopauseScreen({
           {onboardingStep === 1 && (
             <View style={styles.wizardStepContent}>
               <View style={styles.wizardIconCircle}>
-                <Ionicons name="person-outline" size={32} color="#8E24AA" />
+                <Ionicons name="person-outline" size={32} color="#DC2626" />
               </View>
               <Text style={styles.wizardQuestionTitle}>How old are you?</Text>
               <Text style={styles.wizardQuestionSub}>
@@ -586,7 +541,7 @@ export default function PostmenopauseScreen({
           {onboardingStep === 2 && (
             <View style={styles.wizardStepContent}>
               <View style={styles.wizardIconCircle}>
-                <Ionicons name="calendar-outline" size={32} color="#8E24AA" />
+                <Ionicons name="calendar-outline" size={32} color="#DC2626" />
               </View>
               <Text style={styles.wizardQuestionTitle}>At what age did your periods stop completely?</Text>
               <Text style={styles.wizardQuestionSub}>
@@ -622,7 +577,7 @@ export default function PostmenopauseScreen({
           {onboardingStep === 3 && (
             <View style={styles.wizardStepContent}>
               <View style={styles.wizardIconCircle}>
-                <Ionicons name="checkmark-circle-outline" size={32} color="#8E24AA" />
+                <Ionicons name="checkmark-circle-outline" size={32} color="#DC2626" />
               </View>
               <Text style={styles.wizardQuestionTitle}>Gone 12 consecutive months without a period?</Text>
               <Text style={styles.wizardQuestionSub}>
@@ -643,7 +598,7 @@ export default function PostmenopauseScreen({
                     <Ionicons
                       name={profile.twelveMonthsPeriodFree === val ? 'radio-button-on' : 'radio-button-off'}
                       size={20}
-                      color={profile.twelveMonthsPeriodFree === val ? '#8E24AA' : colors.textMuted}
+                      color={profile.twelveMonthsPeriodFree === val ? '#DC2626' : colors.textMuted}
                     />
                     <Text
                       style={[
@@ -662,7 +617,7 @@ export default function PostmenopauseScreen({
           {onboardingStep === 4 && (
             <View style={styles.wizardStepContent}>
               <View style={styles.wizardIconCircle}>
-                <Ionicons name="medical-outline" size={32} color="#8E24AA" />
+                <Ionicons name="medical-outline" size={32} color="#DC2626" />
               </View>
               <Text style={styles.wizardQuestionTitle}>Did menopause occur naturally or after surgery?</Text>
               <Text style={styles.wizardQuestionSub}>
@@ -683,7 +638,7 @@ export default function PostmenopauseScreen({
                     <Ionicons
                       name={profile.menopauseType === type ? 'radio-button-on' : 'radio-button-off'}
                       size={20}
-                      color={profile.menopauseType === type ? '#8E24AA' : colors.textMuted}
+                      color={profile.menopauseType === type ? '#DC2626' : colors.textMuted}
                     />
                     <Text
                       style={[
@@ -702,7 +657,7 @@ export default function PostmenopauseScreen({
           {onboardingStep === 5 && (
             <View style={styles.wizardStepContent}>
               <View style={styles.wizardIconCircle}>
-                <Ionicons name="shield-checkmark-outline" size={32} color="#8E24AA" />
+                <Ionicons name="shield-checkmark-outline" size={32} color="#DC2626" />
               </View>
               <Text style={styles.wizardQuestionTitle}>Are you taking Hormone Replacement Therapy (HRT)?</Text>
               <Text style={styles.wizardQuestionSub}>
@@ -723,7 +678,7 @@ export default function PostmenopauseScreen({
                     <Ionicons
                       name={profile.onHRT === status ? 'radio-button-on' : 'radio-button-off'}
                       size={20}
-                      color={profile.onHRT === status ? '#8E24AA' : colors.textMuted}
+                      color={profile.onHRT === status ? '#DC2626' : colors.textMuted}
                     />
                     <Text
                       style={[
@@ -783,30 +738,6 @@ export default function PostmenopauseScreen({
     >
       {activeTab === 'dashboard' ? (
         <>
-          {/* Urgent Red Flag Alert Banner */}
-          {activeRedFlags.length > 0 && (
-            <View style={[styles.redFlagAlertBanner, { marginHorizontal: 16 }]}>
-              <View style={styles.redFlagAlertHeader}>
-                <Ionicons name="warning" size={22} color="#DC2626" />
-                <Text style={styles.redFlagAlertTitle}>Medical Review Advised</Text>
-              </View>
-              <Text style={styles.redFlagAlertBody}>
-                You reported high-priority symptoms requiring clinical evaluation. Postmenopausal symptoms like unexpected bleeding or new breast lumps require direct assessment by a healthcare clinician.
-              </Text>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.redFlagAlertButton}
-                onPress={() => {
-                  if (onOpenDoctorPage) onOpenDoctorPage();
-                  else if (onBookDoctor) onBookDoctor({ name: 'Dr. Mesal Okubor', spec: 'Obstetrics & Gynecological Telemedicine' });
-                }}
-              >
-                <Ionicons name="call-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.redFlagAlertButtonText}>Consult Doctor Care Now</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           {/* CAL AI STYLE 7-DAY CALENDAR STRIP */}
           <View style={styles.calAiCalendarRow}>
             {calendarWeekDays.map((item) => {
@@ -859,19 +790,6 @@ export default function PostmenopauseScreen({
             onPress={handleOpenOnboardingWizard}
           >
             <View style={styles.heroWhiteCard}>
-              {/* Card Top User Header */}
-              <View style={styles.heroTopRow}>
-                <View style={styles.heroUserAvatar}>
-                  <Text style={styles.heroUserAvatarText}>{greetingDisplayName.charAt(0)}</Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.heroUserName}>{greetingDisplayName} • Postmenopause</Text>
-                  <Text style={styles.heroUserPhase}>
-                    {profile.twelveMonthsPeriodFree ? '12+ Months Period-Free' : 'Monitoring Transition'} • Age {profile.currentAge}
-                  </Text>
-                </View>
-              </View>
-
               {/* Big Display Headline */}
               <Text style={styles.heroHeadlineDisplay}>
                 Stay Vibrant, Strong{"\n"}& Hormonally Balanced.
@@ -882,7 +800,7 @@ export default function PostmenopauseScreen({
                 <PostmenopauseMilestoneRing />
                 <View style={styles.heroMetricsCol}>
                   <View style={styles.metricItemRow}>
-                    <View style={[styles.metricDot, { backgroundColor: '#8E24AA' }]} />
+                    <View style={[styles.metricDot, { backgroundColor: '#DC2626' }]} />
                     <Text style={styles.metricItemText}>
                       Status: <Text style={{ fontWeight: '800', color: '#111827' }}>12+ Mo Period-Free</Text>
                     </Text>
@@ -901,11 +819,6 @@ export default function PostmenopauseScreen({
                   </View>
                 </View>
               </View>
-
-              {/* Card Footer */}
-              <View style={styles.heroFooterRow}>
-                <Text style={styles.heroFooterMeta}>Personalized for your vitality & hormone health</Text>
-              </View>
             </View>
           </TouchableOpacity>
 
@@ -917,7 +830,7 @@ export default function PostmenopauseScreen({
               if (onOpenDoctorPage) {
                 onOpenDoctorPage();
               } else if (onBookDoctor) {
-                onBookDoctor({ name: 'Dr. Mesal Okubor', spec: 'Obstetrics & Gynecological Telemedicine' });
+                onBookDoctor({ name: 'Telemedicine Specialist', spec: 'Obstetrics & Gynecological Telemedicine' });
               }
             }}
           >
@@ -936,7 +849,7 @@ export default function PostmenopauseScreen({
             </Text>
           </TouchableOpacity>
 
-          {/* 2-COLUMN BENTO GRID: CYCLE MODE & SYMPTOMS */}
+          {/* 2-COLUMN BENTO GRID: CYCLE MODE & HEALTH SCORES */}
           <View style={styles.bentoSectionGrid}>
             <TouchableOpacity
               activeOpacity={0.88}
@@ -953,13 +866,13 @@ export default function PostmenopauseScreen({
             <TouchableOpacity
               activeOpacity={0.88}
               style={styles.bentoWhiteCard}
-              onPress={() => setActiveTab('symptoms')}
+              onPress={() => setActiveTab('assessments')}
             >
-              <View style={[styles.bentoIconSquare, { backgroundColor: '#F3E5F5' }]}>
-                <Ionicons name="flower" size={22} color="#8E24AA" />
+              <View style={[styles.bentoIconSquare, { backgroundColor: '#FFEBEE' }]}>
+                <Ionicons name="fitness" size={22} color="#DC2626" />
               </View>
-              <Text style={styles.bentoCardHeading}>Symptoms</Text>
-              <Text style={styles.bentoCardSub}>{loggedSymptoms.length} logged today</Text>
+              <Text style={styles.bentoCardHeading}>Health Scores</Text>
+              <Text style={styles.bentoCardSub}>Bone & heart health</Text>
             </TouchableOpacity>
           </View>
 
@@ -972,15 +885,15 @@ export default function PostmenopauseScreen({
                 style={styles.upcomingPredictionCardClean}
                 onPress={() => setActiveTab('screenings')}
               >
-                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#F3E8FF' }]}>
-                  <Ionicons name="fitness" size={22} color="#8E24AA" />
+                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FFEBEE' }]}>
+                  <Ionicons name="fitness" size={22} color="#DC2626" />
                 </View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <Text style={styles.upcomingCardMainTitle}>DEXA Bone Density Scan</Text>
                   <Text style={styles.upcomingCardSubTitle}>Annual bone mineral density review</Text>
                 </View>
-                <View style={styles.upcomingPillPurple}>
-                  <Text style={styles.upcomingPillPurpleText}>Due Oct</Text>
+                <View style={styles.upcomingPillRed}>
+                  <Text style={styles.upcomingPillRedText}>Due Oct</Text>
                 </View>
               </TouchableOpacity>
 
@@ -1013,106 +926,19 @@ export default function PostmenopauseScreen({
                   <Text style={styles.upcomingCardMainTitle}>Mammogram Screening</Text>
                   <Text style={styles.upcomingCardSubTitle}>Routine annual breast wellness check</Text>
                 </View>
-                <View style={[styles.upcomingPillPurple, { backgroundColor: '#FEF3C7' }]}>
-                  <Text style={[styles.upcomingPillPurpleText, { color: '#B45309' }]}>Upcoming</Text>
+                <View style={[styles.upcomingPillRed, { backgroundColor: '#FEF3C7' }]}>
+                  <Text style={[styles.upcomingPillRedText, { color: '#B45309' }]}>Upcoming</Text>
                 </View>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* CLINICAL TOOLKITS PILLS */}
-          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-            <Text style={styles.sectionHeaderLabelDark}>HEALTH TOOLKITS</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-              {[
-                { id: 'symptoms', label: 'Symptoms', icon: 'pulse-outline' },
-                { id: 'assessments', label: 'Scores', icon: 'fitness-outline' },
-                { id: 'lifestyle', label: 'Lifestyle', icon: 'water-outline' },
-                { id: 'meds', label: 'Meds & HRT', icon: 'medical-outline' },
-                { id: 'screenings', label: 'Reminders', icon: 'calendar-outline' },
-                { id: 'learn', label: 'Library', icon: 'book-outline' },
-                { id: 'ai', label: 'Ask AI', icon: 'chatbubbles-outline' },
-              ].map((tool) => (
-                <TouchableOpacity
-                  key={tool.id}
-                  activeOpacity={0.75}
-                  style={styles.toolkitChip}
-                  onPress={() => setActiveTab(tool.id)}
-                >
-                  <Ionicons name={tool.icon} size={15} color="#8E24AA" style={{ marginRight: 6 }} />
-                  <Text style={styles.toolkitChipText}>{tool.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={{ paddingHorizontal: 16 }}>
-
-          {/* Clinical Red Flag Checklist Card */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="warning-outline" size={20} color="#DC2626" />
-              <Text style={styles.cardTitle}>Clinical Red Flag Symptom Check</Text>
+          {/* PERSONALIZED INSIGHTS CAROUSEL OF ARTICLES */}
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
+              <Text style={styles.sectionHeaderLabelDark}>PERSONALIZED INSIGHTS</Text>
             </View>
-            <Text style={styles.cardBodyText}>
-              Select any symptoms below if currently present. Red flags warrant clinical review.
-            </Text>
-            {RED_FLAGS.map((item) => {
-              const isSelected = activeRedFlags.includes(item.id);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.7}
-                  style={[styles.redFlagRow, isSelected && styles.redFlagRowSelected]}
-                  onPress={() => handleToggleRedFlag(item.id)}
-                >
-                  <Ionicons
-                    name={isSelected ? 'checkbox' : 'square-outline'}
-                    size={20}
-                    color={isSelected ? '#DC2626' : colors.textMuted}
-                  />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={[styles.redFlagTitle, isSelected && { color: '#DC2626' }]}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.redFlagSub}>{item.subtitle}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Personalised Insights */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="analytics-outline" size={20} color="#8E24AA" />
-              <Text style={styles.cardTitle}>Personalised Insights</Text>
-            </View>
-
-            <View style={styles.insightItem}>
-              <Ionicons name="sunny-outline" size={18} color="#D97706" style={{ marginTop: 2 }} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.insightTitle}>Symptom Pattern</Text>
-                <Text style={styles.insightDesc}>
-                  {loggedSymptoms.some((s) => s.name === 'Hot flushes')
-                    ? 'Hot flushes logged at moderate level. Keep cool hydration handy.'
-                    : 'Symptom levels are stable today.'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.insightItem}>
-              <Ionicons name="body-outline" size={18} color="#0284C7" style={{ marginTop: 2 }} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.insightTitle}>Bone Protection</Text>
-                <Text style={styles.insightDesc}>
-                  {boneHealth.supplements.includes('both')
-                    ? 'Great job taking daily Calcium & Vitamin D!'
-                    : 'Consider supplementing Calcium (1200mg) and Vitamin D for bone density.'}
-                </Text>
-              </View>
-            </View>
-          </View>
+            <ArticleCarousel onSelectArticle={(article) => setSelectedArticle(article)} />
           </View>
         </>
       ) : (
@@ -1126,437 +952,377 @@ export default function PostmenopauseScreen({
             <Text style={styles.backToDashboardHeaderText}>Back to Overview</Text>
           </TouchableOpacity>
 
-      {/* 2. SYMPTOM TRACKER */}
-      {activeTab === 'symptoms' && (
-        <View style={styles.tabSection}>
-          <Text style={styles.sectionHeaderTitle}>Symptom Tracker</Text>
-          <Text style={styles.sectionHeaderSub}>Tap symptoms to log severity for today.</Text>
+          {/* 2. HEALTH SCORES & ASSESSMENTS */}
+          {activeTab === 'assessments' && (
+            <View style={styles.tabSection}>
+              <Text style={styles.sectionHeaderTitle}>Health Risk Assessments</Text>
 
-          <View style={styles.symptomsGrid}>
-            {ALL_SYMPTOMS.map((symName) => {
-              const logged = loggedSymptoms.find((s) => s.name === symName);
-              const isSelected = !!logged;
+              {/* Bone Health Card */}
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Ionicons name="fitness" size={20} color="#0284C7" />
+                  <Text style={styles.cardTitle}>Bone Health Assessment</Text>
+                </View>
 
-              return (
-                <View key={symName} style={[styles.symptomCard, isSelected && styles.symptomCardSelected]}>
+                <Text style={styles.fieldLabel}>Fracture after age 50?</Text>
+                <View style={styles.radioGroup}>
+                  {[true, false].map((val) => (
+                    <TouchableOpacity
+                      key={String(val)}
+                      activeOpacity={0.7}
+                      style={[styles.radioPill, boneHealth.fracturePost50 === val && styles.radioPillActive]}
+                      onPress={() => {
+                        const updated = { ...boneHealth, fracturePost50: val };
+                        setBoneHealth(updated);
+                        persistData({ boneHealth: updated });
+                      }}
+                    >
+                      <Text style={[styles.radioText, boneHealth.fracturePost50 === val && styles.radioTextActive]}>
+                        {val ? 'Yes' : 'No'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.fieldLabel}>Family history of osteoporosis?</Text>
+                <View style={styles.radioGroup}>
+                  {[true, false].map((val) => (
+                    <TouchableOpacity
+                      key={String(val)}
+                      activeOpacity={0.7}
+                      style={[styles.radioPill, boneHealth.familyOsteoporosis === val && styles.radioPillActive]}
+                      onPress={() => {
+                        const updated = { ...boneHealth, familyOsteoporosis: val };
+                        setBoneHealth(updated);
+                        persistData({ boneHealth: updated });
+                      }}
+                    >
+                      <Text style={[styles.radioText, boneHealth.familyOsteoporosis === val && styles.radioTextActive]}>
+                        {val ? 'Yes' : 'No'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.fieldLabel}>Calcium & Vitamin D intake?</Text>
+                <View style={styles.radioGroup}>
+                  {['Yes, both', 'Calcium only', 'Vitamin D only', 'Neither'].map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      activeOpacity={0.7}
+                      style={[styles.radioPill, boneHealth.supplements === opt && styles.radioPillActive]}
+                      onPress={() => {
+                        const updated = { ...boneHealth, supplements: opt };
+                        setBoneHealth(updated);
+                        persistData({ boneHealth: updated });
+                      }}
+                    >
+                      <Text style={[styles.radioText, boneHealth.supplements === opt && styles.radioTextActive]}>
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Heart Health Card */}
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Ionicons name="heart" size={20} color="#DC2626" />
+                  <Text style={styles.cardTitle}>Heart Health Profile</Text>
+                </View>
+
+                <Text style={styles.fieldLabel}>Blood Pressure</Text>
+                <View style={styles.radioGroup}>
+                  {['Normal (<120/80)', 'Elevated', 'High Stage 1', 'Unsure'].map((bp) => (
+                    <TouchableOpacity
+                      key={bp}
+                      activeOpacity={0.7}
+                      style={[styles.radioPill, heartHealth.bloodPressure === bp && styles.radioPillActive]}
+                      onPress={() => {
+                        const updated = { ...heartHealth, bloodPressure: bp };
+                        setHeartHealth(updated);
+                        persistData({ heartHealth: updated });
+                      }}
+                    >
+                      <Text style={[styles.radioText, heartHealth.bloodPressure === bp && styles.radioTextActive]}>
+                        {bp}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.fieldLabel}>Smoking Status</Text>
+                <View style={styles.radioGroup}>
+                  {['Non-smoker', 'Former smoker', 'Current smoker'].map((sm) => (
+                    <TouchableOpacity
+                      key={sm}
+                      activeOpacity={0.7}
+                      style={[styles.radioPill, heartHealth.smokingStatus === sm && styles.radioPillActive]}
+                      onPress={() => {
+                        const updated = { ...heartHealth, smokingStatus: sm };
+                        setHeartHealth(updated);
+                        persistData({ heartHealth: updated });
+                      }}
+                    >
+                      <Text style={[styles.radioText, heartHealth.smokingStatus === sm && styles.radioTextActive]}>
+                        {sm}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 4. LIFESTYLE TRACKER */}
+          {activeTab === 'lifestyle' && (
+            <View style={styles.tabSection}>
+              <Text style={styles.sectionHeaderTitle}>Daily Lifestyle Tracker</Text>
+
+              <View style={styles.card}>
+                <View style={styles.metricRow}>
+                  <Ionicons name="water" size={22} color="#0284C7" />
+                  <Text style={styles.metricTitle}>Water Intake</Text>
+                  <View style={styles.stepperSmallRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.stepperSmallBtn}
+                      onPress={() => {
+                        const val = Math.max(0, lifestyle.waterGlasses - 1);
+                        const updated = { ...lifestyle, waterGlasses: val };
+                        setLifestyle(updated);
+                        persistData({ lifestyle: updated });
+                      }}
+                    >
+                      <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                    <Text style={styles.metricValText}>{lifestyle.waterGlasses} glasses</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.stepperSmallBtn}
+                      onPress={() => {
+                        const val = lifestyle.waterGlasses + 1;
+                        const updated = { ...lifestyle, waterGlasses: val };
+                        setLifestyle(updated);
+                        persistData({ lifestyle: updated });
+                      }}
+                    >
+                      <Ionicons name="add" size={16} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.metricRow}>
+                  <Ionicons name="walk" size={22} color="#15803D" />
+                  <Text style={styles.metricTitle}>Exercise</Text>
+                  <View style={styles.stepperSmallRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.stepperSmallBtn}
+                      onPress={() => {
+                        const val = Math.max(0, lifestyle.exerciseMins - 10);
+                        const updated = { ...lifestyle, exerciseMins: val };
+                        setLifestyle(updated);
+                        persistData({ lifestyle: updated });
+                      }}
+                    >
+                      <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                    <Text style={styles.metricValText}>{lifestyle.exerciseMins} mins</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.stepperSmallBtn}
+                      onPress={() => {
+                        const val = lifestyle.exerciseMins + 10;
+                        const updated = { ...lifestyle, exerciseMins: val };
+                        setLifestyle(updated);
+                        persistData({ lifestyle: updated });
+                      }}
+                    >
+                      <Ionicons name="add" size={16} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.metricRow}>
+                  <Ionicons name="moon" size={22} color="#DC2626" />
+                  <Text style={styles.metricTitle}>Sleep Duration</Text>
+                  <View style={styles.stepperSmallRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.stepperSmallBtn}
+                      onPress={() => {
+                        const val = Math.max(0, lifestyle.sleepHours - 0.5);
+                        const updated = { ...lifestyle, sleepHours: val };
+                        setLifestyle(updated);
+                        persistData({ lifestyle: updated });
+                      }}
+                    >
+                      <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                    <Text style={styles.metricValText}>{lifestyle.sleepHours} hrs</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.stepperSmallBtn}
+                      onPress={() => {
+                        const val = lifestyle.sleepHours + 0.5;
+                        const updated = { ...lifestyle, sleepHours: val };
+                        setLifestyle(updated);
+                        persistData({ lifestyle: updated });
+                      }}
+                    >
+                      <Ionicons name="add" size={16} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 5. MEDS & HRT */}
+          {activeTab === 'meds' && (
+            <View style={styles.tabSection}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderTitle}>Meds & Supplements</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.addMedBtn}
+                  onPress={() => setShowAddMedModal(true)}
+                >
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                  <Text style={styles.addMedBtnText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {medications.map((med) => (
+                <View key={med.id} style={styles.medCard}>
                   <TouchableOpacity
                     activeOpacity={0.7}
-                    style={styles.symptomHeader}
-                    onPress={() => handleToggleSymptom(symName)}
+                    onPress={() => handleToggleMedTaken(med.id)}
                   >
                     <Ionicons
-                      name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={22}
-                      color={isSelected ? '#8E24AA' : colors.textMuted}
+                      name={med.takenToday ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={24}
+                      color={med.takenToday ? '#15803D' : colors.textMuted}
                     />
-                    <Text style={[styles.symptomTitle, isSelected && styles.symptomTitleSelected]}>
-                      {symName}
-                    </Text>
                   </TouchableOpacity>
 
-                  {isSelected && (
-                    <View style={styles.intensityRow}>
-                      <Text style={styles.intensityLabel}>Severity:</Text>
-                      {['Mild', 'Moderate', 'Severe'].map((lvl) => (
-                        <TouchableOpacity
-                          key={lvl}
-                          activeOpacity={0.7}
-                          style={[
-                            styles.intensityPill,
-                            logged.intensity === lvl && styles.intensityPillActive,
-                          ]}
-                          onPress={() => handleSetSymptomIntensity(symName, lvl)}
-                        >
-                          <Text
-                            style={[
-                              styles.intensityText,
-                              logged.intensity === lvl && styles.intensityTextActive,
-                            ]}
-                          >
-                            {lvl}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.medTitle, med.takenToday && styles.medTitleTaken]}>
+                      {med.name} {med.isHRT ? '(HRT)' : ''}
+                    </Text>
+                    <Text style={styles.medDoseText}>{med.dose} • {med.time}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* 6. REMINDERS */}
+          {activeTab === 'screenings' && (
+            <View style={styles.tabSection}>
+              <Text style={styles.sectionHeaderTitle}>Screening Reminders</Text>
+              <Text style={styles.sectionHeaderSub}>Preventive health checks for postmenopausal care.</Text>
+
+              {screenings.map((sc) => (
+                <View key={sc.id} style={styles.card}>
+                  <View style={styles.cardHeaderRow}>
+                    <Ionicons name="calendar-outline" size={20} color="#DC2626" />
+                    <Text style={styles.cardTitle}>{sc.title}</Text>
+                  </View>
+                  <Text style={styles.screeningText}>Last performed: {sc.lastDate}</Text>
+                  <Text style={styles.screeningText}>Next due date: {sc.nextDue}</Text>
+
+                  <View style={styles.statusBadgeRow}>
+                    <Text style={[styles.statusBadge, sc.status === 'Up to date' ? styles.statusBadgeGood : styles.statusBadgeWarn]}>
+                      {sc.status}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* 7. LIBRARY */}
+          {activeTab === 'learn' && (
+            <View style={styles.tabSection}>
+              <Text style={styles.sectionHeaderTitle}>Postmenopausal Library</Text>
+
+              {EDU_ARTICLES.map((article) => (
+                <TouchableOpacity
+                  key={article.id}
+                  activeOpacity={0.8}
+                  style={styles.articleCard}
+                  onPress={() => setSelectedArticle(article)}
+                >
+                  <View style={styles.articleTagRow}>
+                    <Text style={styles.articleCategory}>{article.category}</Text>
+                    <Text style={styles.articleTime}>{article.readTime}</Text>
+                  </View>
+                  <Text style={styles.articleTitle}>{article.title}</Text>
+                  <Text style={styles.articleSnippet} numberOfLines={2}>{article.content}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* 8. ASK AI */}
+          {activeTab === 'ai' && (
+            <View style={styles.tabSection}>
+              <Text style={styles.sectionHeaderTitle}>Ask RedApple AI</Text>
+              <Text style={styles.sectionHeaderSub}>Get instant answers tailored for postmenopausal wellness.</Text>
+
+              <Text style={styles.fieldLabel}>Preset Questions</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                {PRESET_AI_QUESTIONS.map((q) => (
+                  <TouchableOpacity
+                    key={q}
+                    activeOpacity={0.8}
+                    style={styles.presetChip}
+                    onPress={() => handleAskAI(q)}
+                  >
+                    <Ionicons name="help-circle-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
+                    <Text style={styles.presetChipText}>{q}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.chatList}>
+                {aiChatMessages.map((msg) => {
+                  const isUser = msg.sender === 'user';
+                  return (
+                    <View
+                      key={msg.id}
+                      style={[styles.chatBubble, isUser ? styles.userBubble : styles.aiBubble]}
+                    >
+                      <Text style={[styles.chatText, isUser ? styles.userChatText : styles.aiChatText]}>
+                        {msg.text}
+                      </Text>
                     </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* 3. HEALTH SCORES & ASSESSMENTS */}
-      {activeTab === 'assessments' && (
-        <View style={styles.tabSection}>
-          <Text style={styles.sectionHeaderTitle}>Health Risk Assessments</Text>
-
-          {/* Bone Health Card */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="fitness" size={20} color="#0284C7" />
-              <Text style={styles.cardTitle}>Bone Health Assessment</Text>
-            </View>
-
-            <Text style={styles.fieldLabel}>Fracture after age 50?</Text>
-            <View style={styles.radioGroup}>
-              {[true, false].map((val) => (
-                <TouchableOpacity
-                  key={String(val)}
-                  activeOpacity={0.7}
-                  style={[styles.radioPill, boneHealth.fracturePost50 === val && styles.radioPillActive]}
-                  onPress={() => {
-                    const updated = { ...boneHealth, fracturePost50: val };
-                    setBoneHealth(updated);
-                    persistData({ boneHealth: updated });
-                  }}
-                >
-                  <Text style={[styles.radioText, boneHealth.fracturePost50 === val && styles.radioTextActive]}>
-                    {val ? 'Yes' : 'No'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.fieldLabel}>Family history of osteoporosis?</Text>
-            <View style={styles.radioGroup}>
-              {[true, false].map((val) => (
-                <TouchableOpacity
-                  key={String(val)}
-                  activeOpacity={0.7}
-                  style={[styles.radioPill, boneHealth.familyOsteoporosis === val && styles.radioPillActive]}
-                  onPress={() => {
-                    const updated = { ...boneHealth, familyOsteoporosis: val };
-                    setBoneHealth(updated);
-                    persistData({ boneHealth: updated });
-                  }}
-                >
-                  <Text style={[styles.radioText, boneHealth.familyOsteoporosis === val && styles.radioTextActive]}>
-                    {val ? 'Yes' : 'No'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.fieldLabel}>Calcium & Vitamin D intake?</Text>
-            <View style={styles.radioGroup}>
-              {['Yes, both', 'Calcium only', 'Vitamin D only', 'Neither'].map((opt) => (
-                <TouchableOpacity
-                  key={opt}
-                  activeOpacity={0.7}
-                  style={[styles.radioPill, boneHealth.supplements === opt && styles.radioPillActive]}
-                  onPress={() => {
-                    const updated = { ...boneHealth, supplements: opt };
-                    setBoneHealth(updated);
-                    persistData({ boneHealth: updated });
-                  }}
-                >
-                  <Text style={[styles.radioText, boneHealth.supplements === opt && styles.radioTextActive]}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Heart Health Card */}
-          <View style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="heart" size={20} color="#DC2626" />
-              <Text style={styles.cardTitle}>Heart Health Profile</Text>
-            </View>
-
-            <Text style={styles.fieldLabel}>Blood Pressure</Text>
-            <View style={styles.radioGroup}>
-              {['Normal (<120/80)', 'Elevated', 'High Stage 1', 'Unsure'].map((bp) => (
-                <TouchableOpacity
-                  key={bp}
-                  activeOpacity={0.7}
-                  style={[styles.radioPill, heartHealth.bloodPressure === bp && styles.radioPillActive]}
-                  onPress={() => {
-                    const updated = { ...heartHealth, bloodPressure: bp };
-                    setHeartHealth(updated);
-                    persistData({ heartHealth: updated });
-                  }}
-                >
-                  <Text style={[styles.radioText, heartHealth.bloodPressure === bp && styles.radioTextActive]}>
-                    {bp}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.fieldLabel}>Smoking Status</Text>
-            <View style={styles.radioGroup}>
-              {['Non-smoker', 'Former smoker', 'Current smoker'].map((sm) => (
-                <TouchableOpacity
-                  key={sm}
-                  activeOpacity={0.7}
-                  style={[styles.radioPill, heartHealth.smokingStatus === sm && styles.radioPillActive]}
-                  onPress={() => {
-                    const updated = { ...heartHealth, smokingStatus: sm };
-                    setHeartHealth(updated);
-                    persistData({ heartHealth: updated });
-                  }}
-                >
-                  <Text style={[styles.radioText, heartHealth.smokingStatus === sm && styles.radioTextActive]}>
-                    {sm}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* 4. LIFESTYLE TRACKER */}
-      {activeTab === 'lifestyle' && (
-        <View style={styles.tabSection}>
-          <Text style={styles.sectionHeaderTitle}>Daily Lifestyle Tracker</Text>
-
-          <View style={styles.card}>
-            <View style={styles.metricRow}>
-              <Ionicons name="water" size={22} color="#0284C7" />
-              <Text style={styles.metricTitle}>Water Intake</Text>
-              <View style={styles.stepperSmallRow}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.stepperSmallBtn}
-                  onPress={() => {
-                    const val = Math.max(0, lifestyle.waterGlasses - 1);
-                    const updated = { ...lifestyle, waterGlasses: val };
-                    setLifestyle(updated);
-                    persistData({ lifestyle: updated });
-                  }}
-                >
-                  <Ionicons name="remove" size={16} color={colors.textPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.metricValText}>{lifestyle.waterGlasses} glasses</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.stepperSmallBtn}
-                  onPress={() => {
-                    const val = lifestyle.waterGlasses + 1;
-                    const updated = { ...lifestyle, waterGlasses: val };
-                    setLifestyle(updated);
-                    persistData({ lifestyle: updated });
-                  }}
-                >
-                  <Ionicons name="add" size={16} color={colors.textPrimary} />
-                </TouchableOpacity>
+                  );
+                })}
               </View>
-            </View>
 
-            <View style={styles.metricRow}>
-              <Ionicons name="walk" size={22} color="#15803D" />
-              <Text style={styles.metricTitle}>Exercise</Text>
-              <View style={styles.stepperSmallRow}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.stepperSmallBtn}
-                  onPress={() => {
-                    const val = Math.max(0, lifestyle.exerciseMins - 10);
-                    const updated = { ...lifestyle, exerciseMins: val };
-                    setLifestyle(updated);
-                    persistData({ lifestyle: updated });
-                  }}
-                >
-                  <Ionicons name="remove" size={16} color={colors.textPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.metricValText}>{lifestyle.exerciseMins} mins</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.stepperSmallBtn}
-                  onPress={() => {
-                    const val = lifestyle.exerciseMins + 10;
-                    const updated = { ...lifestyle, exerciseMins: val };
-                    setLifestyle(updated);
-                    persistData({ lifestyle: updated });
-                  }}
-                >
-                  <Ionicons name="add" size={16} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Ionicons name="moon" size={22} color="#8E24AA" />
-              <Text style={styles.metricTitle}>Sleep Duration</Text>
-              <View style={styles.stepperSmallRow}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.stepperSmallBtn}
-                  onPress={() => {
-                    const val = Math.max(0, lifestyle.sleepHours - 0.5);
-                    const updated = { ...lifestyle, sleepHours: val };
-                    setLifestyle(updated);
-                    persistData({ lifestyle: updated });
-                  }}
-                >
-                  <Ionicons name="remove" size={16} color={colors.textPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.metricValText}>{lifestyle.sleepHours} hrs</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.stepperSmallBtn}
-                  onPress={() => {
-                    const val = lifestyle.sleepHours + 0.5;
-                    const updated = { ...lifestyle, sleepHours: val };
-                    setLifestyle(updated);
-                    persistData({ lifestyle: updated });
-                  }}
-                >
-                  <Ionicons name="add" size={16} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* 5. MEDS & HRT */}
-      {activeTab === 'meds' && (
-        <View style={styles.tabSection}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>Meds & Supplements</Text>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.addMedBtn}
-              onPress={() => setShowAddMedModal(true)}
-            >
-              <Ionicons name="add" size={18} color="#FFFFFF" />
-              <Text style={styles.addMedBtnText}>Add</Text>
-            </TouchableOpacity>
-          </View>
-
-          {medications.map((med) => (
-            <View key={med.id} style={styles.medCard}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => handleToggleMedTaken(med.id)}
-              >
-                <Ionicons
-                  name={med.takenToday ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={24}
-                  color={med.takenToday ? '#15803D' : colors.textMuted}
+              <View style={styles.chatInputRow}>
+                <TextInput
+                  style={styles.chatTextInput}
+                  placeholder="Ask about symptoms, HRT, diet, sex..."
+                  placeholderTextColor={colors.textMuted}
+                  value={aiInputText}
+                  onChangeText={setAiInputText}
+                  onSubmitEditing={() => handleAskAI()}
                 />
-              </TouchableOpacity>
-
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.medTitle, med.takenToday && styles.medTitleTaken]}>
-                  {med.name} {med.isHRT ? '(HRT)' : ''}
-                </Text>
-                <Text style={styles.medDoseText}>{med.dose} • {med.time}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* 6. REMINDERS */}
-      {activeTab === 'screenings' && (
-        <View style={styles.tabSection}>
-          <Text style={styles.sectionHeaderTitle}>Screening Reminders</Text>
-          <Text style={styles.sectionHeaderSub}>Preventive health checks for postmenopausal care.</Text>
-
-          {screenings.map((sc) => (
-            <View key={sc.id} style={styles.card}>
-              <View style={styles.cardHeaderRow}>
-                <Ionicons name="calendar-outline" size={20} color="#8E24AA" />
-                <Text style={styles.cardTitle}>{sc.title}</Text>
-              </View>
-              <Text style={styles.screeningText}>Last performed: {sc.lastDate}</Text>
-              <Text style={styles.screeningText}>Next due date: {sc.nextDue}</Text>
-
-              <View style={styles.statusBadgeRow}>
-                <Text style={[styles.statusBadge, sc.status === 'Up to date' ? styles.statusBadgeGood : styles.statusBadgeWarn]}>
-                  {sc.status}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* 7. LIBRARY */}
-      {activeTab === 'learn' && (
-        <View style={styles.tabSection}>
-          <Text style={styles.sectionHeaderTitle}>Postmenopausal Library</Text>
-
-          {EDU_ARTICLES.map((article) => (
-            <TouchableOpacity
-              key={article.id}
-              activeOpacity={0.8}
-              style={styles.articleCard}
-              onPress={() => setSelectedArticle(article)}
-            >
-              <View style={styles.articleTagRow}>
-                <Text style={styles.articleCategory}>{article.category}</Text>
-                <Text style={styles.articleTime}>{article.readTime}</Text>
-              </View>
-              <Text style={styles.articleTitle}>{article.title}</Text>
-              <Text style={styles.articleSnippet} numberOfLines={2}>{article.content}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* 8. ASK AI */}
-      {activeTab === 'ai' && (
-        <View style={styles.tabSection}>
-          <Text style={styles.sectionHeaderTitle}>Ask RedApple AI</Text>
-          <Text style={styles.sectionHeaderSub}>Get instant answers tailored for postmenopausal wellness.</Text>
-
-          <Text style={styles.fieldLabel}>Preset Questions</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-            {PRESET_AI_QUESTIONS.map((q) => (
-              <TouchableOpacity
-                key={q}
-                activeOpacity={0.8}
-                style={styles.presetChip}
-                onPress={() => handleAskAI(q)}
-              >
-                <Ionicons name="help-circle-outline" size={14} color="#8E24AA" style={{ marginRight: 4 }} />
-                <Text style={styles.presetChipText}>{q}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <View style={styles.chatList}>
-            {aiChatMessages.map((msg) => {
-              const isUser = msg.sender === 'user';
-              return (
-                <View
-                  key={msg.id}
-                  style={[styles.chatBubble, isUser ? styles.userBubble : styles.aiBubble]}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.chatSendBtn}
+                  onPress={() => handleAskAI()}
                 >
-                  <Text style={[styles.chatText, isUser ? styles.userChatText : styles.aiChatText]}>
-                    {msg.text}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-
-          <View style={styles.chatInputRow}>
-            <TextInput
-              style={styles.chatTextInput}
-              placeholder="Ask about symptoms, HRT, diet, sex..."
-              placeholderTextColor={colors.textMuted}
-              value={aiInputText}
-              onChangeText={setAiInputText}
-              onSubmitEditing={() => handleAskAI()}
-            />
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.chatSendBtn}
-              onPress={() => handleAskAI()}
-            >
-              <Ionicons name="send" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+                  <Ionicons name="send" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
@@ -1669,17 +1435,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   calAiCircleToday: {
-    backgroundColor: '#8E24AA',
-    shadowColor: '#8E24AA',
+    backgroundColor: '#DC2626',
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 3,
   },
   calAiCircleSelected: {
-    backgroundColor: '#F3E8FF',
+    backgroundColor: '#FFEBEE',
     borderWidth: 1.5,
-    borderColor: '#8E24AA',
+    borderColor: '#DC2626',
   },
   calAiDayLetter: {
     fontSize: 13,
@@ -1702,7 +1468,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   calAiDateNumSelected: {
-    color: '#8E24AA',
+    color: '#DC2626',
     fontWeight: '900',
   },
 
@@ -1732,14 +1498,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 15,
-    backgroundColor: '#F3E8FF',
+    backgroundColor: '#FFEBEE',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroUserAvatarText: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   heroUserName: {
     fontSize: 16,
@@ -1929,16 +1695,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  upcomingPillPurple: {
-    backgroundColor: '#F3E8FF',
+  upcomingPillRed: {
+    backgroundColor: '#FFEBEE',
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  upcomingPillPurpleText: {
+  upcomingPillRedText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   upcomingPillBlue: {
     backgroundColor: '#E0F2FE',
@@ -2031,7 +1797,7 @@ const styles = StyleSheet.create({
   modeTabActive: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -2061,8 +1827,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   subTabPillActive: {
-    backgroundColor: '#8E24AA',
-    borderColor: '#8E24AA',
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
   },
   subTabText: {
     fontSize: 13,
@@ -2134,13 +1900,13 @@ const styles = StyleSheet.create({
   mainHeroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAF5FF',
-    borderColor: '#E9D5FF',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
     borderWidth: 1,
     borderRadius: 24,
     padding: 18,
     marginBottom: 20,
-    shadowColor: '#8E24AA',
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
@@ -2160,14 +1926,14 @@ const styles = StyleSheet.create({
   heroSubHeader: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#8E24AA',
+    color: '#DC2626',
     letterSpacing: 0.8,
   },
   editSetupBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: '#E9D5FF',
+    borderColor: '#FECACA',
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -2176,7 +1942,7 @@ const styles = StyleSheet.create({
   editSetupBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8E24AA',
+    color: '#DC2626',
     marginLeft: 4,
   },
   heroMainTitle: {
@@ -2210,7 +1976,7 @@ const styles = StyleSheet.create({
   heroMetricVal: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   hrtStatusBadge: {
     flexDirection: 'row',
@@ -2319,66 +2085,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* Symptoms Grid */
-  symptomsGrid: {
-    gap: 10,
-  },
-  symptomCard: {
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  symptomCardSelected: {
-    borderColor: '#8E24AA',
-    backgroundColor: '#FAF5FF',
-  },
-  symptomHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  symptomTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginLeft: 10,
-  },
-  symptomTitleSelected: {
-    fontWeight: '700',
-    color: '#8E24AA',
-  },
-  intensityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#E9D5FF',
-    gap: 8,
-  },
-  intensityLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  intensityPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-  },
-  intensityPillActive: {
-    backgroundColor: '#8E24AA',
-  },
-  intensityText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  intensityTextActive: {
-    color: '#FFFFFF',
-  },
-
   /* Form & Control Inputs */
   fieldLabel: {
     fontSize: 14,
@@ -2400,7 +2106,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   radioPillActive: {
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
   },
   radioText: {
     fontSize: 13,
@@ -2459,7 +2165,7 @@ const styles = StyleSheet.create({
   addMedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
@@ -2538,7 +2244,7 @@ const styles = StyleSheet.create({
   articleCategory: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8E24AA',
+    color: '#DC2626',
     textTransform: 'uppercase',
   },
   articleTime: {
@@ -2561,8 +2267,8 @@ const styles = StyleSheet.create({
   presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAF5FF',
-    borderColor: '#E9D5FF',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
     borderWidth: 1,
     borderRadius: 18,
     paddingHorizontal: 12,
@@ -2572,7 +2278,7 @@ const styles = StyleSheet.create({
   presetChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   chatList: {
     gap: 10,
@@ -2585,18 +2291,18 @@ const styles = StyleSheet.create({
   },
   aiBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F3E8FF',
+    backgroundColor: '#FFEBEE',
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
   },
   chatText: {
     fontSize: 14,
     lineHeight: 20,
   },
   aiChatText: {
-    color: '#4C1D95',
+    color: '#991B1B',
   },
   userChatText: {
     color: '#FFFFFF',
@@ -2621,7 +2327,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2666,7 +2372,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   wizardProgressSegmentActive: {
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
   },
   wizardProgressSegmentInactive: {
     backgroundColor: '#E5E7EB',
@@ -2674,7 +2380,7 @@ const styles = StyleSheet.create({
   wizardStepBadge: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   wizardStepContent: {
     width: '100%',
@@ -2684,8 +2390,8 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FAF5FF',
-    borderColor: '#E9D5FF',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2728,7 +2434,7 @@ const styles = StyleSheet.create({
   wizardStepperText: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   wizardOptionsCol: {
     width: '100%',
@@ -2745,8 +2451,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   wizardOptionCardActive: {
-    borderColor: '#8E24AA',
-    backgroundColor: '#FAF5FF',
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
   },
   wizardOptionText: {
     fontSize: 15,
@@ -2756,7 +2462,7 @@ const styles = StyleSheet.create({
   },
   wizardOptionTextActive: {
     fontWeight: '700',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   wizardBottomActions: {
     flexDirection: 'row',
@@ -2777,12 +2483,12 @@ const styles = StyleSheet.create({
   },
   wizardNextBtn: {
     flex: 1,
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
     paddingVertical: 16,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#8E24AA',
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -2819,7 +2525,7 @@ const styles = StyleSheet.create({
   modalCategoryText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#8E24AA',
+    color: '#DC2626',
   },
   modalContentPadding: {
     padding: 20,
@@ -2887,7 +2593,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   modalSaveBtn: {
-    backgroundColor: '#8E24AA',
+    backgroundColor: '#DC2626',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 12,

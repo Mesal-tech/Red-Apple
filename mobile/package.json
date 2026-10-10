@@ -27,6 +27,7 @@
     "react-native-incall-manager": "^4.2.2",
     "react-native-maps": "1.27.2",
     "react-native-safe-area-context": "~5.7.0",
+    "react-native-sideswipe": "^1.5.0",
     "react-native-svg": "^15.15.5",
     "react-native-webview": "13.16.1"
   },
@@ -34,7 +35,15 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:apk": "cd android && gradlew assembleRelease",
+    "build:apk:arm64": "cd android && gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a",
+    "build:bundle": "cd android && gradlew bundleRelease",
+    "prebuild:ios": "expo prebuild --platform ios",
+    "build:ios": "npx eas-cli build --platform ios",
+    "build:ios:sim": "npx eas-cli build --platform ios --profile preview-simulator",
+    "build:ios:preview": "npx eas-cli build --platform ios --profile preview",
+    "build:ios:prod": "npx eas-cli build --platform ios --profile production"
   },
   "private": true,
   "devDependencies": {

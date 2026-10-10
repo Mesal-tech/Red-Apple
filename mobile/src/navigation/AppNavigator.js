@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, StatusBar, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
+import AppLockModal, { PIN_STORAGE_KEY } from '../components/AppLockModal';
+import syncQueueService from '../services/syncQueueService';
 import {
   savePrivacyStatusSafe,
-  getOnboardingStatusSafe,
   saveOnboardingStatusSafe,
   getActiveHealthModeSafe,
   saveActiveHealthModeSafe,
@@ -12,93 +14,13 @@ import {
 } from '../utils/storage';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
+import notificationService from '../services/notificationService';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import OnboardingSetupScreen from '../screens/OnboardingSetupScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
 import HomeScreen from '../screens/HomeScreen';
 import DoctorDashboardScreen from '../screens/DoctorDashboardScreen';
-
-function AnimatedSplashScreen({ onFinishAnimation }) {
-  const logoScale = useRef(new Animated.Value(0.5)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const containerOpacity = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    let finished = false;
-    const finish = () => {
-      if (!finished) {
-        finished = true;
-        if (onFinishAnimation) {
-          onFinishAnimation();
-        }
-      }
-    };
-
-    // Safety fallback: guaranteed dismissal within 2.8s no matter what
-    const safetyTimer = setTimeout(finish, 2800);
-
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(logoScale, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.delay(600),
-      Animated.timing(containerOpacity, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      clearTimeout(safetyTimer);
-      finish();
-    });
-
-    return () => clearTimeout(safetyTimer);
-  }, []);
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[splashStyles.splashContainer, { opacity: containerOpacity }]}
-    >
-      <Animated.View
-        style={[
-          splashStyles.logoCircle,
-          {
-            opacity: logoOpacity,
-            transform: [{ scale: logoScale }],
-          },
-        ]}
-      >
-        <Image
-          source={require('../../assets/logo_white.png')}
-          style={{ width: 66, height: 66 }}
-          resizeMode="contain"
-        />
-      </Animated.View>
-
-      <Animated.View style={{ opacity: textOpacity, alignItems: 'center', marginTop: 20 }}>
-        <Text style={splashStyles.appNameText}>Red Apple</Text>
-        <Text style={splashStyles.appSloganText}>Wellness & Cycle Companion</Text>
-      </Animated.View>
-    </Animated.View>
-  );
-}
 
 const splashStyles = StyleSheet.create({
   splashContainer: {
@@ -113,18 +35,15 @@ const splashStyles = StyleSheet.create({
     bottom: 0,
     zIndex: 999,
   },
-  logoCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: colors.primary,
+  logoContainer: {
+    width: 120,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+  },
+  logoImage: {
+    width: 110,
+    height: 110,
   },
   appNameText: {
     fontSize: 32,
@@ -162,7 +81,6 @@ function isUserOnboarded(user) {
 function MainNavigation() {
   const { isAuthenticated, isLoading: authLoading, logout, user } = useAuth();
 
-  const [splashAnimationDone, setSplashAnimationDone] = useState(false);
   const [authScreen, setAuthScreen] = useState('onboarding'); // 'onboarding' | 'login' | 'signup'
   const [setupCompletedOverride, setSetupCompletedOverride] = useState(null);
   const [localMode, setLocalMode] = useState(getCachedActiveHealthMode);
@@ -182,6 +100,34 @@ function MainNavigation() {
     (user?.pregnancy_mode ? 'pregnancy' : null) ||
     'cycle';
 
+  const [isAppLocked, setIsAppLocked] = useState(false);
+
+  useEffect(() => {
+    syncQueueService.init();
+
+    const checkPinLock = async () => {
+      try {
+        const pin = await AsyncStorage.getItem(PIN_STORAGE_KEY);
+        if (pin) {
+          setIsAppLocked(true);
+        }
+      } catch (e) { }
+    };
+
+    checkPinLock();
+
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        checkPinLock();
+      }
+    });
+
+    return () => {
+      sub.remove();
+      syncQueueService.destroy();
+    };
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) {
       getActiveHealthModeSafe().then((storedMode) => {
@@ -191,6 +137,53 @@ function MainNavigation() {
       });
     }
   }, [isAuthenticated, user?.health_profile?.stage, user?.pregnancy_mode]);
+
+  useEffect(() => {
+    let notifReceivedSub = null;
+    let notifResponseSub = null;
+
+    if (isAuthenticated) {
+      notificationService.init();
+      notificationService.requestPermissionsAndToken();
+      notificationService.syncAllReminders({
+        healthProfile: user?.health_profile,
+        stage: activeMode,
+      });
+
+      try {
+        const Notifications = require('expo-notifications');
+        if (Notifications?.addNotificationReceivedListener) {
+          notifReceivedSub = Notifications.addNotificationReceivedListener((notification) => {
+            const { title, body, data } = notification.request.content;
+            notificationService.addInAppNotification({
+              id: notification.request.identifier || `notif_${Date.now()}`,
+              title,
+              body,
+              time: 'Just now',
+              type: data?.type || 'general',
+              data: data || {},
+              icon: data?.type === 'appointment' ? 'videocam-outline' : 'notifications-outline',
+              iconBg: data?.type === 'appointment' ? '#E6F4EA' : '#FFE5E9',
+              iconColor: data?.type === 'appointment' ? '#059669' : colors.primary,
+            });
+          });
+        }
+        if (Notifications?.addNotificationResponseReceivedListener) {
+          notifResponseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+            const data = response.notification.request.content.data;
+            if (data?.screen === 'DoctorCareScreen' && isDoctor) {
+              setPreviewPatientMode(false);
+            }
+          });
+        }
+      } catch (e) {}
+    }
+
+    return () => {
+      if (notifReceivedSub?.remove) notifReceivedSub.remove();
+      if (notifResponseSub?.remove) notifResponseSub.remove();
+    };
+  }, [isAuthenticated, user?.health_profile, activeMode]);
 
   const handleCompleteSetup = async (healthProfile, stage) => {
     await savePrivacyStatusSafe();
@@ -231,13 +224,17 @@ function MainNavigation() {
             onNavigateSignUp={() => setAuthScreen('signup')}
           />
         )}
-
-        {!splashAnimationDone && (
-          <AnimatedSplashScreen onFinishAnimation={() => setSplashAnimationDone(true)} />
-        )}
       </View>
     );
   }
+
+  const renderAppLock = () => (
+    <AppLockModal
+      visible={isAppLocked}
+      mode="unlock"
+      onSuccess={() => setIsAppLocked(false)}
+    />
+  );
 
   // Doctor Provider Portal (Default view for doctors, with optional patient preview toggle)
   if (isDoctor && !previewPatientMode) {
@@ -247,9 +244,7 @@ function MainNavigation() {
           onSignOut={handleSignOut}
           onPreviewPatientView={() => setPreviewPatientMode(true)}
         />
-        {!splashAnimationDone && (
-          <AnimatedSplashScreen onFinishAnimation={() => setSplashAnimationDone(true)} />
-        )}
+        {renderAppLock()}
       </View>
     );
   }
@@ -281,10 +276,7 @@ function MainNavigation() {
           healthProfile={user?.health_profile}
           onRedoSetup={() => setSetupCompletedOverride(false)}
         />
-
-        {!splashAnimationDone && (
-          <AnimatedSplashScreen onFinishAnimation={() => setSplashAnimationDone(true)} />
-        )}
+        {renderAppLock()}
       </View>
     );
   }
@@ -306,9 +298,7 @@ function MainNavigation() {
         />
       )}
 
-      {!splashAnimationDone && (
-        <AnimatedSplashScreen onFinishAnimation={() => setSplashAnimationDone(true)} />
-      )}
+      {renderAppLock()}
     </View>
   );
 }

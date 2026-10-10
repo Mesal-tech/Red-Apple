@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient';
+import syncQueueService from './syncQueueService';
 import {
   getCycleLogsSafe,
   saveCycleLogsSafe,
@@ -50,10 +51,27 @@ export function computeLocalFertilityPrediction(
   const cyclesPassed = Math.floor(diffDays / cycleLength);
   const currentCycleStart = new Date(baseMidnight.getTime() + cyclesPassed * cycleLength * 24 * 60 * 60 * 1000);
 
+  // Helper to format local YYYY-MM-DD safely without timezone shifts
+  const toLocalIso = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   const ovulationDate = new Date(currentCycleStart.getTime() + (ovulationCycleDay - 1) * 24 * 60 * 60 * 1000);
   const fertileStart = new Date(currentCycleStart.getTime() + (fertileStartCycleDay - 1) * 24 * 60 * 60 * 1000);
   const fertileEnd = new Date(currentCycleStart.getTime() + (fertileEndCycleDay - 1) * 24 * 60 * 60 * 1000);
   const nextPeriodStart = new Date(currentCycleStart.getTime() + cycleLength * 24 * 60 * 60 * 1000);
+
+  // If current cycle's fertile window is in the past, upcoming window is in next cycle
+  let activeOrNextCycleStart = currentCycleStart;
+  if (todayMidnight > fertileEnd) {
+    activeOrNextCycleStart = nextPeriodStart;
+  }
+  const upcomingFertileStart = new Date(activeOrNextCycleStart.getTime() + (fertileStartCycleDay - 1) * 24 * 60 * 60 * 1000);
+  const upcomingFertileEnd = new Date(activeOrNextCycleStart.getTime() + (fertileEndCycleDay - 1) * 24 * 60 * 60 * 1000);
+  const upcomingOvulation = new Date(activeOrNextCycleStart.getTime() + (ovulationCycleDay - 1) * 24 * 60 * 60 * 1000);
 
   let currentPhase = 'follicular';
   let chanceOfGettingPregnant = 'Low';
@@ -69,13 +87,18 @@ export function computeLocalFertilityPrediction(
     chanceOfGettingPregnant = 'Low';
   }
 
+  const diffUntilPeriodMs = nextPeriodStart.getTime() - todayMidnight.getTime();
+  const daysUntilNextPeriod = Math.max(Math.round(diffUntilPeriodMs / (1000 * 60 * 60 * 24)), 1);
+
   return {
     currentCycleDay,
+    currentDayOfCycle: currentCycleDay,
     currentPhase,
-    estimatedOvulationDate: ovulationDate.toISOString().split('T')[0],
-    fertileWindowStart: fertileStart.toISOString().split('T')[0],
-    fertileWindowEnd: fertileEnd.toISOString().split('T')[0],
-    nextPeriodStartDate: nextPeriodStart.toISOString().split('T')[0],
+    daysUntilNextPeriod,
+    estimatedOvulationDate: toLocalIso(upcomingOvulation),
+    fertileWindowStart: toLocalIso(upcomingFertileStart),
+    fertileWindowEnd: toLocalIso(upcomingFertileEnd),
+    nextPeriodStartDate: toLocalIso(nextPeriodStart),
     chanceOfGettingPregnant,
     cycleLength,
     periodDuration,
@@ -89,6 +112,38 @@ export function computeLocalCycleStats(logs = [], baselineCycleLength = 28, base
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const now = new Date();
 
+  // Extract logged period start dates to calculate real cycle lengths
+  const periodStartDates = [];
+  const sortedLogs = [...logs].sort((a, b) => {
+    const da = new Date(a.date || a.startDate || a.created_at).getTime();
+    const db = new Date(b.date || b.startDate || b.created_at).getTime();
+    return da - db;
+  });
+
+  for (let i = 0; i < sortedLogs.length; i++) {
+    const l = sortedLogs[i];
+    if (l.isPeriodDay || l.flow) {
+      const prev = sortedLogs[i - 1];
+      const isStart = !prev || (!prev.isPeriodDay && !prev.flow) || (l.startDate && l.startDate === l.date);
+      if (isStart) {
+        const d = new Date(l.date || l.startDate);
+        if (!isNaN(d.getTime())) periodStartDates.push(d);
+      }
+    }
+  }
+
+  // Calculate actual observed cycle lengths between logged periods
+  const observedLengthsByMonth = {};
+  for (let i = 1; i < periodStartDates.length; i++) {
+    const prevDate = periodStartDates[i - 1];
+    const currDate = periodStartDates[i];
+    const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 18 && diffDays <= 45) {
+      const mKey = `${currDate.getFullYear()}-${String(currDate.getMonth() + 1).padStart(2, '0')}`;
+      observedLengthsByMonth[mKey] = diffDays;
+    }
+  }
+
   // Generate 6 months progression ending at current month
   const recentMonthlyLengths = [];
   for (let i = 5; i >= 0; i--) {
@@ -96,47 +151,33 @@ export function computeLocalCycleStats(logs = [], baselineCycleLength = 28, base
     const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const monthLabel = monthNames[d.getMonth()];
 
-    // Baseline value with realistic natural variation
-    let len = baselineCycleLength;
-    if (i === 1) len = baselineCycleLength - 1;
-    if (i === 3) len = baselineCycleLength + 1;
-    if (i === 4) len = baselineCycleLength - 2;
+    // Use actual observed length if user has logs for that month; otherwise user's real baseline
+    const len = observedLengthsByMonth[monthKey] || baselineCycleLength;
 
     recentMonthlyLengths.push({
       monthKey,
       month: monthLabel,
-      cycleLength: Math.max(21, Math.min(35, len)),
+      cycleLength: Number(len),
     });
   }
 
-  // Symptom frequencies from logs
-  const symptomCounts = {};
-  let totalLogsWithSymptoms = 0;
-
+  // Find real dominant flow from logs
+  const flowCounts = {};
   logs.forEach((log) => {
-    if (Array.isArray(log.symptoms) && log.symptoms.length > 0) {
-      totalLogsWithSymptoms++;
-      log.symptoms.forEach((s) => {
-        symptomCounts[s] = (symptomCounts[s] || 0) + 1;
-      });
+    const f = log.flow || log.flowIntensity;
+    if (f && f !== 'None') {
+      flowCounts[f] = (flowCounts[f] || 0) + 1;
     }
   });
-
-  const symptomFrequencies = Object.entries(symptomCounts)
-    .map(([symptom, count]) => ({
-      symptom,
-      count,
-      percentage: totalLogsWithSymptoms > 0 ? Math.round((count / totalLogsWithSymptoms) * 100) : 0,
-    }))
-    .sort((a, b) => b.count - a.count);
+  const dominantFlow = Object.keys(flowCounts).sort((a, b) => flowCounts[b] - flowCounts[a])[0] || 'Normal Flow';
 
   return {
     averageCycleLength: baselineCycleLength,
     averagePeriodDuration: baselinePeriodDuration,
     totalLogsRecorded: logs.length,
-    dominantFlow: 'Normal Flow',
+    dominantFlow,
     recentMonthlyLengths,
-    symptomFrequencies,
+    symptomFrequencies: [],
   };
 }
 
@@ -167,7 +208,21 @@ export const cycleService = {
 
       const res = await apiRequest(`/cycles/prediction${queryString}`);
       if (res && res.prediction) {
-        return res.prediction;
+        const p = res.prediction;
+        return {
+          currentCycleDay: p.currentCycleDay || p.currentDayOfCycle || 1,
+          currentDayOfCycle: p.currentDayOfCycle || p.currentCycleDay || 1,
+          currentPhase: (p.currentPhase || 'follicular').toLowerCase(),
+          daysUntilNextPeriod: p.daysUntilNextPeriod,
+          nextPeriodStartDate: p.nextPeriodStartDate,
+          isFertileWindow: Boolean(p.isFertileWindow),
+          fertileWindowStart: p.fertileWindowStart,
+          fertileWindowEnd: p.fertileWindowEnd,
+          estimatedOvulationDate: p.estimatedOvulationDate,
+          chanceOfGettingPregnant: p.chanceOfGettingPregnant || p.chanceOfPregnancy || 'Low',
+          cycleLength: Number(p.cycleLength || cycleLength),
+          periodDuration: Number(p.periodDuration || periodDuration),
+        };
       }
     } catch (err) {
       // Backend unreachable or offline — use instant local computation
@@ -244,7 +299,8 @@ export const cycleService = {
         return res.log;
       }
     } catch (err) {
-      // Retained in local storage if offline
+      // Offline fallback: enqueue into persistent background retry queue
+      await syncQueueService.enqueue('CYCLE_LOG', newLog);
     }
 
     return newLog;

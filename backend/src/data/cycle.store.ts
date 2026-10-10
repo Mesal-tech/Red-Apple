@@ -62,61 +62,29 @@ class CycleStore {
   }
 
   private seedDefaults(): void {
-    // Seed default sample history for Amara Okonkwo
-    const defaultLogs: CycleLog[] = [
-      {
-        id: 'log_seed_1',
+    // Seed default sample history for Amara Okonkwo anchored to her profile lastPeriodDate
+    const lastPeriod = new Date(Date.now() - 12 * 24 * 60 * 60 * 1000);
+    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+    const defaultLogs: CycleLog[] = [];
+    const flowLevels: CycleLog['flowIntensity'][] = ['Heavy', 'Heavy', 'Medium', 'Light', 'Light'];
+
+    for (let day = 0; day < 5; day++) {
+      const d = new Date(lastPeriod);
+      d.setDate(lastPeriod.getDate() + day);
+      const dStr = formatDate(d);
+      defaultLogs.push({
+        id: `log_seed_${day + 1}`,
         user_id: 'usr_amara_default_01',
-        date: '2026-08-25',
-        startDate: '2026-08-25',
-        endDate: '2026-08-30',
+        date: dStr,
+        startDate: formatDate(lastPeriod),
+        endDate: formatDate(new Date(lastPeriod.getTime() + 4 * 24 * 60 * 60 * 1000)),
         isPeriodDay: true,
-        flowIntensity: 'Heavy',
-        feeling: 'Crampy',
-        symptoms: ['Cramps', 'Fatigue'],
-        created_at: '2026-08-25T08:00:00.000Z',
-      },
-      {
-        id: 'log_seed_2',
-        user_id: 'usr_amara_default_01',
-        date: '2026-08-26',
-        isPeriodDay: true,
-        flowIntensity: 'Heavy',
-        feeling: 'Tired',
-        symptoms: ['Fatigue'],
-        created_at: '2026-08-26T08:00:00.000Z',
-      },
-      {
-        id: 'log_seed_3',
-        user_id: 'usr_amara_default_01',
-        date: '2026-08-27',
-        isPeriodDay: true,
-        flowIntensity: 'Medium',
-        feeling: 'Normal',
-        symptoms: ['Bloating'],
-        created_at: '2026-08-27T08:00:00.000Z',
-      },
-      {
-        id: 'log_seed_4',
-        user_id: 'usr_amara_default_01',
-        date: '2026-08-28',
-        isPeriodDay: true,
-        flowIntensity: 'Light',
-        feeling: 'Great',
+        flowIntensity: flowLevels[day],
+        feeling: day < 2 ? 'Crampy' : 'Good',
         symptoms: [],
-        created_at: '2026-08-28T08:00:00.000Z',
-      },
-      {
-        id: 'log_seed_5',
-        user_id: 'usr_amara_default_01',
-        date: '2026-08-29',
-        isPeriodDay: true,
-        flowIntensity: 'Light',
-        feeling: 'Great',
-        symptoms: [],
-        created_at: '2026-08-29T08:00:00.000Z',
-      },
-    ];
+        created_at: `${dStr}T08:00:00.000Z`,
+      });
+    }
 
     for (const log of defaultLogs) {
       this.logs.set(log.id, log);
@@ -209,11 +177,9 @@ class CycleStore {
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mName = monthNames[d.getMonth()];
-      // Slight natural biological fluctuation around user's real baseline
-      const variance = (i % 3 === 0 ? 0 : i % 2 === 0 ? 1 : -1);
       recentCycleLengths.push({
         month: mName,
-        value: baselineCycleLength + variance,
+        value: baselineCycleLength,
       });
     }
 

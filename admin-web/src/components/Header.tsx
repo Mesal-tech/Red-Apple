@@ -1,7 +1,7 @@
 import React from 'react';
-import { Edit3, Inbox, Send } from 'lucide-react';
+import { LayoutDashboard, BookOpen, UserCheck, Edit3, Inbox, Send } from 'lucide-react';
 
-export type AdminView = 'compose' | 'inbox' | 'sent';
+export type AdminView = 'overview' | 'articles' | 'doctors' | 'compose' | 'inbox' | 'sent';
 
 interface HeaderProps {
   currentView: AdminView;
@@ -20,7 +20,10 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-3 py-2 sm:px-6 lg:px-8">
         {/* Left: Brand Logo & Title */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div
+          onClick={() => onViewChange('overview')}
+          className="flex items-center gap-2 sm:gap-3 cursor-pointer"
+        >
           <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-red-100 shadow-2xs shrink-0">
             <img
               src="/red-apple-logo.png"
@@ -38,27 +41,69 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center / Right: View Navigation Tabs */}
-        <div className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-zinc-200 bg-zinc-100/70 p-0.5 sm:p-1 shadow-2xs">
-          {/* Write / Compose */}
+        {/* Center / Right: Navigation Tabs */}
+        <div className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-zinc-200 bg-zinc-100/70 p-0.5 sm:p-1 shadow-2xs overflow-x-auto">
+          {/* Overview */}
+          <button
+            type="button"
+            onClick={() => onViewChange('overview')}
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              currentView === 'overview'
+                ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
+            }`}
+          >
+            <LayoutDashboard className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${currentView === 'overview' ? 'text-red-600' : 'text-zinc-500'}`} />
+            <span>Overview</span>
+          </button>
+
+          {/* Education Articles CMS */}
+          <button
+            type="button"
+            onClick={() => onViewChange('articles')}
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              currentView === 'articles'
+                ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
+            }`}
+          >
+            <BookOpen className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${currentView === 'articles' ? 'text-red-600' : 'text-zinc-500'}`} />
+            <span>Articles</span>
+          </button>
+
+          {/* Telemedicine & Doctors */}
+          <button
+            type="button"
+            onClick={() => onViewChange('doctors')}
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              currentView === 'doctors'
+                ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
+            }`}
+          >
+            <UserCheck className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${currentView === 'doctors' ? 'text-emerald-600' : 'text-zinc-500'}`} />
+            <span>Doctors</span>
+          </button>
+
+          {/* Write / Email Campaigns */}
           <button
             type="button"
             onClick={() => onViewChange('compose')}
-            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               currentView === 'compose'
                 ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
                 : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
             }`}
           >
             <Edit3 className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${currentView === 'compose' ? 'text-red-600' : 'text-zinc-500'}`} />
-            <span>Write</span>
+            <span>Campaigns</span>
           </button>
 
-          {/* Inbox (Received) */}
+          {/* Inbox */}
           <button
             type="button"
             onClick={() => onViewChange('inbox')}
-            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               currentView === 'inbox'
                 ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
                 : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
@@ -79,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => onViewChange('sent')}
-            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               currentView === 'sent'
                 ? 'bg-white text-zinc-900 shadow-xs ring-1 ring-zinc-200/70'
                 : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/50'
@@ -98,4 +143,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

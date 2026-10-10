@@ -55,6 +55,36 @@ export function authenticateToken(
 }
 
 /**
+ * Optional authentication middleware.
+ * Attaches user if valid token is provided, but allows guest access.
+ */
+export function optionalAuthenticateToken(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return next();
+  }
+
+  const parts = authHeader.split(' ');
+  if (parts.length === 2 && parts[0] === 'Bearer') {
+    try {
+      const payload = verifyAccessToken(parts[1]);
+      req.user = {
+        userId: payload.userId,
+        email: payload.email,
+        role: payload.role as UserRole,
+      };
+    } catch {
+      // Ignored for optional auth
+    }
+  }
+  next();
+}
+
+/**
  * Role-based access control middleware.
  */
 export function requireRole(...allowedRoles: UserRole[]) {

@@ -11,4 +11,10 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Add any project specific keep options here:
+# WebRTC & Stream Video Video SDK keep rules
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+-keep class io.getstream.video.android.** { *; }
+-dontwarn io.getstream.video.android.**
+-keep class com.oney.WebRTCModule.** { *; }
+-dontwarn com.oney.WebRTCModule.**

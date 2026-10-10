@@ -18,10 +18,15 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.archer.redapple",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Red Apple needs access to your camera for HD telemedicine video consultations with certified specialists.",
-        "NSMicrophoneUsageDescription": "Red Apple needs access to your microphone for clear audio communication during telemedicine consultations."
-      }
+        "NSMicrophoneUsageDescription": "Red Apple needs access to your microphone for clear audio communication during telemedicine consultations.",
+        "NSLocationWhenInUseUsageDescription": "Red Apple uses your location to show nearby women's reproductive health, fertility, and wellness clinics.",
+        "NSBluetoothAlwaysUsageDescription": "Red Apple needs access to Bluetooth to connect to wireless audio headsets during telemedicine video consultations."
+      },
+      "bitcode": false
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +42,17 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.CHANGE_NETWORK_STATE",
-        "android.permission.BLUETOOTH_CONNECT"
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.SCHEDULE_EXACT_ALARM"
       ]
     },
     "web": {
@@ -46,16 +61,33 @@
     "plugins": [
       "expo-web-browser",
       "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FA4A14"
+        }
+      ],
       "@config-plugins/react-native-webrtc",
+      "expo-apple-authentication",
       [
         "expo-build-properties",
         {
           "android": {
             "minSdkVersion": 24
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
           }
         }
       ],
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "69965fdb-1050-4f5b-b3c3-24125f8865ad"
+      }
+    },
+    "owner": "ceeza"
   }
 }

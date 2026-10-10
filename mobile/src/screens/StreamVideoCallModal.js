@@ -28,7 +28,8 @@ let StreamVideoSDK = null;
 try {
   StreamVideoSDK = require('@stream-io/video-react-native-sdk');
 } catch (e) {
-  console.warn('[StreamVideoCallModal] Stream Video SDK native modules not linked or unavailable:', e?.message);
+  // Graceful fallback for non-native development environments (e.g. Expo Go)
+  console.log('[StreamVideoCallModal] Stream Video SDK native modules not linked, using webview fallback');
 }
 
 // Stable null component to prevent re-mounting sub-trees on every timer tick
@@ -92,9 +93,9 @@ const DEFAULT_PATIENT_PHOTO =
 // Verified Telemedicine Care Team specialists for the Invite Sheet
 const CARE_TEAM_MEMBERS = [
   {
-    id: 'doc_mesal',
-    name: 'Dr. Mesal Okubor',
-    handle: '@mesalDoc',
+    id: 'doc_lead',
+    name: 'Consulting Specialist',
+    handle: '@leadDoctor',
     role: 'Lead Obstetrician & Gynecologist',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=300&auto=format&fit=crop&q=80',
     initials: 'MO',
@@ -239,16 +240,16 @@ function TopFloatingNav({
                 effectiveMode === 'muted'
                   ? 'volume-mute'
                   : effectiveMode === 'earpiece'
-                  ? 'ear-outline'
-                  : 'volume-high'
+                    ? 'ear-outline'
+                    : 'volume-high'
               }
               size={14}
               color={
                 effectiveMode === 'muted'
                   ? '#F87171'
                   : effectiveMode === 'earpiece'
-                  ? '#34D399'
-                  : '#FFFFFF'
+                    ? '#34D399'
+                    : '#FFFFFF'
               }
               style={{ marginRight: 5 }}
             />
@@ -262,8 +263,8 @@ function TopFloatingNav({
               {effectiveMode === 'muted'
                 ? 'Muted'
                 : effectiveMode === 'earpiece'
-                ? 'Earpiece'
-                : 'Speaker'}
+                  ? 'Earpiece'
+                  : 'Speaker'}
             </Text>
           </TouchableOpacity>
         )}
@@ -339,16 +340,16 @@ function BottomGlassHudCard({
                       effectiveMode === 'muted'
                         ? 'volume-mute'
                         : effectiveMode === 'earpiece'
-                        ? 'ear-outline'
-                        : 'volume-high'
+                          ? 'ear-outline'
+                          : 'volume-high'
                     }
                     size={13}
                     color={
                       effectiveMode === 'muted'
                         ? '#F87171'
                         : effectiveMode === 'earpiece'
-                        ? '#34D399'
-                        : '#FFFFFF'
+                          ? '#34D399'
+                          : '#FFFFFF'
                     }
                     style={{ marginRight: 4 }}
                   />
@@ -362,8 +363,8 @@ function BottomGlassHudCard({
                     {effectiveMode === 'muted'
                       ? 'Muted'
                       : effectiveMode === 'earpiece'
-                      ? 'Earpiece'
-                      : 'Speaker'}
+                        ? 'Earpiece'
+                        : 'Speaker'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -975,19 +976,18 @@ export default function StreamVideoCallModal({
     typeof isDoctorView === 'boolean'
       ? isDoctorView
       : Boolean(
-          booking?.is_doctor ||
-          booking?.is_doctor_view ||
-          currentUser?.role === 'doctor' ||
-          currentUser?.email === 'mesalokubor63@gmail.com' ||
-          (currentUser?.name && currentUser.name.toLowerCase().includes('mesal okubor'))
-        );
+        booking?.is_doctor ||
+        booking?.is_doctor_view ||
+        currentUser?.role === 'doctor' ||
+        currentUser?.email === 'doctor@redapple.health'
+      );
 
   // Two-sided aware display info:
   // Doctor views -> show PATIENT (e.g. Amara Okonkwo)
-  // Patient views -> show DOCTOR (Dr. Mesal Okubor)
+  // Patient views -> show DOCTOR (Consulting Specialist)
   const defaultDisplayName = isDoctor
     ? (booking?.user_name || booking?.patient_name || 'Amara Okonkwo')
-    : (booking?.doctor_name || 'Dr. Mesal Okubor');
+    : (booking?.doctor_name || 'Consulting Specialist');
 
   const defaultDisplaySubtitle = isDoctor
     ? (booking?.reason || 'General Consultation')
@@ -1052,7 +1052,7 @@ export default function StreamVideoCallModal({
           : (effectiveUser?.id || booking?.user_id || 'usr_patient_amara');
 
         const userName = isDoctor
-          ? 'Dr. Mesal Okubor'
+          ? (effectiveUser?.name || 'Consulting Doctor')
           : (effectiveUser?.name || booking?.user_name || 'Amara Okonkwo');
 
         const userRole = isDoctor ? 'doctor' : 'user';
@@ -1106,7 +1106,7 @@ export default function StreamVideoCallModal({
         });
 
         if (isCancelled) {
-          videoClient.disconnectUser().catch(() => {});
+          videoClient.disconnectUser().catch(() => { });
           return;
         }
         clientRef.current = videoClient;
@@ -1143,8 +1143,8 @@ export default function StreamVideoCallModal({
         }
 
         if (isCancelled) {
-          activeCall.leave().catch(() => {});
-          videoClient.disconnectUser().catch(() => {});
+          activeCall.leave().catch(() => { });
+          videoClient.disconnectUser().catch(() => { });
           return;
         }
 
@@ -1181,19 +1181,19 @@ export default function StreamVideoCallModal({
       if (StreamVideoSDK?.callManager?.speaker) {
         try {
           StreamVideoSDK.callManager.speaker.setMute(false);
-        } catch (e) {}
+        } catch (e) { }
       }
       if (StreamVideoSDK?.callManager?.stop) {
         try {
           StreamVideoSDK.callManager.stop();
-        } catch (e) {}
+        } catch (e) { }
       }
       if (callRef.current) {
-        callRef.current.leave().catch(() => {});
+        callRef.current.leave().catch(() => { });
         callRef.current = null;
       }
       if (clientRef.current) {
-        clientRef.current.disconnectUser().catch(() => {});
+        clientRef.current.disconnectUser().catch(() => { });
         clientRef.current = null;
       }
       setCall(null);
@@ -1205,7 +1205,7 @@ export default function StreamVideoCallModal({
   const handleHangup = async () => {
     try {
       if (call) {
-        await call.leave().catch(() => {});
+        await call.leave().catch(() => { });
       }
     } catch (err) {
       console.warn('[StreamVideoCallModal] Hangup error:', err);
@@ -1213,15 +1213,15 @@ export default function StreamVideoCallModal({
     if (StreamVideoSDK?.callManager?.speaker) {
       try {
         StreamVideoSDK.callManager.speaker.setMute(false);
-      } catch (e) {}
+      } catch (e) { }
     }
     if (StreamVideoSDK?.callManager?.stop) {
       try {
         StreamVideoSDK.callManager.stop();
-      } catch (e) {}
+      } catch (e) { }
     }
     if (clientRef.current) {
-      clientRef.current.disconnectUser().catch(() => {});
+      clientRef.current.disconnectUser().catch(() => { });
       clientRef.current = null;
     }
     setCall(null);
@@ -1723,7 +1723,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#10B981',
+    backgroundColor: '#C81E3A',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -13,6 +13,7 @@ import {
   TextInput,
   Dimensions,
   Share,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +34,6 @@ export default function ProfileScreen({
   activeCycleProfile = null,
   cycleLogs = [],
   onBookDoctor = null,
-  onLogSymptoms = null,
 }) {
   const { user } = useAuth();
 
@@ -41,10 +41,9 @@ export default function ProfileScreen({
   const isDoctor =
     user?.role === 'doctor' || user?.email?.toLowerCase() === 'mesalokubor63@gmail.com';
   const displayName = isDoctor
-    ? (user?.name && user?.name !== 'mesalokubor63' ? user.name : 'Dr. Mesal Okubor')
-    : (user?.name || 'Amara Okonkwo');
-  const displayEmail = user?.email || (isDoctor ? 'mesalokubor63@gmail.com' : 'amara@redapple.health');
-  const displayHandle = isDoctor ? '@dr.mesal' : '@amara.health';
+    ? (user?.name || 'Dr. Specialist')
+    : (user?.name);
+  const displayHandle = isDoctor ? '@dr.specialist' : '@amara.health';
   const memberSince = user?.created_at
     ? `Member since ${new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
     : 'Member since Jan 2026';
@@ -73,7 +72,7 @@ export default function ProfileScreen({
   const [clinicalHistory, setClinicalHistory] = useState({
     allergies: 'Penicillin (Mild rash) • No known food allergies',
     conditions: 'Cycle Regularity Tracking • Normal Pap Smear (2025)',
-    emergencyContact: 'Dr. Mesal Okubor / Next of Kin (+234 803 123 4567)',
+    emergencyContact: 'Emergency Contact / Next of Kin (+234 803 123 4567)',
   });
 
   // Wearables banner dismiss
@@ -262,8 +261,8 @@ export default function ProfileScreen({
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={styles.container} edges={Platform.OS === 'ios' ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
 
       {/* SNAPCHAT-STYLE TOP HEADER BAR */}
       <View style={styles.topNavBar}>
@@ -691,27 +690,9 @@ export default function ProfileScreen({
             {/* SECTION: RECENT HEALTH ACTIVITY (Snapchat "Post to..." Style) */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>RECENT HEALTH ACTIVITY</Text>
-              {onLogSymptoms && (
-                <TouchableOpacity activeOpacity={0.7} onPress={onLogSymptoms}>
-                  <Text style={styles.sectionActionText}>+ Log Symptoms</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
             <View style={styles.cardGroup}>
-              <View style={[styles.cardItemRow, styles.rowBorder]}>
-                <View style={styles.cardItemLeft}>
-                  <View style={[styles.circleIconSmall, { backgroundColor: '#E0F2F1' }]}>
-                    <Ionicons name="happy" size={18} color="#008080" />
-                  </View>
-                  <View style={{ marginLeft: 12 }}>
-                    <Text style={styles.cardItemHeading}>Daily Feeling & Symptoms</Text>
-                    <Text style={styles.cardItemDetail}>Normal flow • Calm mood • Hydrated</Text>
-                  </View>
-                </View>
-                <Text style={styles.cardTimestamp}>Today</Text>
-              </View>
-
               <View style={styles.cardItemRow}>
                 <View style={styles.cardItemLeft}>
                   <View style={[styles.circleIconSmall, { backgroundColor: '#EDE7F6' }]}>
@@ -753,12 +734,12 @@ export default function ProfileScreen({
                 />
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.specialistName}>Dr. Mesal Okubor</Text>
+                    <Text style={styles.specialistName}>Consulting OB-GYN</Text>
                     <Ionicons name="checkmark-circle" size={15} color="#059669" />
                   </View>
                   <Text style={styles.specialistCreds}>MBBS, FWACS, FMCOG</Text>
                   <Text style={styles.specialistRole}>
-                    Obstetrician & Gynecologist • Lead Consultant
+                    Obstetrician & Gynecologist • Lead Telemedicine Consultant
                   </Text>
                 </View>
               </View>
@@ -778,7 +759,7 @@ export default function ProfileScreen({
                   if (onBookDoctor) {
                     onBookDoctor();
                   } else {
-                    Alert.alert('Consultation', 'Redirecting to Dr. Mesal Okubor appointment schedule.');
+                    Alert.alert('Consultation', 'Redirecting to specialist appointment schedule.');
                   }
                 }}
               >
@@ -929,7 +910,7 @@ export default function ProfileScreen({
                   </View>
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.cardItemHeading}>Pelvic Ultrasound Report</Text>
-                    <Text style={styles.cardItemDetail}>Normal Scan • Verified by Dr. Mesal</Text>
+                    <Text style={styles.cardItemDetail}>Normal Scan • Verified by Specialist</Text>
                   </View>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
@@ -1306,7 +1287,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 38) + 8 : 10,
+    paddingBottom: 10,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',

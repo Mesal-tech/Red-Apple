@@ -32,6 +32,18 @@ export interface User {
   pregnancy_mode: boolean;
   role: UserRole;
   refresh_tokens: string[];
+  push_tokens?: string[];
+  read_notification_ids?: string[];
+  notification_settings?: {
+    periodAlerts?: boolean;
+    fertileWindowAlerts?: boolean;
+    appointmentAlerts?: boolean;
+    discreetTitles?: boolean;
+    dailyLogReminder?: boolean;
+    medicationAlerts?: boolean;
+    hydrationAlerts?: boolean;
+    weeklyGrowthAlerts?: boolean;
+  };
   reset_otp?: UserResetOtp | null;
   health_profile?: UserHealthProfile;
   created_at: string;

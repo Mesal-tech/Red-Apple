@@ -1,125 +1,108 @@
-import React, { useState } from 'react';
-import { ShieldCheck, HeartPulse, Stethoscope, Smartphone, BookOpen } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { MenuOverlay } from './MenuOverlay';
 
 interface NavbarProps {
   brandName?: string;
+  transparentOnTop?: boolean;
+  activePage?: 'home' | 'about' | 'newsroom' | 'contact';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   brandName = 'RED APPLE',
+  activePage,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isFeaturesOpen, setIsFeaturesOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
-  const platformFeatures = [
-    {
-      name: 'CYCLE & OVULATION PREDICTOR',
-      description: 'Accurate window forecasting & symptom logs',
-      icon: HeartPulse,
-      badge: 'CORE'
-    },
-    {
-      name: 'TELEMEDICINE CONSULTATIONS',
-      description: 'Book certified OB-GYNs & fertility experts',
-      icon: Stethoscope,
-      badge: 'LIVE VIDEO'
-    },
-    {
-      name: 'PREGNANCY CARE MODE',
-      description: 'Week-by-week fetal growth & antenatal alerts',
-      icon: Smartphone,
-      badge: 'MODE'
-    },
-    {
-      name: 'REPRODUCTIVE HEALTH LIBRARY',
-      description: 'Doctor-reviewed African medical guides',
-      icon: BookOpen,
-      badge: 'INSIGHTS'
-    },
-  ];
+  useEffect(() => {
+    const checkDarkTheme = () => {
+      const darkSections = document.querySelectorAll<HTMLElement>('[data-nav-theme="dark"]');
+      let foundDark = false;
+      const navCheckLine = 50; // Check ~50px below viewport top
+
+      darkSections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= navCheckLine && rect.bottom >= navCheckLine) {
+          foundDark = true;
+        }
+      });
+
+      setIsDark(foundDark);
+    };
+
+    window.addEventListener('scroll', checkDarkTheme, { passive: true });
+    window.addEventListener('resize', checkDarkTheme, { passive: true });
+    checkDarkTheme();
+
+    return () => {
+      window.removeEventListener('scroll', checkDarkTheme);
+      window.removeEventListener('resize', checkDarkTheme);
+    };
+  }, []);
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-40 pointer-events-none">
-        <nav className="w-full px-6 py-4 md:px-10 md:py-6 flex items-center justify-between pointer-events-auto">
-          {/* Left Navigation Group */}
-          <div className="flex items-center space-x-6 md:space-x-8 text-[11px] font-semibold tracking-wider font-mono select-none">
+      {/* Seamless Floating Header (Transparent Background to Never Obstruct the Page) */}
+      <header className="fixed top-0 left-0 right-0 z-40 bg-transparent py-3.5 transition-colors duration-300 pointer-events-none">
+        <nav className="max-w-7xl mx-auto px-6 sm:px-10 flex items-center justify-between">
+          
+          {/* Brand Logo & Name (Switches between Dark and Light mode seamlessly) */}
+          <a
+            href="/"
+            className="flex items-center gap-3 group cursor-pointer select-none pointer-events-auto"
+          >
+            <img
+              src={isDark ? '/logo-white.png' : '/logo.png'}
+              alt="Red Apple"
+              className="w-9 h-9 sm:w-10 sm:h-10 object-contain group-hover:scale-105 transition-all drop-shadow-2xs"
+            />
+            <span
+              className={`font-sans font-extrabold text-lg sm:text-xl tracking-tight transition-colors duration-300 ${
+                isDark ? 'text-white' : 'text-neutral-950'
+              }`}
+            >
+              {brandName}
+            </span>
+          </a>
+
+          {/* Right Action Group: Dot Contact Button & Grid Menu Toggle */}
+          <div className="flex items-center gap-2.5 pointer-events-auto">
+            <a
+              href="/contact"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-neutral-200/80 bg-white/95 backdrop-blur-md hover:bg-white text-[11px] font-bold uppercase tracking-wider text-neutral-900 transition-all shadow-md cursor-pointer group"
+            >
+              <span className="w-2 h-2 rounded-full bg-crimson" />
+              <span>Contact</span>
+            </a>
+
             <button
               onClick={() => setIsMenuOpen(true)}
-              className="hover:text-crimson transition-colors duration-150 flex items-center gap-1 cursor-pointer group"
+              type="button"
+              className="group grid size-[38px] sm:size-[40px] place-items-center rounded-xl border border-neutral-200/80 bg-white/95 backdrop-blur-md text-neutral-900 transition-all hover:bg-white shadow-md cursor-pointer"
               aria-label="Open Navigation Menu"
             >
-              <span>MENU</span>
-              <span className="text-crimson group-hover:rotate-90 transition-transform duration-200">+</span>
-            </button>
-
-            <div className="relative">
-              <button
-                onClick={() => setIsFeaturesOpen(!isFeaturesOpen)}
-                className="hidden sm:flex items-center gap-1 hover:text-crimson transition-colors duration-150 cursor-pointer group"
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="size-4.5 transition-transform duration-200 group-hover:scale-110"
               >
-                <span>FEATURES</span>
-                <span className={`text-crimson transition-transform duration-200 ${isFeaturesOpen ? 'rotate-45' : ''}`}>+</span>
-              </button>
-
-              {/* Features Dropdown Menu */}
-              {isFeaturesOpen && (
-                <div 
-                  className="absolute left-0 mt-3 w-80 bg-white/95 backdrop-blur-md border border-neutral-200 shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-                  onMouseLeave={() => setIsFeaturesOpen(false)}
-                >
-                  <div className="text-[10px] text-neutral-400 font-mono mb-2 uppercase tracking-widest pb-1 border-b border-neutral-100 flex justify-between">
-                    <span>Clinical Capabilities</span>
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  </div>
-                  <div className="space-y-2 pt-1">
-                    {platformFeatures.map((feat, idx) => {
-                      const IconComponent = feat.icon;
-                      return (
-                        <a
-                          key={idx}
-                          href={`#feature-${idx}`}
-                          onClick={() => setIsFeaturesOpen(false)}
-                          className="group block p-2 hover:bg-neutral-50 rounded-xs transition-all"
-                        >
-                          <div className="flex justify-between items-center mb-0.5">
-                            <div className="flex items-center gap-2">
-                              <IconComponent className="w-3.5 h-3.5 text-crimson" />
-                              <span className="font-semibold text-xs text-neutral-900 group-hover:text-crimson">{feat.name}</span>
-                            </div>
-                            <span className="text-[9px] text-neutral-500 font-mono bg-neutral-100 px-1 py-0.2">{feat.badge}</span>
-                          </div>
-                          <p className="text-[11px] text-neutral-500 font-sans pl-5.5">{feat.description}</p>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+                <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="currentColor" />
+                <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" fill="currentColor" />
+                <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" fill="currentColor" />
+                <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" fill="currentColor" />
+              </svg>
+            </button>
           </div>
 
-          {/* Center Brand Title */}
-          <div className="absolute left-1/2 -translate-x-1/2 select-none text-center">
-            <a
-              href="/"
-              className="text-lg md:text-2xl font-black font-display tracking-tight hover:opacity-85 transition-opacity uppercase"
-            >
-              <span>{brandName}</span>
-            </a>
-          </div>
-
-          {/* Empty Right Area for Balance */}
-          <div className="w-16 hidden sm:block" />
         </nav>
       </header>
 
-      {/* Fullscreen Brutalist Luxury Editorial Menu Overlay */}
+      {/* Directory Menu Overlay */}
       <MenuOverlay
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         brandName={brandName}
+        activePage={activePage}
       />
     </>
   );

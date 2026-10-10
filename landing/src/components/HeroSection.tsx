@@ -1,174 +1,173 @@
 import React, { useRef } from 'react';
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { TornPaperEdge } from './TornPaperEdge';
-
-gsap.registerPlugin(ScrollTrigger);
+import { ArrowDown } from 'lucide-react';
+import { KineticHeroText } from './KineticHeroText';
 
 interface HeroSectionProps {
   brandName?: string;
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
-  brandName = 'RED APPLE',
+  brandName: _brandName = 'RED APPLE',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const leftHeadlineRef = useRef<HTMLDivElement>(null);
-  const rightHeadlineRef = useRef<HTMLDivElement>(null);
-  const bottomBannerRef = useRef<HTMLDivElement>(null);
-
-  const splitPercent = 50.0;
+  const kickerRef = useRef<HTMLParagraphElement>(null);
+  const headlineRef = useRef<HTMLHeadingElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const logosRef = useRef<HTMLDivElement>(null);
 
   useGSAP(
     () => {
       if (!containerRef.current) return;
 
-      // Unified single ScrollTrigger: Pins the hero AND scrubs text animation together
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: containerRef.current,
-          start: 'top top',
-          end: '+=100%',
-          pin: true,
-          pinSpacing: false,
-          scrub: 0.6,
-        },
-      });
+      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
 
-      tl.to(
-        leftHeadlineRef.current,
-        {
-          x: -180,
-          opacity: 0,
-          ease: 'power1.out',
-        },
-        0
-      )
-        .to(
-          rightHeadlineRef.current,
+      tl.from(kickerRef.current, {
+        y: 20,
+        opacity: 0,
+        duration: 0.7,
+      })
+        .from(
+          headlineRef.current,
           {
-            x: 180,
+            y: 35,
             opacity: 0,
-            ease: 'power1.out',
+            duration: 0.9,
           },
-          0
+          '-=0.4'
         )
-        .to(
-          bottomBannerRef.current,
+        .from(
+          ctaRef.current,
           {
-            y: 100,
+            y: 15,
             opacity: 0,
-            ease: 'power1.out',
+            duration: 0.6,
           },
-          0
+          '-=0.4'
+        )
+        .from(
+          logosRef.current,
+          {
+            opacity: 0,
+            y: 15,
+            duration: 0.8,
+          },
+          '-=0.3'
         );
     },
     { scope: containerRef }
   );
 
+  const scrollToContent = () => {
+    const target =
+      document.querySelector('#intro') ||
+      document.querySelector('#mission') ||
+      document.querySelector('#products');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div
+    <section
       ref={containerRef}
-      className="relative w-full h-screen min-h-[640px] overflow-hidden select-none bg-neutral-950 flex items-center justify-center font-sans z-10"
+      className="relative w-full min-h-[calc(100vh-20px)] bg-white text-neutral-950 flex flex-col justify-between items-center px-6 sm:px-10 lg:px-14 pt-32 sm:pt-36 pb-10 overflow-hidden"
     >
-      {/* ========================================================================= */}
-      {/* 1. DUAL FULLSCREEN BACKGROUND & USER HERO IMAGE COMPOSITION (LOCKED) */}
-      {/* ========================================================================= */}
+      {/* 1. Center Hero Block: Kicker + Perfectly Sized Headline + Squiggle CTA */}
+      <div className="flex-1 flex flex-col items-center justify-center text-center max-w-5xl mx-auto my-auto w-full py-5 sm:py-10">
+        
+        {/* Kicker (Direct from Page 1 of Pre-Seed Pitch Deck) */}
+        <p
+          ref={kickerRef}
+          className="font-serif italic sm:not-italic font-normal text-base sm:text-lg text-neutral-600 tracking-tight leading-snug mb-3 sm:mb-4 max-w-md mx-auto"
+        >
+          Reproductive &amp; preventive healthcare,
+          <br className="hidden sm:inline" /> built for African women
+        </p>
 
-      {/* A. RIGHT HALF: Concrete Studio Grunge Background + Monochrome Image */}
-      <div
-        className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-gradient-to-br from-[#B8BBBE] via-[#9DA0A4] to-[#808489]"
-        style={{
-          clipPath: `polygon(${splitPercent}% 0, 100% 0, 100% 100%, ${splitPercent}% 100%)`,
-        }}
-      >
-        {/* Subtle noise/grain texture on right */}
-        <div className="absolute inset-0 opacity-40 mix-blend-overlay pointer-events-none bg-[radial-gradient(circle_at_75%_35%,rgba(255,255,255,0.4)_0%,transparent_60%)]" />
-
-        {/* Exact same image: rendered in monochrome and blended with concrete */}
-        <img
-          src="/red-apple-family.jpg"
-          alt="Red Apple Hero Monochrome"
-          className="w-full h-full object-cover object-center filter grayscale contrast-130 brightness-95 mix-blend-multiply pointer-events-none"
-          draggable={false}
+        {/* Main Headline with Extrafazant-Style GSAP Kinetic Hover Effect */}
+        <KineticHeroText
+          line1="TRANSFORMING REPRODUCTIVE"
+          line2Sans="HEALTH"
+          line2Serif="IN AFRICA"
+          headingRef={headlineRef}
         />
-      </div>
 
-      {/* B. LEFT HALF: Pure Solid White Canvas + Exact Same Image in Vivid Color */}
-      <div
-        className="absolute inset-0 w-full h-full z-5 overflow-hidden bg-white shadow-2xl transition-[clip-path] duration-75 ease-out"
-        style={{
-          clipPath: `polygon(0 0, ${splitPercent}% 0, ${splitPercent}% 100%, 0 100%)`,
-        }}
-      >
-        {/* Exact same image: rendered in full natural color on pure white */}
-        <img
-          src="/red-apple-family.jpg"
-          alt="Red Apple Hero Color"
-          className="w-full h-full object-cover object-center filter saturate-105 contrast-105 pointer-events-none"
-          draggable={false}
-        />
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. TORN PAPER RIPPED EDGE SVG SHADOW & FIBERS (LOCKED) */}
-      {/* ========================================================================= */}
-      <div className="absolute inset-0 z-15 pointer-events-none">
-        <TornPaperEdge splitPercent={splitPercent} />
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. EDITORIAL TYPOGRAPHY & PRECISE PLACEMENT */}
-      {/* ========================================================================= */}
-
-      {/* A. Left Headline: RED APPLE (Upper-left quadrant on white canvas) */}
-      <div
-        ref={leftHeadlineRef}
-        className="absolute left-6 sm:left-8 md:left-10 lg:left-14 top-[16%] md:top-[18%] z-25 pointer-events-none max-w-[32%]"
-      >
-        <h1 className="font-display font-normal text-4xl sm:text-6xl md:text-7xl lg:text-8xl text-neutral-950 tracking-tight leading-[0.88] uppercase drop-shadow-xs">
-          {brandName}
-        </h1>
-      </div>
-
-      {/* B. Right Headline: DEDICATED TO YOUR WELL-BEING (Vertically centered on grey concrete) */}
-      <div
-        ref={rightHeadlineRef}
-        className="absolute right-6 sm:right-8 md:right-10 lg:right-14 top-1/2 -translate-y-1/2 z-25 text-right pointer-events-none max-w-[34%] flex flex-col items-end"
-      >
-        <div className="font-display font-normal text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl text-neutral-950 tracking-tight leading-[0.88] text-right uppercase drop-shadow-xs">
-          <div>DEDICATED TO</div>
-          <div>YOUR WELL-BEING</div>
-        </div>
-      </div>
-
-      {/* C. Bottom Spanning Statement: YOUR PARTNER IN HEALTH (High Contrast Red / White Split) */}
-      <div
-        ref={bottomBannerRef}
-        className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-0 right-0 z-30 pointer-events-none px-4 flex justify-center"
-      >
-        <div className="relative w-full max-w-[1700px] text-center">
-          {/* Base Layer: Crisp Pure White Text on Concrete Grey */}
-          <div className="w-full text-center select-none">
-            <span className="font-display font-normal text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-[5.5rem] 2xl:text-[6rem] text-white tracking-tight leading-none whitespace-nowrap block drop-shadow-md uppercase">
-              YOUR PARTNER IN HEALTH
-            </span>
-          </div>
-
-          {/* Top Layer: Vibrant Crimson Red Text on Pure White */}
-          <div
-            className="absolute inset-0 w-full text-center select-none transition-[clip-path] duration-75"
-            style={{
-              clipPath: `polygon(0 0, ${splitPercent}% 0, ${splitPercent}% 100%, 0 100%)`,
-            }}
+        {/* CTA with Downward Arrow Button & Wavy Squiggle Underline */}
+        <div ref={ctaRef} className="mt-7 sm:mt-10 flex flex-col items-center">
+          <button
+            onClick={scrollToContent}
+            className="group flex flex-col items-center cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
+            aria-label="Discover more about Red Apple"
           >
-            <span className="font-display font-normal text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-[5.5rem] 2xl:text-[6rem] text-crimson tracking-tight leading-none whitespace-nowrap block uppercase">
-              YOUR PARTNER IN HEALTH
-            </span>
+            <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-neutral-900 tracking-tight">
+              <span>Discover more</span>
+              <span className="w-5 h-5 rounded-xs bg-crimson text-white flex items-center justify-center transition-transform group-hover:translate-y-0.5 shadow-2xs">
+                <ArrowDown className="w-3.5 h-3.5" />
+              </span>
+            </div>
+
+            {/* Playful Wavy Squiggle SVG Underline in Red Apple Crimson */}
+            <svg
+              className="w-28 sm:w-32 h-3 mt-1 text-crimson overflow-visible"
+              viewBox="0 0 120 12"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M2 6C12 2 18 10 28 6C38 2 44 10 54 6C64 2 70 10 80 6C90 2 96 10 106 6C112 3.6 116 5 118 6"
+                stroke="currentColor"
+                strokeWidth="2.3"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+      </div>
+
+      {/* 2. Partner / Clinical Network Logo Strip across the bottom of the hero */}
+      <div
+        ref={logosRef}
+        className="w-full max-w-7xl mx-auto pt-8 pb-2 border-t border-neutral-100"
+      >
+        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-6 sm:gap-8 md:gap-10 opacity-85 hover:opacity-100 transition-opacity">
+          
+          {/* Badge 1: MDCN Verified */}
+          <div className="flex items-center gap-2 text-neutral-900 font-bold tracking-tight">
+            <span className="w-6 h-6 rounded-full border-2 border-neutral-900 flex items-center justify-center text-[10px] font-black text-crimson">✚</span>
+            <span className="text-xs sm:text-sm font-sans tracking-wide">MDCN VERIFIED DOCTORS</span>
           </div>
+
+          {/* Badge 2: NDPC Compliant */}
+          <div className="flex items-center gap-2 text-neutral-900 font-bold">
+            <svg className="w-5 h-5 text-crimson" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
+            </svg>
+            <span className="text-xs sm:text-sm font-sans">NDPC DATA COMPLIANT</span>
+          </div>
+
+          {/* Badge 3: AI-Assisted Triage */}
+          <div className="flex items-center gap-1.5 text-neutral-900 font-bold text-xs sm:text-sm tracking-tight font-sans">
+            <span className="text-[10px] font-mono font-bold bg-neutral-950 text-white px-1.5 py-0.5 rounded">AI</span>
+            <span>CLINICAL SYMPTOM ANALYSIS</span>
+          </div>
+
+          {/* Badge 4: Localized Affordability */}
+          <div className="flex items-center gap-2 text-neutral-900 font-bold text-xs sm:text-sm">
+            <span className="font-extrabold text-crimson text-sm">₦1,999/mo</span>
+            <span className="text-neutral-600 font-medium font-sans">Accessible Tier</span>
+          </div>
+
+          {/* Badge 5: African Addressable Market */}
+          <div className="flex items-center gap-1.5 text-neutral-900 font-bold text-xs sm:text-sm tracking-tight">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span>325M AFRICAN TAM</span>
+          </div>
+
         </div>
       </div>
-    </div>
+    </section>
   );
 };

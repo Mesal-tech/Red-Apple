@@ -10,15 +10,19 @@ import {
   Modal,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppLockModal, { PIN_STORAGE_KEY } from '../components/AppLockModal';
 import {
   getHealthProfileSafe,
   saveHealthProfileSafe,
 } from '../utils/storage';
+import notificationService from '../services/notificationService';
 
 export default function SettingsScreen({
   onClose,
@@ -35,9 +39,9 @@ export default function SettingsScreen({
   const isDoctor =
     user?.role === 'doctor' || user?.email?.toLowerCase() === 'mesalokubor63@gmail.com';
   const displayName = isDoctor
-    ? (user?.name && user?.name !== 'mesalokubor63' ? user.name : 'Dr. Mesal Okubor')
+    ? (user?.name || 'Dr. Specialist')
     : (user?.name || 'Amara Okonkwo');
-  const displayEmail = user?.email || (isDoctor ? 'mesalokubor63@gmail.com' : 'amara@redapple.health');
+  const displayEmail = user?.email || (isDoctor ? 'doctor@redapple.health' : 'amara@redapple.health');
   const memberSince = user?.created_at
     ? `Member since ${new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
     : 'Member since January 2026';
@@ -51,21 +55,26 @@ export default function SettingsScreen({
   );
   const [showCycleParamModal, setShowCycleParamModal] = useState(false);
 
-  // Notification States
+  // Notification States (Persistent)
   const [periodAlerts, setPeriodAlerts] = useState(true);
   const [dailyPillAlerts, setDailyPillAlerts] = useState(true);
   const [weeklyGrowthAlerts, setWeeklyGrowthAlerts] = useState(true);
   const [hydrationAlerts, setHydrationAlerts] = useState(false);
+  const [discreetTitles, setDiscreetTitles] = useState(false);
+  const [dailyLogReminder, setDailyLogReminder] = useState(true);
+  const [isTestingNotification, setIsTestingNotification] = useState(false);
 
   // Security & Privacy States
   const [passcodeLock, setPasscodeLock] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
+  const [lockModalMode, setLockModalMode] = useState('setup');
   const [anonymousMode, setAnonymousMode] = useState(false);
 
   // Export State
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Load stored cycle lengths on mount
+  // Load stored cycle lengths, PIN status, and notification preferences on mount
   useEffect(() => {
     async function loadStoredProfile() {
       try {
@@ -74,12 +83,53 @@ export default function SettingsScreen({
           if (stored.cycleLength) setCycleLength(Number(stored.cycleLength));
           if (stored.periodDuration) setPeriodLength(Number(stored.periodDuration));
         }
+        const savedPin = await AsyncStorage.getItem(PIN_STORAGE_KEY);
+        if (savedPin) setPasscodeLock(true);
+
+        const notifSettings = await notificationService.getSettings();
+        if (notifSettings) {
+          setPeriodAlerts(notifSettings.periodAlerts !== false);
+          setDailyPillAlerts(notifSettings.dailyPillAlerts !== false);
+          setWeeklyGrowthAlerts(notifSettings.weeklyGrowthAlerts !== false);
+          setHydrationAlerts(notifSettings.hydrationAlerts === true);
+          setDiscreetTitles(notifSettings.discreetTitles === true);
+          setDailyLogReminder(notifSettings.dailyLogReminder !== false);
+        }
       } catch (err) {
         console.warn('[SettingsScreen] Load profile error:', err);
       }
     }
     loadStoredProfile();
   }, []);
+
+  const handleToggleNotification = async (key, val, setter) => {
+    setter(val);
+    try {
+      await notificationService.updateSettings({ [key]: val });
+      const currentStored = (await getHealthProfileSafe()) || {};
+      await notificationService.syncAllReminders({
+        healthProfile: currentStored,
+        stage: currentMode,
+      });
+    } catch (e) {
+      console.warn('[SettingsScreen] Failed to update notification setting:', e);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    setIsTestingNotification(true);
+    try {
+      await notificationService.triggerTestNotification();
+      Alert.alert(
+        'Test Alert Sent! 🍎',
+        'A test notification was triggered. Check your device banner and notification drawer.'
+      );
+    } catch (err) {
+      Alert.alert('Notice', 'Could not dispatch test notification: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsTestingNotification(false);
+    }
+  };
 
   // Save cycle parameters
   const handleSaveCycleParams = async () => {
@@ -116,8 +166,8 @@ export default function SettingsScreen({
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={styles.container} edges={Platform.OS === 'ios' ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
 
       {/* HEADER */}
       <View style={styles.header}>
@@ -284,14 +334,14 @@ export default function SettingsScreen({
                 <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
                   <Ionicons name="notifications-outline" size={16} color={colors.primary} />
                 </View>
-                <View style={{ marginLeft: 12 }}>
+                <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.settingTitle}>Period & Ovulation Alerts</Text>
                   <Text style={styles.settingSubText}>Reminders 3 days before predicted period</Text>
                 </View>
               </View>
               <Switch
                 value={periodAlerts}
-                onValueChange={setPeriodAlerts}
+                onValueChange={(val) => handleToggleNotification('periodAlerts', val, setPeriodAlerts)}
                 trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
                 thumbColor={periodAlerts ? colors.primary : '#9CA3AF'}
               />
@@ -302,16 +352,34 @@ export default function SettingsScreen({
                 <View style={[styles.miniIconCircle, { backgroundColor: '#E0F2F1' }]}>
                   <Ionicons name="medical-outline" size={16} color="#008080" />
                 </View>
-                <View style={{ marginLeft: 12 }}>
+                <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.settingTitle}>Daily Medication & Pill</Text>
                   <Text style={styles.settingSubText}>Daily reminder at 8:00 AM</Text>
                 </View>
               </View>
               <Switch
                 value={dailyPillAlerts}
-                onValueChange={setDailyPillAlerts}
+                onValueChange={(val) => handleToggleNotification('dailyPillAlerts', val, setDailyPillAlerts)}
                 trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
                 thumbColor={dailyPillAlerts ? colors.primary : '#9CA3AF'}
+              />
+            </View>
+
+            <View style={[styles.settingRow, styles.rowBorderBottom]}>
+              <View style={styles.settingLabelRow}>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="create-outline" size={16} color="#D97706" />
+                </View>
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={styles.settingTitle}>Daily Symptom Check-in</Text>
+                  <Text style={styles.settingSubText}>Evening wellness reminder at 8:00 PM</Text>
+                </View>
+              </View>
+              <Switch
+                value={dailyLogReminder}
+                onValueChange={(val) => handleToggleNotification('dailyLogReminder', val, setDailyLogReminder)}
+                trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
+                thumbColor={dailyLogReminder ? colors.primary : '#9CA3AF'}
               />
             </View>
 
@@ -320,36 +388,74 @@ export default function SettingsScreen({
                 <View style={[styles.miniIconCircle, { backgroundColor: '#F3E5F5' }]}>
                   <Ionicons name="sparkles-outline" size={16} color="#7C3AED" />
                 </View>
-                <View style={{ marginLeft: 12 }}>
+                <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.settingTitle}>Weekly Growth Updates</Text>
                   <Text style={styles.settingSubText}>Fetal development & milestone summaries</Text>
                 </View>
               </View>
               <Switch
                 value={weeklyGrowthAlerts}
-                onValueChange={setWeeklyGrowthAlerts}
+                onValueChange={(val) => handleToggleNotification('weeklyGrowthAlerts', val, setWeeklyGrowthAlerts)}
                 trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
                 thumbColor={weeklyGrowthAlerts ? colors.primary : '#9CA3AF'}
               />
             </View>
 
-            <View style={styles.settingRow}>
+            <View style={[styles.settingRow, styles.rowBorderBottom]}>
               <View style={styles.settingLabelRow}>
                 <View style={[styles.miniIconCircle, { backgroundColor: '#EFF6FF' }]}>
                   <Ionicons name="fitness-outline" size={16} color="#2563EB" />
                 </View>
-                <View style={{ marginLeft: 12 }}>
+                <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.settingTitle}>Hydration Reminders</Text>
                   <Text style={styles.settingSubText}>Gentle drink water reminders</Text>
                 </View>
               </View>
               <Switch
                 value={hydrationAlerts}
-                onValueChange={setHydrationAlerts}
+                onValueChange={(val) => handleToggleNotification('hydrationAlerts', val, setHydrationAlerts)}
                 trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
                 thumbColor={hydrationAlerts ? colors.primary : '#9CA3AF'}
               />
             </View>
+
+            <View style={[styles.settingRow, styles.rowBorderBottom]}>
+              <View style={styles.settingLabelRow}>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#F3F4F6' }]}>
+                  <Ionicons name="eye-off-outline" size={16} color="#374151" />
+                </View>
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={styles.settingTitle}>Discreet Notification Mode</Text>
+                  <Text style={styles.settingSubText}>Hides cycle & pregnancy terms on lock screen</Text>
+                </View>
+              </View>
+              <Switch
+                value={discreetTitles}
+                onValueChange={(val) => handleToggleNotification('discreetTitles', val, setDiscreetTitles)}
+                trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
+                thumbColor={discreetTitles ? colors.primary : '#9CA3AF'}
+              />
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.settingRow}
+              onPress={handleTestNotification}
+              disabled={isTestingNotification}
+            >
+              <View style={styles.settingLabelRow}>
+                <View style={[styles.miniIconCircle, { backgroundColor: '#FFE5E9' }]}>
+                  <Ionicons name="notifications" size={16} color={colors.primary} />
+                </View>
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={styles.settingTitle}>Send Test Notification</Text>
+                  <Text style={styles.settingSubText}>
+                    {isTestingNotification ? 'Triggering alert...' : 'Verify notification sound & banner on this device'}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="paper-plane-outline" size={18} color={colors.primary} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -370,7 +476,10 @@ export default function SettingsScreen({
               </View>
               <Switch
                 value={passcodeLock}
-                onValueChange={setPasscodeLock}
+                onValueChange={(val) => {
+                  setLockModalMode(val ? 'setup' : 'disable');
+                  setShowLockModal(true);
+                }}
                 trackColor={{ false: '#E5E7EB', true: '#FFCDD2' }}
                 thumbColor={passcodeLock ? colors.primary : '#9CA3AF'}
               />
@@ -570,6 +679,23 @@ export default function SettingsScreen({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* APP SECURITY PIN MODAL */}
+      <AppLockModal
+        visible={showLockModal}
+        mode={lockModalMode}
+        onCancel={() => setShowLockModal(false)}
+        onSuccess={() => {
+          setShowLockModal(false);
+          setPasscodeLock(lockModalMode === 'setup');
+          Alert.alert(
+            lockModalMode === 'setup' ? 'Security PIN Enabled' : 'PIN Lock Disabled',
+            lockModalMode === 'setup'
+              ? 'Your health records and consultations are now secured with your 4-digit PIN.'
+              : 'App PIN security has been turned off.'
+          );
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -584,7 +710,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 38) + 8 : 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
     backgroundColor: '#FFFFFF',

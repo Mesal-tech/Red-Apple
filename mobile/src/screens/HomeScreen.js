@@ -37,631 +37,16 @@ import cycleService, {
   computeLocalFertilityPrediction,
   computeLocalCycleStats,
 } from '../services/cycleService';
+import FunctionalCycleRing from '../components/FunctionalCycleRing';
+import CycleLengthChart from '../components/CycleLengthChart';
+import AdditionalAnalyticsMetrics from '../components/AdditionalAnalyticsMetrics';
+import MiniCalendarDatePicker from '../components/MiniCalendarDatePicker';
+import AIAssistantDrawer from '../components/AIAssistantDrawer';
+import { getUserBookings } from '../services/telemedicineService';
+import notificationService from '../services/notificationService';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = StatusBar.currentHeight || 38;
-
-function FunctionalCycleRing({ currentDay, totalDays }) {
-  const percentage = Math.min(Math.max(currentDay / totalDays, 0), 1);
-  const totalDegrees = percentage * 360;
-
-  const rightDeg = Math.min(totalDegrees, 180);
-  const leftDeg = Math.max(totalDegrees - 180, 0);
-
-  return (
-    <View style={ringStyles.ringContainer}>
-      <View style={ringStyles.trackCircle} />
-
-      <View style={ringStyles.halfCircleContainerRight}>
-        <View
-          style={[
-            ringStyles.halfCircleRight,
-            { transform: [{ rotate: `${rightDeg}deg` }] },
-          ]}
-        />
-      </View>
-
-      {totalDegrees > 180 && (
-        <View style={ringStyles.halfCircleContainerLeft}>
-          <View
-            style={[
-              ringStyles.halfCircleLeft,
-              { transform: [{ rotate: `${leftDeg}deg` }] },
-            ]}
-          />
-        </View>
-      )}
-
-      <View style={ringStyles.innerMaskCircle}>
-        <Text style={ringStyles.ringDayNumber}>{currentDay}</Text>
-        <Text style={ringStyles.ringDayTotal}>of {totalDays}</Text>
-      </View>
-    </View>
-  );
-}
-
-const ringStyles = StyleSheet.create({
-  ringContainer: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  trackCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 7,
-    borderColor: '#FFEBEE',
-    position: 'absolute',
-  },
-  halfCircleContainerRight: {
-    width: 52,
-    height: 104,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    overflow: 'hidden',
-  },
-  halfCircleRight: {
-    width: 52,
-    height: 104,
-    borderTopRightRadius: 52,
-    borderBottomRightRadius: 52,
-    borderWidth: 7,
-    borderColor: colors.primary,
-    borderLeftWidth: 0,
-    transformOrigin: 'left center',
-  },
-  halfCircleContainerLeft: {
-    width: 52,
-    height: 104,
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    overflow: 'hidden',
-  },
-  halfCircleLeft: {
-    width: 52,
-    height: 104,
-    borderTopLeftRadius: 52,
-    borderBottomLeftRadius: 52,
-    borderWidth: 7,
-    borderColor: colors.primary,
-    borderRightWidth: 0,
-    transformOrigin: 'right center',
-  },
-  innerMaskCircle: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  ringDayNumber: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.primary,
-  },
-  ringDayTotal: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-});
-
-function CycleLengthChart({ historyData = null, averageLength = 28 }) {
-  const defaultMonths = [
-    { month: 'Feb', value: averageLength - 1 },
-    { month: 'Mar', value: averageLength + 1 },
-    { month: 'Apr', value: averageLength },
-    { month: 'May', value: averageLength - 2 },
-    { month: 'Jun', value: averageLength },
-    { month: 'Jul', value: averageLength },
-  ];
-
-  const months = (historyData && historyData.length > 0)
-    ? historyData.map((item) => ({
-        month: item.month,
-        value: Number(item.cycleLength || item.value || averageLength),
-      }))
-    : defaultMonths;
-
-  const [plotWidth, setPlotWidth] = useState(SCREEN_WIDTH - 104);
-  const values = months.map((m) => m.value);
-  const rawMin = Math.min(...values, 24);
-  const rawMax = Math.max(...values, 32);
-  const minY = Math.floor((rawMin - 1) / 2) * 2;
-  const maxY = Math.ceil((rawMax + 1) / 2) * 2;
-  const midY = Math.round((minY + maxY) / 2);
-  const chartHeight = 90;
-
-  const getYPos = (val) => {
-    const range = maxY - minY || 1;
-    const pct = (val - minY) / range;
-    return chartHeight * (1 - pct);
-  };
-
-  return (
-    <View style={styles.chartCard}>
-      <Text style={styles.chartTitle}>Cycle Length History</Text>
-
-      <View style={styles.chartMainContainer}>
-        <View style={styles.yAxisCol}>
-          <Text style={styles.yAxisText}>{maxY}</Text>
-          <Text style={styles.yAxisText}>{midY}</Text>
-          <Text style={styles.yAxisText}>{minY}</Text>
-        </View>
-
-        <View
-          style={styles.graphPlotArea}
-          onLayout={(e) => {
-            const w = e.nativeEvent.layout.width;
-            if (w > 0) setPlotWidth(w);
-          }}
-        >
-          {months.map((item, idx) => {
-            const currentY = getYPos(item.value);
-            const xStep = months.length > 1 ? 100 / (months.length - 1) : 50;
-            const currentXPercent = idx * xStep;
-
-            let lineSegment = null;
-            if (idx < months.length - 1) {
-              const nextItem = months[idx + 1];
-              const nextY = getYPos(nextItem.value);
-              const nextXPercent = (idx + 1) * xStep;
-
-              const x1 = (currentXPercent / 100) * plotWidth;
-              const y1 = currentY;
-              const x2 = (nextXPercent / 100) * plotWidth;
-              const y2 = nextY;
-
-              const dx = x2 - x1;
-              const dy = y2 - y1;
-              const length = Math.sqrt(dx * dx + dy * dy);
-              const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-              lineSegment = (
-                <View
-                  key={`line-${idx}`}
-                  style={{
-                    position: 'absolute',
-                    left: `${currentXPercent}%`,
-                    top: currentY + 4,
-                    width: length,
-                    height: 2.5,
-                    backgroundColor: colors.primary,
-                    borderRadius: 1.5,
-                    transformOrigin: 'left center',
-                    transform: [{ rotate: `${angle}deg` }],
-                    zIndex: 1,
-                  }}
-                />
-              );
-            }
-
-            return (
-              <React.Fragment key={idx}>
-                {lineSegment}
-                <View
-                  style={[
-                    styles.dataPointDotContainer,
-                    { left: `${currentXPercent}%`, top: currentY },
-                  ]}
-                >
-                  <View style={styles.dataPointDot} />
-                </View>
-              </React.Fragment>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.xAxisRow}>
-        <View style={{ width: 32 }} />
-        <View style={styles.xAxisLabelsContainer}>
-          {months.map((item, idx) => (
-            <Text key={idx} style={styles.xAxisText}>{item.month}</Text>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function AdditionalAnalyticsMetrics({ stats = null, prediction = null, cycleLength = 28, periodDuration = 5 }) {
-  const avgPeriod = stats?.averagePeriodDuration || periodDuration || 5;
-  const dominantFlow = stats?.dominantFlow || 'Normal Flow';
-
-  const formatWindow = (startStr, endStr) => {
-    if (!startStr || !endStr) return 'Aug 10 – Aug 15';
-    try {
-      const s = new Date(startStr);
-      const e = new Date(endStr);
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const sMonth = months[s.getMonth()];
-      const eMonth = months[e.getMonth()];
-      if (sMonth === eMonth) {
-        return `${sMonth} ${s.getDate()} – ${e.getDate()}`;
-      }
-      return `${sMonth} ${s.getDate()} – ${eMonth} ${e.getDate()}`;
-    } catch {
-      return `${startStr} – ${endStr}`;
-    }
-  };
-
-  const fertileWindowDisplay = prediction?.fertileWindowStart && prediction?.fertileWindowEnd
-    ? formatWindow(prediction.fertileWindowStart, prediction.fertileWindowEnd)
-    : 'Aug 10 – Aug 15';
-
-  const lutealPhaseDays = Math.max(cycleLength - 14, 12);
-
-  const symptomFrequencies = (stats?.symptomFrequencies && stats.symptomFrequencies.length > 0)
-    ? stats.symptomFrequencies
-    : [
-        { symptom: 'Mild Cramps', percentage: 65 },
-        { symptom: 'Energy Dip', percentage: 40 },
-        { symptom: 'Mood Shift', percentage: 25 },
-        { symptom: 'Bloating', percentage: 20 },
-      ];
-
-  // Dynamically generate flow pills matching user's period duration
-  const flowDays = [];
-  for (let i = 1; i <= Math.min(avgPeriod, 7); i++) {
-    let pillStyle = styles.flowDayPillActive;
-    if (i === 3) pillStyle = styles.flowDayPillMedium;
-    if (i > 3) pillStyle = styles.flowDayPillLight;
-    flowDays.push(
-      <View key={i} style={pillStyle}>
-        <Text style={styles.flowDayText}>D{i}</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ gap: 16, marginHorizontal: 16, marginBottom: 20 }}>
-      <View style={styles.metricCard}>
-        <View style={styles.metricHeaderRow}>
-          <View style={styles.metricTitleIconRow}>
-            <Ionicons name="water" size={20} color={colors.primary} />
-            <Text style={styles.metricCardTitle}>Period Duration & Flow</Text>
-          </View>
-          <View style={styles.normalBadge}>
-            <Text style={styles.normalBadgeText}>{dominantFlow}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.metricDescriptionText}>
-          Your period typically lasts <Text style={styles.boldText}>{avgPeriod} days</Text>. Flow starts heavy on Days 1–2 and naturally lightens through Day {avgPeriod}.
-        </Text>
-
-        <View style={styles.metricStatGrid}>
-          <View style={styles.metricStatBox}>
-            <Text style={styles.metricStatVal}>{avgPeriod} Days</Text>
-            <Text style={styles.metricStatLbl}>Avg. Duration</Text>
-          </View>
-          <View style={styles.metricStatBox}>
-            <Text style={styles.metricStatVal}>Days 1-2</Text>
-            <Text style={styles.metricStatLbl}>Heavy Flow</Text>
-          </View>
-          <View style={styles.metricStatBox}>
-            <Text style={styles.metricStatVal}>{avgPeriod > 2 ? `Days 3-${avgPeriod}` : 'Day 2'}</Text>
-            <Text style={styles.metricStatLbl}>Light Flow</Text>
-          </View>
-        </View>
-
-        <View style={styles.flowTimelineContainer}>
-          {flowDays}
-        </View>
-      </View>
-
-      <View style={styles.metricCard}>
-        <View style={styles.metricHeaderRow}>
-          <View style={styles.metricTitleIconRow}>
-            <Ionicons name="leaf" size={20} color="#00A88F" />
-            <Text style={styles.metricCardTitle}>Fertility & Ovulation</Text>
-          </View>
-          <View style={[styles.normalBadge, { backgroundColor: '#E0F2F1' }]}>
-            <Text style={[styles.normalBadgeText, { color: '#00A88F' }]}>High Accuracy</Text>
-          </View>
-        </View>
-
-        <View style={styles.fertilityRow}>
-          <View style={styles.fertilityItem}>
-            <Text style={styles.fertilitySubLabel}>LUTEAL PHASE</Text>
-            <Text style={styles.fertilityBigText}>{lutealPhaseDays} Days</Text>
-          </View>
-          <View style={styles.fertilityItem}>
-            <Text style={styles.fertilitySubLabel}>NEXT FERTILE WINDOW</Text>
-            <Text style={styles.fertilityBigText}>{fertileWindowDisplay}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.metricCard}>
-        <View style={styles.metricHeaderRow}>
-          <View style={styles.metricTitleIconRow}>
-            <Ionicons name="pulse" size={20} color="#7C4DFF" />
-            <Text style={styles.metricCardTitle}>Logged Symptoms</Text>
-          </View>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8 }}
-          style={{ marginTop: 8 }}
-        >
-          {symptomFrequencies.map((item, idx) => (
-            <View key={idx} style={styles.symptomTagPill}>
-              <Text style={styles.symptomTagText}>
-                {item.symptom} {item.percentage ? `• ${item.percentage}%` : ''}
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-    </View>
-  );
-}
-
-function MiniCalendarDatePicker({ selectedDate, onSelectDate, maxDate = new Date() }) {
-  const [viewDate, setViewDate] = useState(() => new Date(selectedDate || maxDate));
-
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
-
-  const prevMonth = () => {
-    setViewDate(new Date(year, month - 1, 1));
-  };
-
-  const nextMonth = () => {
-    const next = new Date(year, month + 1, 1);
-    if (next <= maxDate) {
-      setViewDate(next);
-    }
-  };
-
-  const canGoNext = new Date(year, month + 1, 1) <= maxDate;
-
-  const today = new Date();
-  const isSelectedDate = (d) => {
-    if (!selectedDate) return false;
-    return (
-      selectedDate.getFullYear() === year &&
-      selectedDate.getMonth() === month &&
-      selectedDate.getDate() === d
-    );
-  };
-
-  const isTodayDate = (d) => {
-    return (
-      today.getFullYear() === year &&
-      today.getMonth() === month &&
-      today.getDate() === d
-    );
-  };
-
-  const isFutureDate = (d) => {
-    const dateObj = new Date(year, month, d, 23, 59, 59);
-    return dateObj > maxDate;
-  };
-
-  const gridCells = [];
-  for (let i = 0; i < firstDayOfWeek; i++) {
-    gridCells.push({ key: `pad-${i}`, empty: true });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    gridCells.push({ key: `day-${d}`, dayNum: d });
-  }
-
-  const selectedFormatted = selectedDate
-    ? selectedDate.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      })
-    : '';
-
-  return (
-    <View style={calStyles.calendarContainer}>
-      {/* Month Header with Navigation */}
-      <View style={calStyles.monthNavRow}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={calStyles.monthNavBtn}
-          onPress={prevMonth}
-        >
-          <Ionicons name="chevron-back" size={18} color="#374151" />
-        </TouchableOpacity>
-
-        <Text style={calStyles.monthNavTitle}>
-          {monthNames[month]} {year}
-        </Text>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={[calStyles.monthNavBtn, !canGoNext && { opacity: 0.25 }]}
-          onPress={nextMonth}
-          disabled={!canGoNext}
-        >
-          <Ionicons name="chevron-forward" size={18} color="#374151" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Weekday Letters */}
-      <View style={calStyles.weekdayRow}>
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((letter, idx) => (
-          <View key={idx} style={calStyles.weekdayCol}>
-            <Text style={calStyles.weekdayLetter}>{letter}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Days Grid */}
-      <View style={calStyles.daysGrid}>
-        {gridCells.map((cell) => {
-          if (cell.empty) {
-            return <View key={cell.key} style={calStyles.dayCell} />;
-          }
-
-          const isSelected = isSelectedDate(cell.dayNum);
-          const isToday = isTodayDate(cell.dayNum);
-          const isFuture = isFutureDate(cell.dayNum);
-
-          return (
-            <TouchableOpacity
-              key={cell.key}
-              activeOpacity={0.7}
-              disabled={isFuture}
-              style={[
-                calStyles.dayCell,
-                isSelected && calStyles.dayCellSelected,
-                !isSelected && isToday && calStyles.dayCellToday,
-              ]}
-              onPress={() => onSelectDate(new Date(year, month, cell.dayNum))}
-            >
-              <Text
-                style={[
-                  calStyles.dayNumText,
-                  isSelected && calStyles.dayNumTextSelected,
-                  isToday && !isSelected && calStyles.dayNumTextToday,
-                  isFuture && calStyles.dayNumTextDisabled,
-                ]}
-              >
-                {cell.dayNum}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Selected Date Confirmation Pill */}
-      {selectedFormatted ? (
-        <View style={calStyles.selectedBadgeRow}>
-          <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-          <Text style={calStyles.selectedBadgeText}>
-            Selected: <Text style={{ fontWeight: '800' }}>{selectedFormatted}</Text>
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-const calStyles = StyleSheet.create({
-  calendarContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    padding: 14,
-    marginTop: 10,
-  },
-  monthNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-  monthNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthNavTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  weekdayCol: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  weekdayLetter: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9CA3AF',
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: `${100 / 7}%`,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 2,
-    borderRadius: 18,
-  },
-  dayCellSelected: {
-    backgroundColor: colors.primary,
-  },
-  dayCellToday: {
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-  dayNumText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  dayNumTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  dayNumTextToday: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  dayNumTextDisabled: {
-    color: '#E5E7EB',
-  },
-  selectedBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF0F5',
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginTop: 10,
-    alignSelf: 'center',
-    gap: 6,
-  },
-  selectedBadgeText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-});
 
 function TopProfileHeader({
   user,
@@ -745,7 +130,7 @@ export default function HomeScreen({
     user?.email?.toLowerCase() === 'mesalokubor63@gmail.com';
 
   const userName = isDoctorAccount
-    ? (user?.name && user?.name !== 'mesalokubor63' ? user.name : 'Dr. Mesal Okubor')
+    ? (user?.name || 'Consulting Doctor')
     : (user?.name || 'Amara Okonkwo');
 
   const greetingDisplayName = isDoctorAccount
@@ -765,38 +150,34 @@ export default function HomeScreen({
   const [currentPage, setCurrentPage] = useState(0); // 0: Homepage | 1: Cycle / Center | 2: Learn | 3: Telemed
   const [showLegendModal, setShowLegendModal] = useState(false);
   const [showExpandedCycleModal, setShowExpandedCycleModal] = useState(false);
+  const [showCycleCalendarModal, setShowCycleCalendarModal] = useState(false);
+  const [showDailyLogDrawer, setShowDailyLogDrawer] = useState(false);
 
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(3);
-  const [notificationsList, setNotificationsList] = useState([
-    {
-      id: '1',
-      title: 'Period Expected Soon',
-      body: 'Your period is expected in 3 days (Sep 6). Tap to review predictions.',
-      time: '2h ago',
-      icon: 'water-outline',
-      iconBg: '#FFEBEE',
-      iconColor: colors.primary,
-    },
-    {
-      id: '2',
-      title: 'Daily Health Log Reminder',
-      body: 'Keep your insights accurate by logging your daily mood and symptoms.',
-      time: '5h ago',
-      icon: 'create-outline',
-      iconBg: '#FFF3E0',
-      iconColor: '#E65100',
-    },
-    {
-      id: '3',
-      title: 'Doctor Appointment Confirmed',
-      body: 'Your HD Video Consultation with Dr. Mesal Okubor is scheduled for 4:00 PM.',
-      time: 'Yesterday',
-      icon: 'videocam-outline',
-      iconBg: '#E0F2F1',
-      iconColor: '#008080',
-    },
-  ]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+
+  const reloadNotifications = async () => {
+    try {
+      const items = await notificationService.getInAppNotifications();
+      if (Array.isArray(items)) {
+        setNotificationsList(items);
+        const unread = items.filter((n) => !n.isRead).length;
+        setUnreadNotificationsCount(unread);
+      }
+    } catch (e) {
+      console.warn('[HomeScreen] Reload notifications error:', e);
+    }
+  };
+
+  useEffect(() => {
+    reloadNotifications();
+    const unsub = notificationService.subscribe(() => {
+      reloadNotifications();
+    });
+    return () => unsub();
+  }, []);
 
   const [activeHealthMode, setActiveHealthMode] = useState(() => {
     // 1. Check in-memory / local storage cache first (immediate user switch)
@@ -830,6 +211,22 @@ export default function HomeScreen({
       setIsRefreshing(false);
     }
   };
+
+  const [userBookingsList, setUserBookingsList] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getUserBookings()
+      .then((res) => {
+        if (isMounted && Array.isArray(res)) {
+          setUserBookingsList(res);
+        }
+      })
+      .catch(() => { });
+    return () => {
+      isMounted = false;
+    };
+  }, [showDailyLogDrawer, isRefreshing]);
 
   /**
    * Persistently switch health modes both locally and to the backend.
@@ -906,7 +303,7 @@ export default function HomeScreen({
         showToastSuccess && showToastSuccess(`Cycle updated to ${dateStr}!`);
       } else {
         updatedProfile.postpartumTransition = true;
-        showToastSuccess && showToastSuccess('Transition mode active. We will monitor your symptoms.');
+        showToastSuccess && showToastSuccess('Transition mode active.');
       }
 
       await saveHealthProfileSafe(updatedProfile);
@@ -934,19 +331,6 @@ export default function HomeScreen({
 
   const [pregnancyDueDate, setPregnancyDueDate] = useState('Dec 24, 2026');
   const [pregnancyConceptionDate, setPregnancyConceptionDate] = useState('Apr 2, 2026');
-
-  const feelingsList = [
-    { label: 'Great', icon: 'happy-outline', color: '#00A88F' },
-    { label: 'Normal', icon: 'sunny-outline', color: '#FFB300' },
-    { label: 'Tired', icon: 'moon-outline', color: '#7C4DFF' },
-    { label: 'Sad', icon: 'rainy-outline', color: '#008080' },
-    { label: 'Crampy', icon: 'flash-outline', color: colors.primary },
-  ];
-
-  const [showDailyLogDrawer, setShowDailyLogDrawer] = useState(false);
-  const [selectedFeelingIndex, setSelectedFeelingIndex] = useState(0);
-  const [activeQuickLogs, setActiveQuickLogs] = useState(['Cramps']);
-  const [hasLoggedToday, setHasLoggedToday] = useState(false);
 
   // Real cycle data states
   const [cachedProfile, setCachedProfile] = useState(healthProfile || user?.health_profile || null);
@@ -1004,25 +388,6 @@ export default function HomeScreen({
         setCycleHistory(hist);
         const logs = hist.logs || [];
         setCycleLogs(logs);
-
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayLog = logs.find((l) => {
-          const lDate = l.date || (l.logged_at ? l.logged_at.split('T')[0] : null);
-          return lDate === todayStr;
-        });
-
-        if (todayLog) {
-          setHasLoggedToday(true);
-          if (Array.isArray(todayLog.symptoms) && todayLog.symptoms.length > 0) {
-            setActiveQuickLogs(todayLog.symptoms);
-          }
-          if (todayLog.feeling && typeof todayLog.feeling === 'string') {
-            const fIdx = feelingsList.findIndex(
-              (f) => f.label.toLowerCase() === todayLog.feeling.toLowerCase()
-            );
-            if (fIdx >= 0) setSelectedFeelingIndex(fIdx);
-          }
-        }
       }
     } catch (err) {
       console.warn('[HomeScreen] Error loading cycle data:', err);
@@ -1093,18 +458,18 @@ export default function HomeScreen({
     const daysUntilPeriod = Math.round(diffPeriodMs / (1000 * 60 * 60 * 24));
 
     let periodPill = `${daysUntilPeriod} days`;
-    let periodSubTitle = `${daysUntilPeriod} days from today • Cycle Day 1`;
+    let periodSubTitle = `${daysUntilPeriod} days from today • Cycle Day ${displayCurrentDay}`;
 
     if (daysUntilPeriod === 0) {
       periodPill = 'Today';
-      periodSubTitle = 'Expected today • Cycle Day 1';
+      periodSubTitle = `Expected today • Cycle Day ${displayCurrentDay}`;
     } else if (daysUntilPeriod === 1) {
       periodPill = 'Tomorrow';
-      periodSubTitle = 'Expected tomorrow • Cycle Day 1';
+      periodSubTitle = `Expected tomorrow • Cycle Day ${displayCurrentDay}`;
     } else if (daysUntilPeriod < 0) {
       const lateDays = Math.abs(daysUntilPeriod);
       periodPill = `${lateDays}d late`;
-      periodSubTitle = `${lateDays} day${lateDays > 1 ? 's' : ''} past expected • Check in`;
+      periodSubTitle = `${lateDays} day${lateDays > 1 ? 's' : ''} past expected • Cycle Day ${displayCurrentDay}`;
     }
 
     const periodMainTitle = `Period expected ${formatShortDateStr(nextPeriodDate)}`;
@@ -1134,9 +499,12 @@ export default function HomeScreen({
       const nextFStart = new Date(nextCycleStart.getTime() + (fStartDay - 1) * 24 * 60 * 60 * 1000);
       const nextFEnd = new Date(nextCycleStart.getTime() + (fEndDay - 1) * 24 * 60 * 60 * 1000);
 
+      const diffMs = nextFStart.getTime() - todayMidnight.getTime();
+      const daysUntilNextFertile = Math.max(Math.round(diffMs / (1000 * 60 * 60 * 24)), 1);
+
       fertileMainTitle = `Fertile window ${formatDateRange(nextFStart, nextFEnd)}`;
-      fertileSubTitle = 'Next cycle • High chance';
-      fertilePill = 'Next cycle';
+      fertileSubTitle = `${daysUntilNextFertile} day${daysUntilNextFertile === 1 ? '' : 's'} away • Next cycle`;
+      fertilePill = `${daysUntilNextFertile} days`;
     } else if (todayMidnight >= fStart && todayMidnight <= fEnd) {
       isFertileActiveNow = true;
       fertileMainTitle = `Fertile window ${formatDateRange(fStart, fEnd)}`;
@@ -1171,18 +539,21 @@ export default function HomeScreen({
   const ovulationLabel = `${isOvulationPast ? 'Ovulation was' : 'Ovulation is'} ${ovulationFormatted}`;
 
   const displayNotifications = useMemo(() => {
+    if (!Array.isArray(notificationsList) || notificationsList.length === 0) {
+      return [];
+    }
     return notificationsList.map((item) => {
-      if (item.id === '1') {
+      if (item.type === 'period_alert' && upcomingPredictions) {
         const periodDetail = upcomingPredictions.daysUntilPeriod === 0
           ? 'today'
           : upcomingPredictions.daysUntilPeriod === 1
-          ? 'tomorrow'
-          : upcomingPredictions.daysUntilPeriod < 0
-          ? `${Math.abs(upcomingPredictions.daysUntilPeriod)} days ago`
-          : `in ${upcomingPredictions.daysUntilPeriod} days`;
+            ? 'tomorrow'
+            : upcomingPredictions.daysUntilPeriod < 0
+              ? `${Math.abs(upcomingPredictions.daysUntilPeriod)} days ago`
+              : `in ${upcomingPredictions.daysUntilPeriod} days`;
         return {
           ...item,
-          body: `Your period is expected ${periodDetail} (${nextPeriodFormatted}). Tap to review predictions.`,
+          body: item.body || `Your period is expected ${periodDetail} (${nextPeriodFormatted}). Tap to review predictions.`,
         };
       }
       return item;
@@ -1204,7 +575,7 @@ export default function HomeScreen({
   const handleScroll = (event) => {
     const xOffset = event.nativeEvent.contentOffset.x;
     const pageIndex = Math.round(xOffset / SCREEN_WIDTH);
-    if (pageIndex >= 0 && pageIndex <= 3 && pageIndex !== currentPage) {
+    if (pageIndex >= 0 && pageIndex <= 2 && pageIndex !== currentPage) {
       setCurrentPage(pageIndex);
     }
   };
@@ -1216,12 +587,52 @@ export default function HomeScreen({
 
   const handleBookDoctorFromHome = (doc) => {
     setSelectedDoctorForBooking(doc);
-    scrollToPage(3);
+    scrollToPage(2);
   };
 
-  const handleOpenNotifications = () => {
-    setUnreadNotificationsCount(0);
+  const handleOpenNotifications = async () => {
     setShowNotificationsModal(true);
+    await reloadNotifications();
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadNotificationsCount(0);
+      showToastSuccess && showToastSuccess('All notifications marked as read.');
+    } catch (e) {
+      console.warn('[HomeScreen] Mark all read error:', e);
+    }
+  };
+
+  const handlePressNotificationItem = async (item) => {
+    try {
+      await notificationService.markAsRead(item.id);
+      setNotificationsList((prev) =>
+        prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
+      );
+      setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+      setShowNotificationsModal(false);
+
+      if (item.data?.screen === 'DoctorCareScreen' || item.type === 'appointment') {
+        scrollToPage(2);
+      } else if (item.data?.screen === 'PregnancyScreen' || item.type === 'pregnancy_milestone') {
+        if (!isPregnancyMode) {
+          await switchHealthMode('pregnancy');
+        }
+      } else if (item.data?.screen === 'PostmenopauseScreen' || item.type === 'menopause_wellness') {
+        if (!isPostmenopauseMode) {
+          await switchHealthMode('postmenopause');
+        }
+      } else if (item.type === 'daily_log') {
+        setShowDailyLogDrawer(true);
+      } else {
+        scrollToPage(0);
+      }
+    } catch (err) {
+      console.warn('[HomeScreen] Press notification error:', err);
+    }
   };
 
   const [selectedDateKey, setSelectedDateKey] = useState(() => {
@@ -1271,7 +682,7 @@ export default function HomeScreen({
       // Check if logged as period
       const isLoggedPeriod = cycleLogs.some((l) => {
         const lDate = l.date || (l.logged_at ? l.logged_at.split('T')[0] : null);
-        return lDate === dateKey && (l.isPeriodDay || (Array.isArray(l.symptoms) && l.symptoms.includes('Period')));
+        return lDate === dateKey && (l.isPeriodDay || l.flow);
       });
 
       let type = 'normal';
@@ -1296,36 +707,29 @@ export default function HomeScreen({
     return { weekDays: days };
   }, [activeCycleProfile, cycleLogs, cyclePrediction.currentCycleDay]);
 
-  const [calendarMonthDate, setCalendarMonthDate] = useState(() => new Date());
-
-  const prevCalMonth = () => {
-    setCalendarMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  const handleJumpToToday = () => {
+    const d = new Date();
+    setSelectedDateKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
   };
 
-  const nextCalMonth = () => {
-    setCalendarMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
+  useEffect(() => {
+    if (showCycleCalendarModal) {
+      const now = new Date();
+      const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (!selectedDateKey || !selectedDateKey.startsWith(currentMonthPrefix)) {
+        setSelectedDateKey(`${currentMonthPrefix}-${String(now.getDate()).padStart(2, '0')}`);
+      }
+    }
+  }, [showCycleCalendarModal]);
 
-  const { monthGridCells, calendarMonthTitle } = useMemo(() => {
-    const year = calendarMonthDate.getFullYear();
-    const month = calendarMonthDate.getMonth();
+  const currentMonthData = useMemo(() => {
+    const now = new Date();
+    const todayZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December',
     ];
-    const title = `${monthNames[month]} ${year}`;
-
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7;
-
-    const cells = [];
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      cells.push({ key: `pad-${i}`, empty: true });
-    }
-
-    const now = new Date();
-    const todayZero = new Date(now);
-    todayZero.setHours(0, 0, 0, 0);
 
     const cycleLength = activeCycleProfile.cycleLength || 28;
     const periodDuration = activeCycleProfile.periodDuration || 5;
@@ -1334,10 +738,37 @@ export default function HomeScreen({
     const fertileStartCycleDay = Math.max(ovulationCycleDay - 5, 1);
     const fertileEndCycleDay = ovulationCycleDay + 1;
 
+    // Fast O(1) set lookup for logged period days
+    const loggedPeriodDatesSet = new Set();
+    cycleLogs.forEach((l) => {
+      if (l.isPeriodDay) {
+        const lDate = l.date || (l.logged_at ? l.logged_at.split('T')[0] : null);
+        if (lDate) loggedPeriodDatesSet.add(lDate);
+      }
+    });
+
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const monthTitle = `${monthNames[month]} ${year}`;
+    const monthKey = `${year}-${month}`;
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // Monday-based week: Monday is 0, Sunday is 6
+    const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7;
+
+    const cells = [];
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      cells.push({ key: `pad-${year}-${month}-${i}`, empty: true });
+    }
+
+    let periodDaysCount = 0;
+    let fertileDaysCount = 0;
+    let ovulationDayNum = null;
+
     for (let d = 1; d <= daysInMonth; d++) {
       const cellDate = new Date(year, month, d);
       const isToday = cellDate.toDateString() === now.toDateString();
-      const dateKey = cellDate.toISOString().split('T')[0];
+      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
       let cycleDay = 1;
       if (lastPeriodDate && !isNaN(lastPeriodDate.getTime())) {
@@ -1352,23 +783,22 @@ export default function HomeScreen({
         cycleDay = ((((currentDay - 1 + diffDays) % cycleLength) + cycleLength) % cycleLength) + 1;
       }
 
-      // Check if logged as period
-      const isLoggedPeriod = cycleLogs.some((l) => {
-        const lDate = l.date || (l.logged_at ? l.logged_at.split('T')[0] : null);
-        return lDate === dateKey && (l.isPeriodDay || (Array.isArray(l.symptoms) && l.symptoms.includes('Period')));
-      });
+      const isLoggedPeriod = loggedPeriodDatesSet.has(dateKey);
 
       let type = 'normal';
       if (isLoggedPeriod || (cycleDay >= 1 && cycleDay <= periodDuration)) {
         type = 'period';
+        periodDaysCount++;
       } else if (cycleDay === ovulationCycleDay) {
         type = 'ovulation';
+        ovulationDayNum = d;
       } else if (cycleDay >= fertileStartCycleDay && cycleDay <= fertileEndCycleDay) {
         type = 'fertile';
+        fertileDaysCount++;
       }
 
       cells.push({
-        key: `day-${d}`,
+        key: `day-${year}-${month}-${d}`,
         empty: false,
         dayNum: d,
         dateKey,
@@ -1378,53 +808,62 @@ export default function HomeScreen({
       });
     }
 
-    return { monthGridCells: cells, calendarMonthTitle: title };
-  }, [calendarMonthDate, activeCycleProfile, cycleLogs, cyclePrediction.currentCycleDay]);
+    return {
+      monthKey,
+      monthTitle,
+      year,
+      month,
+      isCurrentMonth: true,
+      cells,
+      stats: {
+        periodDaysCount,
+        fertileDaysCount,
+        ovulationDayNum,
+      },
+    };
+  }, [activeCycleProfile, cycleLogs, cyclePrediction.currentCycleDay]);
 
-  const toggleQuickLog = (logName) => {
-    if (activeQuickLogs.includes(logName)) {
-      setActiveQuickLogs(activeQuickLogs.filter((l) => l !== logName));
-    } else {
-      setActiveQuickLogs([...activeQuickLogs, logName]);
-    }
-  };
+  const selectedDateCellInfo = useMemo(() => {
+    if (!currentMonthData?.cells) return null;
+    const found = currentMonthData.cells.find((c) => !c.empty && c.dateKey === selectedDateKey);
+    if (found) return found;
 
-  const handleSaveDailyLog = async () => {
+    const todayCell = currentMonthData.cells.find((c) => !c.empty && c.isToday);
+    if (todayCell) return todayCell;
+
+    return currentMonthData.cells.find((c) => !c.empty) || null;
+  }, [currentMonthData, selectedDateKey]);
+
+
+  const handleSaveDailyLog = async (logData) => {
     try {
-      const feelingObj = feelingsList[selectedFeelingIndex] || feelingsList[0];
-      const todayStr = new Date().toISOString().split('T')[0];
-      const isPeriod = activeQuickLogs.includes('Period') || (activeQuickLogs.includes('Cramps') && selectedFeelingIndex === 4);
-
-      await cycleService.logCycleSymptom({
-        date: todayStr,
-        feeling: feelingObj.label,
-        symptoms: activeQuickLogs,
-        isPeriodDay: isPeriod,
-      });
-
-      setHasLoggedToday(true);
-      showToastSuccess && showToastSuccess('Daily health log saved!');
+      await cycleService.logCycleSymptom(logData);
       await loadCycleData();
-    } catch (err) {
-      console.warn('[HomeScreen] Failed to save daily log:', err.message);
-    } finally {
       setShowDailyLogDrawer(false);
+      if (showToastSuccess) {
+        showToastSuccess('Daily log saved!');
+      } else {
+        Alert.alert('Saved', 'Your daily log has been recorded.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Could not save daily log.');
     }
   };
 
-  const openArticleDetails = (title, category, readTime, author, summary, bulletPoints, fullText) => {
+  const openArticleDetails = (title, category, readTime, author, summary, bulletPoints, fullText, thumbnail) => {
     setSelectedArticle({
       title,
       category,
       readTime,
-      author: author || 'Dr. Mesal Okubor, MBBS, FWACS • Lead Consultant',
+      author: author || 'Medical Editorial Board • Reviewed by OB-GYN',
       summary: summary || 'Understanding your body changes empowers proactive reproductive health and fertility planning.',
       bulletPoints: bulletPoints || [
         'Recognize subtle shifts in physical cues and hormonal patterns.',
-        'Keep track of daily symptoms to identify cycle trends.',
+        'Keep track of your cycle to identify trends.',
         'Consult with certified specialists whenever unexpected changes occur.',
       ],
       fullText: fullText || 'Tracking hormonal fluctuations across your menstrual cycle provides invaluable health data. By monitoring physiological symptoms such as cervical fluid elasticity, basal body temperature, and energy levels, you can accurately predict your peak fertile window and optimize your reproductive wellness.',
+      thumbnail,
     });
     setIsFullReadingMode(false);
   };
@@ -1449,7 +888,7 @@ export default function HomeScreen({
         contentOffset={{ x: 0, y: 0 }}
         style={{ flex: 1 }}
       >
-        {/* PAGE 0: HOMEPAGE */}
+        {/* PAGE 0: MERGED HOMEPAGE & MODE PAGE (CYCLE / PREGNANCY / POSTMENOPAUSE) */}
         <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
           <TopProfileHeader
             user={user}
@@ -1462,374 +901,139 @@ export default function HomeScreen({
             unreadNotificationsCount={unreadNotificationsCount}
           />
 
-          <ScrollView
-            contentContainerStyle={styles.pageScrollContentDark}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={handleRefresh}
-                tintColor={colors.primary}
-                colors={[colors.primary, '#FA4A14']}
-                progressBackgroundColor="#FFFFFF"
-              />
-            }
-          >
-            <View style={styles.welcomeSection}>
-              <Text style={styles.welcomeGreeting}>
-                Welcome, <Text style={styles.welcomeNameText}>{greetingDisplayName}</Text> 👋
-              </Text>
-              <Text style={styles.welcomeSubtitle}>
-                Here's your cycle & health overview for today
-              </Text>
-            </View>
-
-            {/* HERO FEATURED WHITE CARD */}
-            <TouchableOpacity
-              activeOpacity={0.92}
-              style={styles.heroCardContainer}
-              onPress={() => scrollToPage(1)}
-            >
-              <View style={styles.heroWhiteCard}>
-                {/* Functional Ring & Cycle Details */}
-                <View style={styles.heroRingRow}>
-                  <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
-                  <View style={styles.heroMetricsCol}>
-                    <View style={styles.metricItemRow}>
-                      <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
-                      <Text style={styles.metricItemText}>
-                        Next period <Text style={{ fontWeight: '800', color: '#111827' }}>{nextPeriodFormatted}</Text>
-                      </Text>
-                    </View>
-                    <View style={styles.metricItemRow}>
-                      <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
-                      <Text style={styles.metricItemText}>Cycle length: {displayCycleLength} days</Text>
-                    </View>
-                    <View style={styles.metricItemRow}>
-                      <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
-                      <Text style={styles.metricItemText}>{ovulationLabel}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* FEATURED CARD: TALK TO A DOCTOR */}
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.doctorFeaturedCard}
-              onPress={() => scrollToPage(3)}
-            >
-              <View style={styles.doctorFeaturedTopRow}>
-                <View style={styles.doctorBadgeIconLarge}>
-                  <Ionicons name="videocam" size={26} color="#008080" />
-                </View>
-                <View style={styles.doctorActionPill}>
-                  <Text style={styles.doctorActionPillText}>Consult</Text>
-                  <Ionicons name="arrow-forward" size={13} color="#008080" />
-                </View>
-              </View>
-              <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
-              <Text style={styles.doctorFeaturedSubtitle}>
-                Book an HD video consultation with a certified women's health specialist.
-              </Text>
-            </TouchableOpacity>
-
-            {/* 2-COLUMN BENTO GRID: PREGNANCY & POSTMENOPAUSE */}
-            <View style={styles.bentoSectionGrid}>
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.bentoWhiteCard}
-                onPress={() => openModeChangeOnboarding('pregnancy')}
-              >
-                <View style={[styles.bentoIconSquare, { backgroundColor: '#FFE5E9' }]}>
-                  <Ionicons name="sparkles" size={22} color={colors.primary} />
-                </View>
-                <Text style={styles.bentoCardHeading}>Pregnancy</Text>
-                <Text style={styles.bentoCardSub}>Baby growth & tracker</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.bentoWhiteCard}
-                onPress={() => openModeChangeOnboarding('postmenopause')}
-              >
-                <View style={[styles.bentoIconSquare, { backgroundColor: '#F3E5F5' }]}>
-                  <Ionicons name="flower" size={22} color="#8E24AA" />
-                </View>
-                <Text style={styles.bentoCardHeading}>Menopause</Text>
-                <Text style={styles.bentoCardSub}>Hormones & vitality</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* UPCOMING PREDICTIONS SECTION */}
-            <View style={styles.predictionsContainer}>
-              <Text style={styles.sectionHeaderLabelDark}>UPCOMING PREDICTIONS</Text>
-              <View style={{ gap: 12 }}>
-                <View style={styles.upcomingPredictionCardClean}>
-                  <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FFE5E9' }]}>
-                    <Ionicons name="water" size={22} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
-                    <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
-                  </View>
-                  <View style={styles.upcomingPillRed}>
-                    <Text style={styles.upcomingPillRedText}>{upcomingPredictions.periodPill}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.upcomingPredictionCardClean}>
-                  <View style={[styles.upcomingIconSquircle, { backgroundColor: '#E0F2F1' }]}>
-                    <Ionicons name="leaf" size={22} color="#00A88F" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.fertileMainTitle}</Text>
-                    <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.fertileSubTitle}</Text>
-                  </View>
-                  <View style={styles.upcomingPillGreen}>
-                    <Text style={styles.upcomingPillGreenText}>{upcomingPredictions.fertilePill}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View style={{ height: 100 }} />
-          </ScrollView>
-        </View>
-
-        {/* PAGE 1: HOME / PREGNANCY / POSTMENOPAUSE */}
-        <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
           {isPregnancyMode ? (
-            <>
-              <TopProfileHeader
-                user={user}
-                isDoctorAccount={isDoctorAccount}
-                userName={userName}
-                userSubtitle={userSubtitle}
-                onOpenProfile={() => setShowProfileModal(true)}
-                onOpenSettings={() => setShowSettingsModal(true)}
-                onOpenNotifications={handleOpenNotifications}
-                unreadNotificationsCount={unreadNotificationsCount}
-              />
-              <PregnancyScreen
-                dueDate={pregnancyDueDate}
-                conceptionDate={pregnancyConceptionDate}
-                currentWeek={16}
-                onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
-                onBookDoctor={handleBookDoctorFromHome}
-              />
-            </>
+            <PregnancyScreen
+              dueDate={pregnancyDueDate}
+              conceptionDate={pregnancyConceptionDate}
+              currentWeek={16}
+              greetingDisplayName={greetingDisplayName}
+              weekDays={weekDays}
+              onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
+              onBookDoctor={handleBookDoctorFromHome}
+              onOpenDoctorPage={() => scrollToPage(2)}
+            />
           ) : isPostmenopauseMode ? (
-            <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-              <TopProfileHeader
-                user={user}
-                isDoctorAccount={isDoctorAccount}
-                userName={userName}
-                userSubtitle={userSubtitle}
-                onOpenProfile={() => setShowProfileModal(true)}
-                onOpenSettings={() => setShowSettingsModal(true)}
-                onOpenNotifications={handleOpenNotifications}
-                unreadNotificationsCount={unreadNotificationsCount}
-              />
-              <PostmenopauseScreen
-                greetingDisplayName={greetingDisplayName}
-                weekDays={weekDays}
-                onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
-                onOpenSetupWizard={(stage) => openModeChangeOnboarding(stage || 'postmenopause')}
-                onBookDoctor={handleBookDoctorFromHome}
-                onOpenDoctorPage={() => scrollToPage(3)}
-              />
-            </View>
+            <PostmenopauseScreen
+              greetingDisplayName={greetingDisplayName}
+              weekDays={weekDays}
+              onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
+              onOpenSetupWizard={(stage) => openModeChangeOnboarding(stage || 'postmenopause')}
+              onBookDoctor={handleBookDoctorFromHome}
+              onOpenDoctorPage={() => scrollToPage(2)}
+            />
           ) : (
-            /* RESTORED PREVIOUS EXPANDED CALENDAR & CYCLE PAGE (PURE WHITE THEME) */
-            <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-              <TopProfileHeader
-                user={user}
-                isDoctorAccount={isDoctorAccount}
-                userName={userName}
-                userSubtitle={userSubtitle}
-                onOpenProfile={() => setShowProfileModal(true)}
-                onOpenSettings={() => setShowSettingsModal(true)}
-                onOpenNotifications={handleOpenNotifications}
-                unreadNotificationsCount={unreadNotificationsCount}
-              />
+            <ScrollView
+              contentContainerStyle={styles.pageScrollContentDark}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefreshing}
+                  onRefresh={handleRefresh}
+                  tintColor={colors.primary}
+                  colors={[colors.primary, '#FA4A14']}
+                  progressBackgroundColor="#FFFFFF"
+                />
+              }
+            >
+              <View style={styles.welcomeSection}>
+                <Text style={styles.welcomeGreeting}>
+                  Welcome, <Text style={styles.welcomeNameText}>{greetingDisplayName}</Text> 👋
+                </Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Here's your cycle & health overview for today
+                </Text>
+              </View>
 
-              <ScrollView
-                contentContainerStyle={[styles.pageScrollContentDark, { backgroundColor: '#FFFFFF' }]}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={isRefreshing}
-                    onRefresh={handleRefresh}
-                    tintColor={colors.primary}
-                    colors={[colors.primary, '#FA4A14']}
-                    progressBackgroundColor="#FFFFFF"
-                  />
-                }
+              {/* HERO FEATURED WHITE CARD - OPENS CYCLE CALENDAR ON TAP */}
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={styles.heroCardContainer}
+                onPress={() => setShowCycleCalendarModal(true)}
               >
-                {/* MONTH HEADER OUTSIDE CALENDAR (LIKE PROTOTYPE) */}
-                <View style={styles.calendarHeaderOutsideRow}>
-                  <View>
-                    <Text style={styles.calendarMonthTitleOutside}>{calendarMonthTitle}</Text>
-                    <View style={styles.calendarSubRow}>
-                      <Text style={styles.calendarSubTitleOutside}>Cycle calendar</Text>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        style={styles.infoIconButton}
-                        onPress={() => setShowLegendModal(true)}
-                      >
-                        <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {/* Prev Month */}
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      style={styles.calendarNavBtnOutside}
-                      onPress={prevCalMonth}
-                    >
-                      <Ionicons name="chevron-back" size={18} color="#374151" />
-                    </TouchableOpacity>
-
-                    {/* Next Month */}
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      style={styles.calendarNavBtnOutside}
-                      onPress={nextCalMonth}
-                    >
-                      <Ionicons name="chevron-forward" size={18} color="#374151" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* EXPANDED CYCLE CALENDAR CARD */}
-                <View style={[styles.calendarCard, { marginHorizontal: 16, marginTop: 4 }]}>
-                  {/* Weekday Row */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((w, idx) => (
-                      <View key={idx} style={{ width: `${100 / 7}%`, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{w}</Text>
+                <View style={styles.heroWhiteCard}>
+                  {/* Functional Ring & Cycle Details */}
+                  <View style={styles.heroRingRow}>
+                    <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
+                    <View style={styles.heroMetricsCol}>
+                      <View style={styles.metricItemRow}>
+                        <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
+                        <Text style={styles.metricItemText}>
+                          Next period <Text style={{ fontWeight: '800', color: '#111827' }}>{nextPeriodFormatted}</Text>
+                        </Text>
                       </View>
-                    ))}
-                  </View>
-
-                  {/* Calendar Days Grid */}
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                    {monthGridCells.map((cell) => {
-                      if (cell.empty) {
-                        return <View key={cell.key} style={{ width: `${100 / 7}%`, height: 38 }} />;
-                      }
-
-                      const isSelected = selectedDateKey === cell.dateKey;
-                      const isToday = cell.isToday;
-
-                      let cellBg = 'transparent';
-                      let textColor = colors.textPrimary;
-                      let fontWeight = '600';
-
-                      if (cell.type === 'period') {
-                        cellBg = colors.primaryLight;
-                        textColor = colors.primary;
-                        fontWeight = '800';
-                      } else if (cell.type === 'ovulation') {
-                        cellBg = '#00A88F';
-                        textColor = '#FFFFFF';
-                        fontWeight = '900';
-                      } else if (cell.type === 'fertile') {
-                        cellBg = '#E0F2F1';
-                        textColor = '#008080';
-                        fontWeight = '800';
-                      }
-
-                      if (isToday) {
-                        cellBg = colors.primary;
-                        textColor = '#FFFFFF';
-                        fontWeight = '900';
-                      }
-
-                      return (
-                        <TouchableOpacity
-                          key={cell.key}
-                          activeOpacity={0.7}
-                          style={{
-                            width: `${100 / 7}%`,
-                            height: 38,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: 4,
-                          }}
-                          onPress={() => setSelectedDateKey(cell.dateKey)}
-                        >
-                          <View
-                            style={[
-                              styles.dayCellCircle,
-                              { backgroundColor: cellBg },
-                              isSelected && !isToday && styles.dayCellSelected,
-                              isSelected && isToday && styles.dayCellTodaySelected,
-                            ]}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight, color: textColor }}>
-                              {cell.dayNum}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {/* Bottom Legend Row */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderTopWidth: 1,
-                      borderTopColor: '#F3F4F6',
-                      paddingTop: 12,
-                      marginTop: 8,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>Period</Text>
+                      <View style={styles.metricItemRow}>
+                        <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
+                        <Text style={styles.metricItemText}>Cycle length: {displayCycleLength} days</Text>
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#00A88F' }} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>Fertile</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>Today</Text>
+                      <View style={styles.metricItemRow}>
+                        <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
+                        <Text style={styles.metricItemText}>{ovulationLabel}</Text>
                       </View>
                     </View>
                   </View>
                 </View>
+              </TouchableOpacity>
 
-                {/* CYCLE ANALYTICS & METRICS (MOVED FROM MODAL) */}
-                <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 12 }}>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: colors.textPrimary }}>Analytics</Text>
+              {/* FEATURED CARD: TALK TO A DOCTOR */}
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={styles.doctorFeaturedCard}
+                onPress={() => scrollToPage(2)}
+              >
+                <View style={styles.doctorFeaturedTopRow}>
+                  <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
+                  <View style={styles.doctorActionPill}>
+                    <Text style={styles.doctorActionPillText}>Consult</Text>
+                    <Ionicons name="arrow-forward" size={13} color="#008080" />
+                  </View>
                 </View>
-                <CycleLengthChart
-                  historyData={cycleHistory?.stats?.recentMonthlyLengths}
-                  averageLength={activeCycleProfile.cycleLength}
-                />
-                <AdditionalAnalyticsMetrics
-                  stats={cycleHistory?.stats}
-                  prediction={cyclePrediction}
-                  cycleLength={activeCycleProfile.cycleLength}
-                  periodDuration={activeCycleProfile.periodDuration}
-                />
+                <Text style={styles.doctorFeaturedSubtitle}>
+                  Book a video consultation with a certified women's health specialist.
+                </Text>
+              </TouchableOpacity>
 
-                <View style={{ height: 100 }} />
-              </ScrollView>
-            </View>
+              {/* 2-COLUMN BENTO GRID: PREGNANCY & POSTMENOPAUSE */}
+              <View style={styles.bentoSectionGrid}>
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={styles.bentoWhiteCard}
+                  onPress={() => openModeChangeOnboarding('pregnancy')}
+                >
+                  <Text style={styles.bentoCardHeading}>Pregnancy</Text>
+                  <Text style={styles.bentoCardSub}>Baby growth & tracker</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={styles.bentoWhiteCard}
+                  onPress={() => openModeChangeOnboarding('postmenopause')}
+                >
+                  <Text style={styles.bentoCardHeading}>Menopause</Text>
+                  <Text style={styles.bentoCardSub}>Hormones & vitality</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* CYCLE FORECAST SECTION */}
+              <View style={styles.predictionsContainer}>
+                <Text style={styles.sectionHeaderLabelDark}>CYCLE FORECAST</Text>
+                <View style={{ gap: 12 }}>
+                  <View style={styles.upcomingPredictionCardClean}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
+                      <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+
+
+              <View style={{ height: 100 }} />
+            </ScrollView>
           )}
         </View>
 
-        {/* PAGE 2: LEARN & INSIGHTS */}
+        {/* PAGE 1: LEARN & INSIGHTS */}
         <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
           <TopProfileHeader
             user={user}
@@ -1845,11 +1049,12 @@ export default function HomeScreen({
           <LearnScreen openArticleDetails={openArticleDetails} />
         </View>
 
-        {/* PAGE 3: DOCTOR CARE / TELEMEDICINE */}
+        {/* PAGE 2: DOCTOR CARE / TELEMEDICINE */}
         <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
           <DoctorCareScreen
             initialDoctor={selectedDoctorForBooking}
             onBookDoctor={handleBookDoctorFromHome}
+            onOpenProfile={() => setShowProfileModal(true)}
             onOpenSettings={() => setShowSettingsModal(true)}
             onOpenNotifications={handleOpenNotifications}
             unreadNotificationsCount={unreadNotificationsCount}
@@ -1882,14 +1087,26 @@ export default function HomeScreen({
             </Text>
           </TouchableOpacity>
 
-          {/* TAB 2: CYCLE / PREGNANCY / POSTMENOPAUSE */}
+          {/* TAB 2: CENTER AI AGENT ASSISTANT & SYMPTOM LOG */}
+          <View style={styles.bottomBarCenterBtnWrapper}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.bottomBarCenterBtn}
+              onPress={() => setShowDailyLogDrawer(true)}
+              accessibilityLabel="AI Health Companion"
+            >
+              <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* TAB 3: LEARN */}
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.bottomBarTab}
             onPress={() => scrollToPage(1)}
           >
             <Ionicons
-              name={currentPage === 1 ? "calendar" : "calendar-outline"}
+              name={currentPage === 1 ? "book" : "book-outline"}
               size={22}
               color={currentPage === 1 ? colors.primary : "#8E8E93"}
             />
@@ -1899,29 +1116,18 @@ export default function HomeScreen({
                 currentPage === 1 && styles.bottomBarTabLabelActive,
               ]}
             >
-              {isPregnancyMode ? 'Pregnancy' : isPostmenopauseMode ? 'Postmeno' : 'Cycle'}
+              Learn
             </Text>
           </TouchableOpacity>
 
-          {/* TAB 3: CENTER QUICK LOG ACTION (+) */}
-          <View style={styles.bottomBarCenterBtnWrapper}>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.bottomBarCenterBtn}
-              onPress={() => setShowDailyLogDrawer(true)}
-            >
-              <Ionicons name="add" size={30} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* TAB 4: LEARN */}
+          {/* TAB 4: TELEMEDICINE */}
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.bottomBarTab}
             onPress={() => scrollToPage(2)}
           >
             <Ionicons
-              name={currentPage === 2 ? "book" : "book-outline"}
+              name={currentPage === 2 ? "videocam" : "videocam-outline"}
               size={22}
               color={currentPage === 2 ? colors.primary : "#8E8E93"}
             />
@@ -1931,33 +1137,11 @@ export default function HomeScreen({
                 currentPage === 2 && styles.bottomBarTabLabelActive,
               ]}
             >
-              Learn
-            </Text>
-          </TouchableOpacity>
-
-          {/* TAB 5: TELEMEDICINE */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.bottomBarTab}
-            onPress={() => scrollToPage(3)}
-          >
-            <Ionicons
-              name={currentPage === 3 ? "videocam" : "videocam-outline"}
-              size={22}
-              color={currentPage === 3 ? colors.primary : "#8E8E93"}
-            />
-            <Text
-              style={[
-                styles.bottomBarTabLabel,
-                currentPage === 3 && styles.bottomBarTabLabelActive,
-              ]}
-            >
               Telemed
             </Text>
           </TouchableOpacity>
         </View>
       </View>
-
 
       <Modal
         visible={showNotificationsModal}
@@ -1981,30 +1165,350 @@ export default function HomeScreen({
             <TouchableOpacity
               activeOpacity={0.7}
               style={styles.closeDetailButton}
-              onPress={() => alert('All notifications marked as read.')}
+              onPress={handleMarkAllNotificationsRead}
             >
               <Ionicons name="checkmark-done" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={styles.articleDetailScrollContent} showsVerticalScrollIndicator={false}>
-            {displayNotifications.map((item) => (
-              <View key={item.id} style={styles.notificationItemRow}>
-                <View style={[styles.notificationIconCircle, { backgroundColor: item.iconBg }]}>
-                  <Ionicons name={item.icon} size={22} color={item.iconColor} />
+          <ScrollView
+            contentContainerStyle={styles.articleDetailScrollContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isNotificationsLoading}
+                onRefresh={async () => {
+                  setIsNotificationsLoading(true);
+                  await reloadNotifications();
+                  setIsNotificationsLoading(false);
+                }}
+                tintColor={colors.primary}
+              />
+            }
+          >
+            {displayNotifications.length === 0 ? (
+              <View style={styles.notificationEmptyContainer}>
+                <View style={styles.notificationEmptyIconCircle}>
+                  <Ionicons name="notifications-outline" size={38} color="#9CA3AF" />
                 </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <View style={styles.notificationHeaderRow}>
-                    <Text style={styles.notificationTitle}>{item.title}</Text>
-                    <Text style={styles.notificationTime}>{item.time}</Text>
-                  </View>
-                  <Text style={styles.notificationBody}>{item.body}</Text>
-                </View>
+                <Text style={styles.notificationEmptyTitle}>All Caught Up!</Text>
+                <Text style={styles.notificationEmptySubtitle}>
+                  You don't have any unread health alerts right now. We will notify you when your cycle, medication, or consultation timings approach.
+                </Text>
               </View>
-            ))}
+            ) : (
+              displayNotifications.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.75}
+                  style={[
+                    styles.notificationItemRow,
+                    !item.isRead && styles.notificationItemRowUnread,
+                  ]}
+                  onPress={() => handlePressNotificationItem(item)}
+                >
+                  <View style={[styles.notificationIconCircle, { backgroundColor: item.iconBg || '#FFE5E9' }]}>
+                    <Ionicons name={item.icon || 'notifications'} size={22} color={item.iconColor || colors.primary} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <View style={styles.notificationHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                        <Text style={styles.notificationTitle} numberOfLines={1}>{item.title}</Text>
+                        {!item.isRead && <View style={styles.notificationUnreadDot} />}
+                      </View>
+                      <Text style={styles.notificationTime}>{item.time}</Text>
+                    </View>
+                    <Text style={styles.notificationBody}>{item.body}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      <Modal
+        visible={showCycleCalendarModal}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowCycleCalendarModal(false)}
+      >
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+        {showCycleCalendarModal && (
+          <SafeAreaView style={styles.calendarPageContainer} edges={['top', 'bottom', 'left', 'right']}>
+            {/* TOP HEADER */}
+            <View style={styles.calendarPageHeader}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.calendarPageBackBtn}
+                onPress={() => setShowCycleCalendarModal(false)}
+              >
+                <Ionicons name="arrow-back" size={22} color="#111827" />
+              </TouchableOpacity>
+
+              <View style={{ alignItems: 'center' }}>
+                <Text style={styles.calendarPageTitle}>Cycle Calendar</Text>
+              </View>
+
+              <View style={{ width: 38 }} />
+            </View>
+
+            {/* PINNED STICKY WEEKDAY & LEGEND ROW */}
+            <View style={styles.calendarPagePinnedHeader}>
+              {/* Compact Legend Row */}
+              <View style={styles.calendarPageLegendRow}>
+                <View style={styles.calendarLegendItem}>
+                  <View style={[styles.calendarLegendDot, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.calendarLegendText}>Period</Text>
+                </View>
+                <View style={styles.calendarLegendItem}>
+                  <View style={[styles.calendarLegendDot, { backgroundColor: '#E0F2F1', borderWidth: 1, borderColor: '#00A88F' }]} />
+                  <Text style={styles.calendarLegendText}>Fertile</Text>
+                </View>
+                <View style={styles.calendarLegendItem}>
+                  <View style={[styles.calendarLegendDot, { backgroundColor: '#00A88F' }]} />
+                  <Text style={styles.calendarLegendText}>Ovulation</Text>
+                </View>
+                <View style={styles.calendarLegendItem}>
+                  <View style={[styles.calendarLegendDot, { borderWidth: 2, borderColor: colors.primary, backgroundColor: '#FFFFFF' }]} />
+                  <Text style={styles.calendarLegendText}>Today</Text>
+                </View>
+              </View>
+
+              {/* Weekday Row */}
+              <View style={styles.calendarPageWeekdayRow}>
+                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((w, idx) => (
+                  <View key={idx} style={styles.calendarPageWeekdayCol}>
+                    <Text style={styles.calendarPageWeekdayText}>{w}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* SINGLE CURRENT MONTH SCROLLABLE CONTENT */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.calendarPageScrollContent}
+            >
+              <View style={styles.calendarMonthBlockSingle}>
+                {/* Month Title Header */}
+                <View style={styles.calendarMonthHeaderRow}>
+                  <Text style={styles.calendarMonthTitleText}>{currentMonthData.monthTitle}</Text>
+                </View>
+
+                {/* Day Cells Grid (7 Columns) */}
+                <View style={styles.calendarMonthGrid}>
+                  {currentMonthData.cells.map((cell) => {
+                    if (cell.empty) {
+                      return <View key={cell.key} style={styles.calendarPageCellTouchable} />;
+                    }
+
+                    const isSelected = (selectedDateCellInfo?.dateKey || selectedDateKey) === cell.dateKey;
+                    const isToday = cell.isToday;
+
+                    let cellBg = 'transparent';
+                    let textColor = '#1F2937';
+                    let fontWeight = '600';
+                    const isPeriodDay = cell.type === 'period';
+
+                    if (cell.type === 'period') {
+                      cellBg = '#FFEBEE';
+                      textColor = colors.primary;
+                      fontWeight = '800';
+                    } else if (cell.type === 'ovulation') {
+                      cellBg = '#00A88F';
+                      textColor = '#FFFFFF';
+                      fontWeight = '900';
+                    } else if (cell.type === 'fertile') {
+                      cellBg = '#E0F2F1';
+                      textColor = '#008080';
+                      fontWeight = '800';
+                    }
+
+                    if (isToday) {
+                      fontWeight = '900';
+                      if (!isPeriodDay && cell.type === 'normal') {
+                        cellBg = '#F3F4F6';
+                        textColor = colors.primary;
+                      }
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={cell.key}
+                        activeOpacity={0.7}
+                        style={styles.calendarPageCellTouchable}
+                        onPress={() => setSelectedDateKey(cell.dateKey)}
+                      >
+                        <View
+                          style={[
+                            styles.calendarPageDayCellCircle,
+                            { backgroundColor: cellBg },
+                            isToday && { borderWidth: 2, borderColor: colors.primary },
+                            isSelected && !isToday && styles.dayCellSelected,
+                            isSelected && isToday && styles.dayCellTodaySelected,
+                          ]}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight, color: textColor }}>
+                            {cell.dayNum}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* SELECTED DAY INSIGHT & ACTION CARD */}
+              {selectedDateCellInfo && (
+                <View style={styles.calendarDayInsightCard}>
+                  <View style={styles.calendarDayInsightTopRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.calendarDayInsightDate}>
+                        {(() => {
+                          const [y, m, d] = selectedDateCellInfo.dateKey.split('-');
+                          const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+                          const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                          const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          const dayName = daysShort[dateObj.getDay()];
+                          const monthName = monthsShort[dateObj.getMonth()];
+                          return `${dayName}, ${monthName} ${Number(d)}${selectedDateCellInfo.isToday ? ' • Today' : ''}`;
+                        })()}
+                      </Text>
+                      <Text style={styles.calendarDayInsightPhase}>
+                        {selectedDateCellInfo.type === 'period'
+                          ? `🩸 Menstrual Period • Day ${selectedDateCellInfo.cycleDay}`
+                          : selectedDateCellInfo.type === 'ovulation'
+                          ? `✨ Ovulation Day • Peak Fertility (Day ${selectedDateCellInfo.cycleDay})`
+                          : selectedDateCellInfo.type === 'fertile'
+                          ? `🌱 Fertile Window • High Chance (Day ${selectedDateCellInfo.cycleDay})`
+                          : selectedDateCellInfo.cycleDay > 15
+                          ? `🌙 Luteal Phase • Day ${selectedDateCellInfo.cycleDay}`
+                          : `🌸 Follicular Phase • Day ${selectedDateCellInfo.cycleDay}`}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.calendarPhasePill,
+                        selectedDateCellInfo.type === 'period' && { backgroundColor: '#FFEBEE' },
+                        selectedDateCellInfo.type === 'ovulation' && { backgroundColor: '#E0F2F1' },
+                        selectedDateCellInfo.type === 'fertile' && { backgroundColor: '#E0F2F1' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.calendarPhasePillText,
+                          selectedDateCellInfo.type === 'period' && { color: colors.primary },
+                          selectedDateCellInfo.type === 'ovulation' && { color: '#008080' },
+                          selectedDateCellInfo.type === 'fertile' && { color: '#008080' },
+                        ]}
+                      >
+                        Day {selectedDateCellInfo.cycleDay}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.calendarDayInsightNote}>
+                    {selectedDateCellInfo.type === 'period'
+                      ? 'Active menstrual flow. Stay hydrated, use warm compresses for cramping, and track flow intensity.'
+                      : selectedDateCellInfo.type === 'ovulation'
+                      ? 'Ovulation is predicted today. This is your peak 24-hour fertile window.'
+                      : selectedDateCellInfo.type === 'fertile'
+                      ? 'Elevated fertility window. Sperm can survive up to 5 days leading up to ovulation.'
+                      : selectedDateCellInfo.cycleDay > 15
+                      ? 'Progesterone is supporting your body in the second half of your cycle.'
+                      : 'Estrogen is gradually rising as follicles mature. Great time for high energy activities.'}
+                  </Text>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={styles.calendarLogDayBtn}
+                    onPress={() => setShowDailyLogDrawer(true)}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+                    <Text style={styles.calendarLogDayBtnText}>Log Symptoms for this Day</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* MONTH OVERVIEW SUMMARY STATS */}
+              <View style={styles.calendarMonthStatsRow}>
+                <View style={styles.calendarMonthStatCard}>
+                  <Text style={styles.calendarMonthStatVal}>{displayCycleLength}d</Text>
+                  <Text style={styles.calendarMonthStatLbl}>Cycle Length</Text>
+                </View>
+                <View style={styles.calendarMonthStatCard}>
+                  <Text style={[styles.calendarMonthStatVal, { color: colors.primary }]}>
+                    {currentMonthData.stats?.periodDaysCount || 5}d
+                  </Text>
+                  <Text style={styles.calendarMonthStatLbl}>Period Days</Text>
+                </View>
+                <View style={styles.calendarMonthStatCard}>
+                  <Text style={[styles.calendarMonthStatVal, { color: '#00A88F' }]}>
+                    {currentMonthData.stats?.fertileDaysCount ? `${currentMonthData.stats.fertileDaysCount}d` : '6d'}
+                  </Text>
+                  <Text style={styles.calendarMonthStatLbl}>Fertile Days</Text>
+                </View>
+              </View>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </SafeAreaView>
+        )}
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* AI HEALTH ASSISTANT & SYMPTOM LOG DRAWER                                  */}
+      {/* ========================================================================= */}
+      <AIAssistantDrawer
+        visible={showDailyLogDrawer}
+        onClose={() => setShowDailyLogDrawer(false)}
+        selectedDateKey={selectedDateKey}
+        healthContext={{
+          activeMode: isPregnancyMode ? 'pregnancy' : isPostmenopauseMode ? 'postmenopause' : 'cycle',
+          userName: greetingDisplayName || userName,
+          userAge: user?.date_of_birth ? Math.floor((new Date().getTime() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 3600 * 1000)) : undefined,
+          medicalProfile: {
+            reproductiveGoal: user?.health_profile?.reproductiveGoal || (isPregnancyMode ? 'track_pregnancy' : 'track_cycle'),
+            birthControl: user?.health_profile?.birthControl || 'None reported',
+            knownConditions: user?.health_profile?.conditions || [],
+            notes: user?.health_profile?.notes || '',
+          },
+          appointments: userBookingsList.map((b) => ({
+            id: b.booking_id,
+            doctorId: b.doctor_id,
+            doctorName: b.doctor_name,
+            doctorSpecialty: b.doctor_specialty,
+            scheduledTime: b.scheduled_time,
+            consultationType: b.consultation_type,
+            status: b.status,
+            reason: b.reason,
+          })),
+          pregnancy: isPregnancyMode ? {
+            currentWeek: 16,
+            dueDate: pregnancyDueDate,
+            conceptionDate: pregnancyConceptionDate,
+            trimester: 2,
+            babySize: 'Avocado',
+          } : null,
+          postmenopause: isPostmenopauseMode ? {
+            stage: activeHealthMode,
+          } : null,
+          cycle: {
+            currentCycleDay: displayCurrentDay,
+            cycleLength: displayCycleLength,
+            phaseName: cyclePrediction.currentPhase
+              ? cyclePrediction.currentPhase.charAt(0).toUpperCase() + cyclePrediction.currentPhase.slice(1) + ' Phase'
+              : 'Menstrual Phase',
+            nextPeriodDate: nextPeriodFormatted,
+            ovulationDate: ovulationFormatted,
+            selectedDate: selectedDateKey,
+          },
+        }}
+        onSaveLog={handleSaveDailyLog}
+        onNavigateTelemedicine={() => scrollToPage(2)}
+      />
 
       <Modal
         visible={showExpandedCycleModal}
@@ -2118,100 +1622,6 @@ export default function HomeScreen({
             </View>
           </ScrollView>
         </SafeAreaView>
-      </Modal>
-
-      <Modal
-        visible={showDailyLogDrawer}
-        animationType="slide"
-        transparent={true}
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowDailyLogDrawer(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.drawerBackdrop}
-          onPress={() => setShowDailyLogDrawer(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={styles.drawerContentContainer}
-          >
-            <View style={styles.drawerHandlePill} />
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              <Text style={styles.dailyLogDrawerTitle}>How are you feeling today?</Text>
-              <Text style={styles.dailyLogDrawerSub}>Log your daily mood and health metrics for today</Text>
-
-              <View style={styles.feelingIconsRowDrawer}>
-                {feelingsList.map((feeling, idx) => {
-                  const isSelected = selectedFeelingIndex === idx;
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.feelingCircleButtonDrawer,
-                        isSelected && { backgroundColor: feeling.color + '20', borderColor: feeling.color, borderWidth: 2 },
-                      ]}
-                      onPress={() => setSelectedFeelingIndex(idx)}
-                    >
-                      <Ionicons
-                        name={feeling.icon}
-                        size={26}
-                        color={isSelected ? feeling.color : colors.textSecondary}
-                      />
-                      <Text style={[styles.feelingLabelText, isSelected && { color: feeling.color, fontWeight: '800' }]}>
-                        {feeling.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <View style={styles.innerDividerLine} />
-
-              <Text style={styles.quickLogSubHeader}>SELECT SYMPTOMS & INDICATORS</Text>
-              <View style={styles.quickLogGrid}>
-                {[
-                  { name: 'Period', icon: 'water-outline', bg: '#FFEBEE', color: colors.primary },
-                  { name: 'Cramps', icon: 'flame-outline', bg: '#FFEBEE', color: colors.primary },
-                  { name: 'Fatigue', icon: 'pulse-outline', bg: '#FFF3E0', color: '#E65100' },
-                  { name: 'Bloating', icon: 'swap-horizontal-outline', bg: '#E0F2F1', color: '#008080' },
-                  { name: 'Headache', icon: 'flash-outline', bg: '#EDE7F6', color: '#7C4DFF' },
-                  { name: 'Tender', icon: 'heart-outline', bg: '#FCE4EC', color: '#D81B60' },
-                ].map((item, idx) => {
-                  const isSelected = activeQuickLogs.includes(item.name);
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.quickLogCard,
-                        isSelected && { borderColor: item.color, borderWidth: 2 },
-                      ]}
-                      onPress={() => toggleQuickLog(item.name)}
-                    >
-                      <View style={[styles.quickLogIconCircle, { backgroundColor: item.bg }]}>
-                        <Ionicons name={item.icon} size={20} color={item.color} />
-                      </View>
-                      <Text style={styles.quickLogCardText}>{item.name}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.saveDailyLogButtonDrawer}
-                onPress={handleSaveDailyLog}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.saveDailyLogTextDrawer}>Save Daily Log</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
       </Modal>
 
       {/* REDESIGNED SLEEK WELCOME BACK TO CYCLE TRACKING DRAWER */}
@@ -2373,11 +1783,7 @@ export default function HomeScreen({
           cycleLogs={cycleLogs}
           onBookDoctor={() => {
             setShowProfileModal(false);
-            scrollToPage(3);
-          }}
-          onLogSymptoms={() => {
-            setShowProfileModal(false);
-            scrollToPage(1);
+            scrollToPage(2);
           }}
         />
       </Modal>
@@ -2411,11 +1817,7 @@ export default function HomeScreen({
           cycleLogs={cycleLogs}
           onBookDoctor={() => {
             setShowSettingsModal(false);
-            scrollToPage(3);
-          }}
-          onLogSymptoms={() => {
-            setShowSettingsModal(false);
-            scrollToPage(1);
+            scrollToPage(2);
           }}
         />
       </Modal>
@@ -2506,19 +1908,39 @@ export default function HomeScreen({
             onPress={(e) => e.stopPropagation()}
             style={styles.drawerContentContainer}
           >
-            <View style={styles.drawerHandlePill} />
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              <View style={styles.drawerHeaderRow}>
-                <View style={styles.articleCategoryBadge}>
-                  <Text style={styles.articleCategoryText}>{selectedArticle?.category}</Text>
-                </View>
-
-                <TouchableOpacity activeOpacity={0.7} style={styles.bookmarkButtonCircle}>
-                  <Ionicons name="bookmark-outline" size={20} color={colors.textPrimary} />
+            {/* FULL-WIDTH TOP IMAGE HEADER WITH OVERLAY CONTROLS */}
+            {selectedArticle?.thumbnail ? (
+              <View style={styles.drawerTopHeaderContainer}>
+                <Image
+                  source={{ uri: selectedArticle.thumbnail }}
+                  style={styles.drawerTopHeaderImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.drawerHandlePillOverlay} />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.drawerCloseButtonOverlay}
+                  onPress={() => setSelectedArticle(null)}
+                >
+                  <Ionicons name="close" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
+            ) : (
+              <View style={{ paddingTop: 12, paddingHorizontal: 20 }}>
+                <View style={styles.drawerHandlePill} />
+                <View style={{ alignItems: 'flex-end', marginBottom: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.bookmarkButtonCircle}
+                    onPress={() => setSelectedArticle(null)}
+                  >
+                    <Ionicons name="close" size={20} color={colors.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerScrollBody}>
               <Text style={styles.drawerArticleTitle}>{selectedArticle?.title}</Text>
               <Text style={styles.drawerArticleMeta}>{selectedArticle?.readTime} • {selectedArticle?.author}</Text>
 
@@ -2541,15 +1963,6 @@ export default function HomeScreen({
               >
                 <Ionicons name="book" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
                 <Text style={styles.openFullArticleButtonText}>Read Full Article</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.saveLibrarySecondaryButton}
-                onPress={() => alert('Article Saved to Your Library!')}
-              >
-                <Ionicons name="heart-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.saveLibrarySecondaryText}>Save to My Library</Text>
               </TouchableOpacity>
             </ScrollView>
           </TouchableOpacity>
@@ -2580,9 +1993,15 @@ export default function HomeScreen({
             </View>
 
             <ScrollView contentContainerStyle={styles.articleDetailScrollContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.articleCategoryBadge}>
-                <Text style={styles.articleCategoryText}>{selectedArticle.category}</Text>
-              </View>
+              {selectedArticle?.thumbnail && (
+                <View style={styles.fullArticleThumbnailContainer}>
+                  <Image
+                    source={{ uri: selectedArticle.thumbnail }}
+                    style={styles.fullArticleThumbnailImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
 
               <Text style={styles.articleDetailTitle}>{selectedArticle.title}</Text>
               <Text style={styles.articleDetailMeta}>{selectedArticle.readTime} • {selectedArticle.author}</Text>
@@ -2882,6 +2301,39 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 3,
   },
+  heroCardCalendarLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  heroCardCalendarLinkLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroCardCalendarLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  heroCardCalendarLinkPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  heroCardCalendarLinkPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
   heroCardPhaseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3022,8 +2474,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 26,
     padding: 18,
-    minHeight: 140,
-    justifyContent: 'space-between',
+    minHeight: 88,
+    justifyContent: 'center',
     alignItems: 'flex-start',
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -3044,7 +2496,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     color: '#111827',
-    marginTop: 12,
+    marginTop: 0,
     marginBottom: 2,
   },
   bentoCardSub: {
@@ -3072,7 +2524,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   doctorBadgeIconLarge: {
     width: 52,
@@ -3086,7 +2538,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 0,
   },
   doctorFeaturedSubtitle: {
     fontSize: 13,
@@ -3459,6 +2911,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0F0F5',
   },
+  notificationItemRowUnread: {
+    backgroundColor: '#FFFBF8',
+    borderColor: '#FED7AA',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  notificationUnreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginLeft: 6,
+  },
   notificationIconCircle: {
     width: 42,
     height: 42,
@@ -3485,6 +2953,33 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  notificationEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+    paddingHorizontal: 32,
+  },
+  notificationEmptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  notificationEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  notificationEmptySubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
   /* Outside Month Header Styles (Matching Prototype) */
@@ -4683,22 +4178,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.textPrimary,
   },
-  symptomPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  symptomTagPill: {
-    backgroundColor: '#F5F5FA',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-  },
-  symptomTagText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
 
   /* Calendar Legend Modal */
   modalOverlay: {
@@ -4763,17 +4242,53 @@ const styles = StyleSheet.create({
   },
   drawerContentContainer: {
     width: '100%',
-    maxHeight: '85%',
+    maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 12,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 10,
+  },
+  drawerTopHeaderContainer: {
+    width: '100%',
+    height: 170,
+    backgroundColor: '#374151',
+    position: 'relative',
+  },
+  drawerTopHeaderImage: {
+    width: '100%',
+    height: '100%',
+  },
+  drawerHandlePillOverlay: {
+    position: 'absolute',
+    top: 10,
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    zIndex: 10,
+  },
+  drawerCloseButtonOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  drawerScrollBody: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   drawerHandlePill: {
     width: 44,
@@ -4811,6 +4326,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F8',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fullArticleThumbnailContainer: {
+    width: '100%',
+    height: 220,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    marginBottom: 18,
+  },
+  fullArticleThumbnailImage: {
+    width: '100%',
+    height: '100%',
   },
   drawerArticleTitle: {
     fontSize: 24,
@@ -5233,6 +4760,348 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 3,
+  },
+  /* ========================================================================= */
+  /* DEDICATED CYCLE CALENDAR PAGE STYLES (RED APPLE SIGNATURE DESIGN)         */
+  /* ========================================================================= */
+  calendarPageContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  calendarPageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+  },
+  calendarPageBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calendarPageTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  calendarPageTodayHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  calendarPageTodayHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  calendarPagePinnedHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  calendarPageWeekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+  },
+  calendarPageWeekdayCol: {
+    width: `${100 / 7}%`,
+    alignItems: 'center',
+  },
+  calendarPageWeekdayText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  calendarPageLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  calendarLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  calendarLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  calendarLegendText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  calendarPageScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 48,
+  },
+  calendarMonthBlock: {
+    marginBottom: 28,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  calendarMonthHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  calendarMonthTitleText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.2,
+  },
+  calendarCurrentMonthBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+  },
+  calendarCurrentMonthBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  calendarMonthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarPageCellTouchable: {
+    width: `${100 / 7}%`,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  calendarPageDayCellCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarMonthBlockSingle: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  calendarDayInsightCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calendarDayInsightTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  calendarDayInsightDate: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  calendarDayInsightPhase: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4B5563',
+    marginTop: 2,
+  },
+  calendarPhasePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  calendarPhasePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#374151',
+  },
+  calendarDayInsightNote: {
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  calendarLogDayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  calendarLogDayBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  calendarMonthStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  calendarMonthStatCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calendarMonthStatVal: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  calendarMonthStatLbl: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+
+  /* DAILY LOG DRAWER */
+  dailyLogDrawerContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: SCREEN_HEIGHT * 0.85,
+  },
+  dailyLogHeroSection: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    marginBottom: 16,
+  },
+  dailyLogHeroTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  dailyLogHeroSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  dailyLogSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 10,
+    marginTop: 12,
+  },
+  flowPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  flowPillBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  flowPillBtnActive: {
+    backgroundColor: '#FFEBEE',
+    borderColor: colors.primary,
+  },
+  flowPillBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  flowPillBtnTextActive: {
+    color: colors.primary,
+  },
+  chipsWrapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  chipBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  chipBtnActive: {
+    backgroundColor: '#FFEBEE',
+    borderColor: colors.primary,
+  },
+  chipBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  chipBtnTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  dailyLogSaveBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 18,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  dailyLogSaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });
 

@@ -1,632 +1,302 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { useGSAP } from '@gsap/react';
+import { ArrowRight, Globe } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-// =========================================================================
-// DEDICATED VIDEO SLOTS FOR EACH STORYTELLING STAGE
-// =========================================================================
-export const VIDEO_BEAT_1 = '/Cinematic_documentary_slow_mot.mp4'; // Screen 1: Next generation
-export const VIDEO_BEAT_2 = '/Cinematic_documentary_aerial_d.mp4'; // Screen 2: Rural clinic / aerial reality
-export const VIDEO_BEAT_3 = '/Cinematic_documentary_aerial_d - Copy.mp4'; // Screen 3: Telemedicine / future of health
-
 export const ImpactSection: React.FC = () => {
-  const containerRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const card0Ref = useRef<HTMLDivElement>(null);
+  const card1Ref = useRef<HTMLDivElement>(null);
+  const card2Ref = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
 
-  // Screen 1 Refs
-  const screen1Ref = useRef<HTMLDivElement>(null);
-  const s1HeadlineRef = useRef<HTMLDivElement>(null);
-  const s1GenerationsRef = useRef<HTMLDivElement>(null);
-  const s1StatLeftRef = useRef<HTMLDivElement>(null);
-  const s1StatRightRef = useRef<HTMLDivElement>(null);
-  const s1ApertureRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const section = sectionRef.current;
+    const pin = pinRef.current;
+    const root = rootRef.current;
+    const c0 = card0Ref.current;
+    const c1 = card1Ref.current;
+    const c2 = card2Ref.current;
 
-  // Screen 2 Refs
-  const screen2Ref = useRef<HTMLDivElement>(null);
-  const s2ParagraphRef = useRef<HTMLDivElement>(null);
-  const s2StatLeftRef = useRef<HTMLDivElement>(null);
-  const s2StatRightRef = useRef<HTMLDivElement>(null);
-  const s2ApertureRef = useRef<HTMLDivElement>(null);
+    if (!section || !pin || !root || !c0 || !c1 || !c2) return;
 
-  // Screen 3 Refs
-  const screen3Ref = useRef<HTMLDivElement>(null);
-  const s3HeadlineRef = useRef<HTMLDivElement>(null);
-  const s3ApertureRef = useRef<HTMLDivElement>(null);
+    const cards = [c0, c1, c2];
+    const depth = 60; // z-axis distance between cards
+    const yOffset = 16; // vertical peek offset
 
-  const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+    // Set initial 3D positions
+    cards.forEach((card, idx) => {
+      gsap.set(card, {
+        z: -idx * depth,
+        y: -idx * yOffset,
+        zIndex: cards.length - idx,
+        autoAlpha: 1,
+        transformOrigin: 'center center',
+      });
+    });
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setMousePos({ x, y });
-  };
+    const tl = gsap.timeline({ paused: true });
 
-  useGSAP(
-    () => {
-      if (!containerRef.current) return;
+    // 1. As user scrolls down: Card 0 leaves the screen DOWNWARDS
+    tl.to(c0, {
+      y: () => `+=${window.innerHeight * 0.85}`,
+      ease: 'power2.in',
+      duration: 1,
+    }, 0);
+    tl.to(c0, {
+      autoAlpha: 0,
+      duration: 0.25,
+      ease: 'none',
+    }, 0.7);
 
-      // =======================================================================
-      // 1. SCREEN 1 SCROLL-BASED ENTRY ANIMATION
-      // =======================================================================
-      if (screen1Ref.current) {
-        // A. Staircase headline lines stagger in with slide-up & fade across full entry
-        const s1Lines = s1HeadlineRef.current?.querySelectorAll('.staircase-line');
-        if (s1Lines && s1Lines.length > 0) {
-          gsap.fromTo(
-            s1Lines,
-            {
-              y: (i) => 70 + i * 20,
-              opacity: 0,
-              scale: 0.94,
-            },
-            {
-              y: 0,
-              opacity: 1,
-              scale: 1,
-              ease: 'power2.out',
-              stagger: 0.08,
-              scrollTrigger: {
-                trigger: screen1Ref.current,
-                start: 'top 90%',
-                end: 'top top',
-                scrub: 1.2,
-              },
-            }
-          );
-        }
+    // Remaining cards step forward in 3D stack
+    tl.to(c1, { z: 0, y: 0, duration: 1, ease: 'none' }, 0);
+    tl.to(c2, { z: -depth, y: -yOffset, duration: 1, ease: 'none' }, 0);
 
-        // B. "GENERATIONS" floats in from the right
-        if (s1GenerationsRef.current) {
-          gsap.fromTo(
-            s1GenerationsRef.current,
-            { x: 100, opacity: 0 },
-            {
-              x: 0,
-              opacity: 1,
-              ease: 'power2.out',
-              scrollTrigger: {
-                trigger: screen1Ref.current,
-                start: 'top 85%',
-                end: 'top top',
-                scrub: 1.3,
-              },
-            }
-          );
-        }
+    // 2. Next scroll step: Card 1 leaves the screen DOWNWARDS
+    tl.to(c1, {
+      y: () => `+=${window.innerHeight * 0.85}`,
+      ease: 'power2.in',
+      duration: 1,
+    }, 1);
+    tl.to(c1, {
+      autoAlpha: 0,
+      duration: 0.25,
+      ease: 'none',
+    }, 1.7);
 
-        // C. Bottom clinical data callouts float up
-        gsap.fromTo(
-          [s1StatLeftRef.current, s1StatRightRef.current],
-          { y: 60, opacity: 0 },
-          {
-            y: 0,
-            opacity: 1,
-            ease: 'power2.out',
-            stagger: 0.15,
-            scrollTrigger: {
-              trigger: screen1Ref.current,
-              start: 'top 75%',
-              end: 'top top',
-              scrub: 1.2,
-            },
-          }
-        );
+    // Card 2 moves to the very front
+    tl.to(c2, { z: 0, y: 0, duration: 1, ease: 'none' }, 1);
 
-        // D. Aperture subtle scaling reveal
-        if (s1ApertureRef.current) {
-          gsap.fromTo(
-            s1ApertureRef.current,
-            { scale: 0.92, opacity: 0.5 },
-            {
-              scale: 1,
-              opacity: 1,
-              ease: 'power1.out',
-              scrollTrigger: {
-                trigger: screen1Ref.current,
-                start: 'top 90%',
-                end: 'top top',
-                scrub: 1.4,
-              },
-            }
-          );
-        }
-      }
+    // Continuous rotation of the circular scroll stamp badge
+    if (badgeRef.current) {
+      tl.fromTo(badgeRef.current, { rotation: 0 }, { rotation: 360, ease: 'none', duration: 2 }, 0);
+    }
 
-      // =======================================================================
-      // 2. SCREEN 2 SCROLL-BASED ENTRY ANIMATION
-      // =======================================================================
-      if (screen2Ref.current) {
-        // A. Centered statement zooms and floats in smoothly across entry
-        if (s2ParagraphRef.current) {
-          gsap.fromTo(
-            s2ParagraphRef.current,
-            { y: 80, opacity: 0, scale: 0.90 },
-            {
-              y: 0,
-              opacity: 1,
-              scale: 1,
-              ease: 'power2.out',
-              scrollTrigger: {
-                trigger: screen2Ref.current,
-                start: 'top 85%',
-                end: 'top top',
-                scrub: 1.2,
-              },
-            }
-          );
-        }
+    // ScrollTrigger to pin the section and scrub the timeline
+    const st = ScrollTrigger.create({
+      trigger: section,
+      start: 'top top',
+      end: () => `+=${window.innerHeight * 2.2}`,
+      pin: pin,
+      pinSpacing: true,
+      scrub: 0.3,
+      invalidateOnRefresh: true,
+      onUpdate: (self) => {
+        tl.progress(self.progress);
+      },
+    });
 
-        // B. Left stat slides from left, right stat slides from right
-        if (s2StatLeftRef.current) {
-          gsap.fromTo(
-            s2StatLeftRef.current,
-            { x: -70, opacity: 0 },
-            {
-              x: 0,
-              opacity: 1,
-              ease: 'power2.out',
-              scrollTrigger: {
-                trigger: screen2Ref.current,
-                start: 'top 80%',
-                end: 'top top',
-                scrub: 1.3,
-              },
-            }
-          );
-        }
+    // 3D Mouse Parallax Tilt on desktop
+    let cleanupMouse: (() => void) | undefined;
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      const tiltX = gsap.quickTo(root, 'rotationX', { duration: 0.6, ease: 'power3.out' });
+      const tiltY = gsap.quickTo(root, 'rotationY', { duration: 0.6, ease: 'power3.out' });
 
-        if (s2StatRightRef.current) {
-          gsap.fromTo(
-            s2StatRightRef.current,
-            { x: 70, opacity: 0 },
-            {
-              x: 0,
-              opacity: 1,
-              ease: 'power2.out',
-              scrollTrigger: {
-                trigger: screen2Ref.current,
-                start: 'top 80%',
-                end: 'top top',
-                scrub: 1.3,
-              },
-            }
-          );
-        }
+      const onMouseMove = (e: MouseEvent) => {
+        const rect = pin.getBoundingClientRect();
+        const qX = (e.clientX - rect.left) / rect.width - 0.5;
+        const qY = (e.clientY - rect.top) / rect.height - 0.5;
+        tiltX(-qY * 6);
+        tiltY(qX * 8);
+      };
 
-        // C. 6 Peripheral apertures expansion
-        if (s2ApertureRef.current) {
-          gsap.fromTo(
-            s2ApertureRef.current,
-            { scale: 0.90, opacity: 0.4 },
-            {
-              scale: 1,
-              opacity: 1,
-              ease: 'power1.out',
-              scrollTrigger: {
-                trigger: screen2Ref.current,
-                start: 'top 90%',
-                end: 'top top',
-                scrub: 1.4,
-              },
-            }
-          );
-        }
-      }
+      const onMouseLeave = () => {
+        tiltX(0);
+        tiltY(0);
+      };
 
-      // =======================================================================
-      // 3. SCREEN 3 SCROLL-BASED ENTRY ANIMATION
-      // =======================================================================
-      if (screen3Ref.current) {
-        // A. 4 bold hope-filled lines stagger in from below across entry
-        const s3Lines = s3HeadlineRef.current?.querySelectorAll('.hope-line');
-        if (s3Lines && s3Lines.length > 0) {
-          gsap.fromTo(
-            s3Lines,
-            {
-              y: (i) => 80 + i * 25,
-              opacity: 0,
-              x: 35,
-            },
-            {
-              y: 0,
-              opacity: 1,
-              x: 0,
-              ease: 'power2.out',
-              stagger: 0.1,
-              scrollTrigger: {
-                trigger: screen3Ref.current,
-                start: 'top 85%',
-                end: 'top top',
-                scrub: 1.2,
-              },
-            }
-          );
-        }
+      pin.addEventListener('mousemove', onMouseMove, { passive: true });
+      pin.addEventListener('mouseleave', onMouseLeave, { passive: true });
 
-        // B. Top apertures reveal
-        if (s3ApertureRef.current) {
-          gsap.fromTo(
-            s3ApertureRef.current,
-            { scale: 0.92, opacity: 0.5 },
-            {
-              scale: 1,
-              opacity: 1,
-              ease: 'power1.out',
-              scrollTrigger: {
-                trigger: screen3Ref.current,
-                start: 'top 90%',
-                end: 'top top',
-                scrub: 1.4,
-              },
-            }
-          );
-        }
+      cleanupMouse = () => {
+        pin.removeEventListener('mousemove', onMouseMove);
+        pin.removeEventListener('mouseleave', onMouseLeave);
+      };
+    }
 
-        // C. Pin Screen 3 while the light section slides up over it
-        ScrollTrigger.create({
-          trigger: screen3Ref.current,
-          start: 'top top',
-          end: '+=100%',
-          pin: true,
-          pinSpacing: false,
-        });
-
-        // D. Parallax depth & dimming on Screen 3 as the light section ushers in
-        gsap.to(screen3Ref.current, {
-          scale: 0.95,
-          opacity: 0.3,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: screen3Ref.current,
-            start: 'top top',
-            end: '+=100%',
-            scrub: true,
-          },
-        });
-      }
-    },
-    { scope: containerRef }
-  );
+    return () => {
+      st.kill();
+      tl.kill();
+      cleanupMouse?.();
+      gsap.killTweensOf([c0, c1, c2, root]);
+    };
+  }, []);
 
   return (
     <section
-      id="platform-section"
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      className="relative w-full bg-[#070707] text-white z-30 font-sans border-t border-neutral-800/80 shadow-[0_-50px_100px_rgba(0,0,0,0.98)] select-none overflow-hidden"
+      ref={sectionRef}
+      id="impact"
+      data-nav-theme="dark"
+      className="relative w-full bg-[#0E0E10] text-white overflow-hidden"
     >
-      {/* ========================================================================= */}
-      {/* SCREEN 1: THE URGENT TRUTH */}
-      {/* ========================================================================= */}
+      {/* Pinned Viewport Container with calibrated padding to clear floating nav and fit any screen */}
       <div
-        ref={screen1Ref}
-        className="relative w-full h-screen px-6 sm:px-12 md:px-16 lg:px-24 py-12 md:py-16 flex flex-col justify-between overflow-hidden bg-[#070707]"
+        ref={pinRef}
+        className="w-full h-screen max-h-screen flex flex-col justify-between items-center pt-16 sm:pt-20 pb-4 sm:pb-6 px-4 sm:px-8 relative overflow-hidden select-none"
       >
-        {/* Dim Ambient Video Base with vertical edge vignette */}
-        <div
-          className="absolute inset-0 z-0 opacity-15 mix-blend-luminosity pointer-events-none"
-          style={{
-            maskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 80%, transparent 100%)',
-          }}
-        >
-          <video
-            src={VIDEO_BEAT_1}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover object-center filter grayscale contrast-140 brightness-35"
-          />
-        </div>
+        {/* Section Header */}
+        <div className="text-center max-w-2xl mx-auto space-y-1 sm:space-y-1.5 relative z-20 shrink-0">
+          <p className="font-editorial italic text-xs sm:text-sm md:text-base text-neutral-400 tracking-tight">
+            Our Maternal Health Conviction
+          </p>
 
-        {/* High-Clarity Video in Screen 1 Apertures */}
-        <div
-          ref={s1ApertureRef}
-          className="absolute inset-0 z-1 pointer-events-none overflow-hidden"
-          style={{
-            maskImage: `
-              radial-gradient(ellipse 260px 380px at 78% 38%, black 20%, rgba(0,0,0,0.7) 48%, transparent 75%),
-              radial-gradient(ellipse 220px 280px at 15% 72%, black 18%, rgba(0,0,0,0.6) 45%, transparent 68%),
-              radial-gradient(ellipse 160px 200px at 8% 28%, black 15%, transparent 65%),
-              radial-gradient(ellipse 170px 220px at 88% 80%, black 15%, transparent 65%),
-              radial-gradient(circle 220px at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,0.8) 0%, transparent 75%)
-            `,
-            WebkitMaskImage: `
-              radial-gradient(ellipse 260px 380px at 78% 38%, black 20%, rgba(0,0,0,0.7) 48%, transparent 75%),
-              radial-gradient(ellipse 220px 280px at 15% 72%, black 18%, rgba(0,0,0,0.6) 45%, transparent 68%),
-              radial-gradient(ellipse 160px 200px at 8% 28%, black 15%, transparent 65%),
-              radial-gradient(ellipse 170px 220px at 88% 80%, black 15%, transparent 65%),
-              radial-gradient(circle 220px at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,0.8) 0%, transparent 75%)
-            `,
-          }}
-        >
-          <video
-            src={VIDEO_BEAT_1}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover object-center filter grayscale contrast-135 brightness-110"
-          />
-        </div>
-
-        {/* Film grain overlay */}
-        <div className="absolute inset-0 bg-[#070707]/20 z-2 pointer-events-none" />
-
-        {/* Bottom seam joint cover gradient */}
-        <div className="absolute bottom-0 inset-x-0 h-36 md:h-48 bg-gradient-to-t from-[#070707] via-[#070707]/80 to-transparent pointer-events-none z-3" />
-
-        {/* Content */}
-        <div className="relative max-w-[1360px] mx-auto z-10 w-full flex-1 flex flex-col justify-between pt-2 sm:pt-4">
-          
-          <div ref={s1HeadlineRef} className="max-w-xl">
-            <div className="staircase-line flex items-baseline gap-3 sm:gap-4 mb-0.5">
-              <div className="font-mono text-[8px] sm:text-[9px] text-neutral-400 font-bold tracking-widest uppercase leading-tight shrink-0 max-w-[125px] sm:max-w-[145px] pb-0.5">
-                <div>THIS IS THE CRISIS IN</div>
-                <div className="text-neutral-500">AFRICAN MATERNAL CARE</div>
-              </div>
-              
-              <h2 className="font-sans font-black text-xl sm:text-2xl md:text-3xl lg:text-[2.1rem] xl:text-[2.35rem] text-white tracking-[-0.03em] leading-[0.95] uppercase drop-shadow-md">
-                ACCESSIBLE HEALTHCARE IS THE
-              </h2>
-            </div>
-
-            <div className="staircase-line mb-0.5">
-              <h2 className="font-sans font-black text-xl sm:text-2xl md:text-3xl lg:text-[2.1rem] xl:text-[2.35rem] text-white tracking-[-0.03em] leading-[0.95] uppercase drop-shadow-md">
-                REASON OUR MOTHERS
-              </h2>
-            </div>
-
-            <div className="staircase-line mb-0.5">
-              <h2 className="font-sans font-black text-xl sm:text-2xl md:text-3xl lg:text-[2.1rem] xl:text-[2.35rem] text-white tracking-[-0.03em] leading-[0.95] uppercase drop-shadow-md">
-                AND DAUGHTERS
-              </h2>
-            </div>
-
-            <div className="staircase-line pl-[12%] sm:pl-[16%] md:pl-[20%] mb-0.5">
-              <h2 className="font-sans font-black text-xl sm:text-2xl md:text-3xl lg:text-[2.1rem] xl:text-[2.35rem] text-white tracking-[-0.03em] leading-[0.95] uppercase drop-shadow-md">
-                ARE HEALTHY &amp;
-              </h2>
-            </div>
-
-            <div className="staircase-line pl-[24%] sm:pl-[30%] md:pl-[36%]">
-              <h2 className="font-sans font-black text-xl sm:text-2xl md:text-3xl lg:text-[2.1rem] xl:text-[2.35rem] text-white tracking-[-0.03em] leading-[0.95] uppercase drop-shadow-md">
-                THRIVING ACROSS
-              </h2>
-            </div>
-          </div>
-
-          {/* Right Word Floating in Space */}
-          <div
-            ref={s1GenerationsRef}
-            className="absolute right-0 sm:right-6 md:right-12 lg:right-16 top-[42%] md:top-[44%] -translate-y-1/2 select-none pointer-events-none z-20"
-          >
-            <span className="font-sans font-black text-xl sm:text-2xl md:text-3xl lg:text-[2.1rem] xl:text-[2.35rem] text-white tracking-[-0.03em] uppercase drop-shadow-2xl opacity-95">
-              GENERATIONS
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tight text-white leading-tight">
+            <span className="block font-sans font-extrabold text-white">
+              DIGNIFIED MATERNAL CARE
             </span>
-          </div>
-
-          {/* Bottom Callouts */}
-          <div className="pt-8 sm:pt-12 grid grid-cols-1 sm:grid-cols-12 gap-6 items-end pb-2">
-            <div ref={s1StatLeftRef} className="sm:col-span-6 md:col-span-5 sm:col-start-4 md:col-start-4 font-mono space-y-1">
-              <div className="text-[10px] font-bold text-neutral-300 tracking-wider uppercase flex items-center gap-1.5">
-                <span>•</span>
-                <span>MATERNAL TELEMEDICINE</span>
-              </div>
-              <div className="text-xs sm:text-sm font-bold text-neutral-400">
-                15 000+ (ACTIVE CLINICAL
-              </div>
-              <div className="text-[10px] text-neutral-500 tracking-wider">
-                SESSIONS CONDUCTED)
-              </div>
-            </div>
-
-            <div ref={s1StatRightRef} className="sm:col-span-5 md:col-span-4 sm:col-start-7 md:col-start-8 text-left sm:text-right font-mono space-y-1 transform sm:translate-y-4 md:translate-y-6 sm:-translate-x-4 md:-translate-x-8">
-              <div className="text-[10px] font-bold text-neutral-300 tracking-wider uppercase flex items-center justify-start sm:justify-end gap-1.5">
-                <span>FERTILITY PRECISION</span>
-                <span>•</span>
-              </div>
-              <div className="text-xs sm:text-sm font-bold text-neutral-400">
-                98.4% (CYCLE PREDICTION
-              </div>
-              <div className="text-[10px] text-neutral-500 tracking-wider">
-                ACCURACY RATE)
-              </div>
-            </div>
-          </div>
-
+            <span className="block font-editorial font-normal italic text-neutral-300 mt-0.5">
+              IS FOUNDATIONAL HEALTH
+            </span>
+          </h2>
         </div>
-      </div>
 
-      {/* ========================================================================= */}
-      {/* SCREEN 2: THE HUMANITARIAN REALITY */}
-      {/* ========================================================================= */}
-      <div
-        ref={screen2Ref}
-        className="relative w-full h-screen px-6 sm:px-12 md:px-16 lg:px-24 py-12 md:py-16 flex flex-col justify-between items-center overflow-hidden bg-[#070707]"
-      >
-        {/* Top & Bottom seam joint cover gradients */}
-        <div className="absolute top-0 inset-x-0 h-36 md:h-48 bg-gradient-to-b from-[#070707] via-[#070707]/80 to-transparent pointer-events-none z-3" />
-        <div className="absolute bottom-0 inset-x-0 h-36 md:h-48 bg-gradient-to-t from-[#070707] via-[#070707]/80 to-transparent pointer-events-none z-3" />
-
-        {/* Dim Ambient Video Base with vertical edge vignette */}
+        {/* 3D Stack Stage Container - Scaled to fit comfortably on any viewport height */}
         <div
-          className="absolute inset-0 z-0 opacity-15 mix-blend-luminosity pointer-events-none"
+          className="w-full max-w-xl mx-auto flex-1 min-h-0 flex items-center justify-center relative my-1 sm:my-2"
           style={{
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
+            perspective: '1200px',
+            transformStyle: 'preserve-3d',
           }}
         >
-          <video
-            src={VIDEO_BEAT_2}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover object-center filter grayscale contrast-140 brightness-35"
-          />
-        </div>
+          <div
+            ref={rootRef}
+            className="relative w-full max-w-[400px] sm:max-w-[450px] md:max-w-[480px] aspect-[16/10] max-h-[44vh]"
+            style={{
+              transformStyle: 'preserve-3d',
+            }}
+          >
+            {/* Card 0 (Front): Warm Gold / Sand Border - Empowering Every Mother */}
+            <div
+              ref={card0Ref}
+              className="absolute inset-0 w-full h-full rounded-xs overflow-hidden shadow-2xl border-[5px] sm:border-[6px] border-[#C81E3A] bg-neutral-900 group cursor-pointer"
+              style={{
+                transformStyle: 'preserve-3d',
+                willChange: 'transform, opacity',
+              }}
+            >
+              {/* Blank Placeholder */}
+              <div className="w-full h-full bg-neutral-900" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3.5 sm:p-4.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#C81E3A] font-semibold">
+                      CYCLE &amp; HORMONAL INTELLIGENCE
+                    </span>
+                    <h3 className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-tight text-white mt-0.5">
+                      EMPOWERING EVERY MOTHER
+                    </h3>
+                  </div>
+                  <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-xs text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
+                    <span>EXPLORE</span>
+                    <ArrowRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* 6 Peripheral Spotlight Apertures for Screen 2 */}
-        <div
-          ref={s2ApertureRef}
-          className="absolute inset-0 z-1 pointer-events-none overflow-hidden"
-          style={{
-            maskImage: `
-              radial-gradient(circle 150px at 16% 24%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 160px at 84% 22%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 170px at 10% 54%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 170px at 90% 50%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 130px at 28% 76%, black 15%, rgba(0,0,0,0.6) 40%, transparent 65%),
-              radial-gradient(circle 130px at 72% 76%, black 15%, rgba(0,0,0,0.6) 40%, transparent 65%),
-              radial-gradient(circle 200px at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,0.8) 0%, transparent 75%)
-            `,
-            WebkitMaskImage: `
-              radial-gradient(circle 150px at 16% 24%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 160px at 84% 22%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 170px at 10% 54%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 170px at 90% 50%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 130px at 28% 76%, black 15%, rgba(0,0,0,0.6) 40%, transparent 65%),
-              radial-gradient(circle 130px at 72% 76%, black 15%, rgba(0,0,0,0.6) 40%, transparent 65%),
-              radial-gradient(circle 200px at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,0.8) 0%, transparent 75%)
-            `,
-          }}
-        >
-          <video
-            src={VIDEO_BEAT_2}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover object-center filter grayscale contrast-135 brightness-110"
-          />
-        </div>
+            {/* Card 1 (Middle): Royal Blue Border - Specialist Telehealth */}
+            <div
+              ref={card1Ref}
+              className="absolute inset-0 w-full h-full rounded-xs overflow-hidden shadow-2xl border-[5px] sm:border-[6px] border-[#C81E3A] bg-neutral-900 group cursor-pointer"
+              style={{
+                transformStyle: 'preserve-3d',
+                willChange: 'transform, opacity',
+              }}
+            >
+              {/* Blank Placeholder */}
+              <div className="w-full h-full bg-neutral-900" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3.5 sm:p-4.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#93C5FD] font-semibold">
+                      MDCN TELEHEALTH NETWORK
+                    </span>
+                    <h3 className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-tight text-white mt-0.5">
+                      CLOSING GEOGRAPHIC DISTANCE
+                    </h3>
+                  </div>
+                  <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-xs text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
+                    <span>EXPLORE</span>
+                    <ArrowRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* Film grain overlay */}
-        <div className="absolute inset-0 bg-[#070707]/20 z-2 pointer-events-none" />
+            {/* Card 2 (Back): Signature Crimson Border - Community & Clinic Digitization */}
+            <div
+              ref={card2Ref}
+              className="absolute inset-0 w-full h-full rounded-xs overflow-hidden shadow-2xl border-[5px] sm:border-[6px] border-[#C81E3A] bg-neutral-900 group cursor-pointer"
+              style={{
+                transformStyle: 'preserve-3d',
+                willChange: 'transform, opacity',
+              }}
+            >
+              {/* Blank Placeholder */}
+              <div className="w-full h-full bg-neutral-900" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3.5 sm:p-4.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#FCA5A5] font-semibold">
+                      DIGITAL EMR &amp; CLINIC OS
+                    </span>
+                    <h3 className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-tight text-white mt-0.5">
+                      INTERGENERATIONAL DIGNITY
+                    </h3>
+                  </div>
+                  <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-xs text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
+                    <span>EXPLORE</span>
+                    <ArrowRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* Centered Editorial Content */}
-        <div className="relative max-w-xl mx-auto z-10 text-center my-auto px-4">
-          <div ref={s2ParagraphRef}>
-            <p className="text-xs sm:text-sm md:text-base text-neutral-200 font-sans leading-relaxed tracking-wide max-w-lg mx-auto">
-              Over 68% of women across Sub-Saharan Africa lack timely access to certified reproductive specialists, leading to preventable maternal complications and silent struggles with fertility. Red Apple bridges this critical gap.
-            </p>
           </div>
         </div>
 
-        {/* Peripheral Data Left & Right */}
-        <div className="relative max-w-5xl mx-auto z-10 w-full flex justify-between items-center px-4 pb-2">
-          <div ref={s2StatLeftRef} className="font-mono space-y-0.5">
-            <div className="text-[10px] sm:text-[11px] font-bold text-neutral-300 tracking-wider uppercase flex items-center gap-1.5">
-              <span>•</span>
-              <span>MATERNAL MORTALITY DEFICIT</span>
-            </div>
-            <div className="text-xs sm:text-sm font-bold text-neutral-400">
-              1 IN 22 LIFETIME RISK
-            </div>
-          </div>
-
-          <div ref={s2StatRightRef} className="font-mono space-y-0.5 text-right">
-            <div className="text-[10px] sm:text-[11px] font-bold text-neutral-300 tracking-wider uppercase flex items-center justify-end gap-1.5">
-              <span>RURAL CLINICAL GAP</span>
-              <span>•</span>
-            </div>
-            <div className="text-xs sm:text-sm font-bold text-neutral-400">
-              62% UNMET ACCESS
-            </div>
-          </div>
+        {/* Bottom Bar: Action Trigger */}
+        <div className="w-full max-w-4xl mx-auto flex items-center justify-center relative z-20 shrink-0 pt-1 sm:pt-2">
+          <a
+            href="/about"
+            className="group inline-flex items-center gap-2.5 px-5 py-2 sm:py-2.5 bg-[#FF66C4] hover:bg-[#ff4db8] text-neutral-950 font-extrabold text-xs uppercase tracking-wider rounded-xs shadow-md transition-all duration-200 hover:-translate-y-0.5"
+            aria-label="View our clinical impact outcomes"
+          >
+            <span className="w-4 h-4 rounded-xs bg-black/15 flex items-center justify-center transition-transform group-hover:translate-x-0.5">
+              <ArrowRight className="w-3 h-3 text-neutral-950" />
+            </span>
+            <span>VIEW OUR IMPACT</span>
+          </a>
         </div>
-      </div>
 
-      {/* ========================================================================= */}
-      {/* SCREEN 3: THE RALLYING CRY */}
-      {/* ========================================================================= */}
-      <div
-        ref={screen3Ref}
-        className="relative w-full h-screen px-6 sm:px-12 md:px-16 lg:px-24 py-12 md:py-16 flex flex-col justify-end overflow-hidden bg-[#070707]"
-      >
-        {/* Top seam joint cover gradient */}
-        <div className="absolute top-0 inset-x-0 h-36 md:h-48 bg-gradient-to-b from-[#070707] via-[#070707]/80 to-transparent pointer-events-none z-3" />
-
-        {/* Dim Ambient Video Base with vertical edge vignette */}
+        {/* Rotating Circular Scroll Badge (Extrafazant "THIS IS HOW WE SCROLL" style) */}
         <div
-          className="absolute inset-0 z-0 opacity-15 mix-blend-luminosity pointer-events-none"
-          style={{
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 100%)',
-          }}
+          ref={badgeRef}
+          className="hidden md:flex absolute bottom-4 sm:bottom-6 right-4 sm:right-8 w-20 h-20 lg:w-24 lg:h-24 rounded-full bg-[#BFDBFE] text-neutral-950 items-center justify-center pointer-events-none select-none z-30 shadow-xl"
         >
-          <video
-            src={VIDEO_BEAT_3}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover object-center filter grayscale contrast-140 brightness-35"
-          />
-        </div>
-
-        {/* Top/Ambient Apertures for Screen 3 with soft bottom drop-offs */}
-        <div
-          ref={s3ApertureRef}
-          className="absolute inset-0 z-1 pointer-events-none overflow-hidden"
-          style={{
-            maskImage: `
-              radial-gradient(ellipse 260px 220px at 18% 28%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(ellipse 300px 240px at 50% 24%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 200px at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,0.8) 0%, transparent 75%)
-            `,
-            WebkitMaskImage: `
-              radial-gradient(ellipse 260px 220px at 18% 28%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(ellipse 300px 240px at 50% 24%, black 20%, rgba(0,0,0,0.7) 45%, transparent 68%),
-              radial-gradient(circle 200px at ${mousePos.x}% ${mousePos.y}%, rgba(0,0,0,0.8) 0%, transparent 75%)
-            `,
-          }}
-        >
-          <video
-            src={VIDEO_BEAT_3}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover object-center filter grayscale contrast-135 brightness-110"
-          />
-        </div>
-
-        {/* Film grain overlay */}
-        <div className="absolute inset-0 bg-[#070707]/20 z-2 pointer-events-none" />
-
-        {/* Bottom-Right Refined Hope-Filled Typography */}
-        <div className="relative max-w-7xl mx-auto z-10 w-full flex justify-end pb-12 sm:pb-20">
-          <div ref={s3HeadlineRef} className="text-right space-y-0.5 max-w-2xl">
-            <div className="hope-line">
-              <h2 className="font-sans font-black text-2xl sm:text-3xl md:text-4xl lg:text-[2.6rem] xl:text-[3rem] text-neutral-400 tracking-[-0.03em] leading-[0.94] uppercase">
-                FOR EVERY MOTHER.
-              </h2>
-            </div>
-
-            <div className="hope-line">
-              <h2 className="font-sans font-black text-2xl sm:text-3xl md:text-4xl lg:text-[2.6rem] xl:text-[3rem] text-white tracking-[-0.03em] leading-[0.94] uppercase">
-                FOR EVERY DAUGHTER.
-              </h2>
-            </div>
-
-            <div className="hope-line">
-              <h2 className="font-sans font-black text-2xl sm:text-3xl md:text-4xl lg:text-[2.6rem] xl:text-[3rem] text-white tracking-[-0.03em] leading-[0.94] uppercase">
-                A FUTURE
-              </h2>
-            </div>
-
-            <div className="hope-line">
-              <h2 className="font-sans font-black text-2xl sm:text-3xl md:text-4xl lg:text-[2.6rem] xl:text-[3rem] text-white tracking-[-0.03em] leading-[0.94] uppercase">
-                FILLED WITH HOPE.
-              </h2>
-            </div>
+          {/* Circular SVG Text */}
+          <svg
+            className="absolute inset-0 w-full h-full animate-[spin_20s_linear_infinite]"
+            viewBox="0 0 100 100"
+          >
+            <path
+              id="circlePath"
+              d="M 50, 50 m -37, 0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"
+              fill="none"
+            />
+            <text className="text-[10px] font-extrabold tracking-[0.16em] uppercase fill-neutral-950">
+              <textPath href="#circlePath" startOffset="0%">
+                • THIS IS HOW WE SCROLL • RED APPLE
+              </textPath>
+            </text>
+          </svg>
+          <div className="relative z-10 w-7 h-7 rounded-full bg-white/80 flex items-center justify-center shadow-2xs">
+            <Globe className="w-3.5 h-3.5 text-neutral-950" />
           </div>
         </div>
 
@@ -634,3 +304,4 @@ export const ImpactSection: React.FC = () => {
     </section>
   );
 };
+

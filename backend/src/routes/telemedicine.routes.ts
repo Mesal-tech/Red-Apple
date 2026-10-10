@@ -12,6 +12,8 @@ import {
   addDoctorSlot,
   toggleDoctorSlot,
   getStreamToken,
+  getPartnerClinics,
+  getPartnerClinicById,
 } from '../controllers/telemedicine.controller';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { verifyAccessToken } from '../utils/token';
@@ -45,6 +47,10 @@ router.get(
 router.get('/doctors', getDoctors);
 router.get('/doctors/:id', getDoctorById);
 router.get('/doctors/:id/slots', getDoctorSlots);
+
+// Public accredited partner clinics & hospitals
+router.get('/clinics', getPartnerClinics);
+router.get('/clinics/:id', getPartnerClinicById);
 
 // Protected consultation booking & appointments lifecycle
 router.post('/book', authenticateToken, bookConsultation);

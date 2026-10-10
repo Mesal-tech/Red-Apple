@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,35 +8,149 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-
-const FETUS_IMAGE = require('../../assets/images/fetus_week_16.jpg');
+import * as pregnancyService from '../services/pregnancyService';
+import ArticleCarousel from '../components/ArticleCarousel';
+import { scheduleAntenatalReminders } from '../utils/notifications';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const WEEK_DAYS = [
-  { dayName: 'S', dateNum: 26, isToday: false },
-  { dayName: 'TODAY', dateNum: 27, isToday: true },
-  { dayName: 'T', dateNum: 28, isToday: false },
-  { dayName: 'W', dateNum: 29, isToday: false },
-  { dayName: 'T', dateNum: 30, isToday: false },
-  { dayName: 'F', dateNum: 31, isToday: false },
-  { dayName: 'S', dateNum: 1, isToday: false },
-];
+// Functional Circular Ring for Gestational Week Milestone
+function PregnancyMilestoneRing({ currentWeek = 16, totalWeeks = 40 }) {
+  const fraction = Math.min(Math.max(currentWeek / totalWeeks, 0.05), 1);
+  const totalDegrees = 360 * fraction;
+  const rightDeg = Math.min(totalDegrees, 180);
+  const leftDeg = Math.max(totalDegrees - 180, 0);
+
+  return (
+    <View style={ringStyles.ringContainer}>
+      <View style={ringStyles.trackCircle} />
+
+      <View style={ringStyles.halfCircleContainerRight}>
+        <View
+          style={[
+            ringStyles.halfCircleRight,
+            { transform: [{ rotate: `${rightDeg}deg` }] },
+          ]}
+        />
+      </View>
+
+      {totalDegrees > 180 && (
+        <View style={ringStyles.halfCircleContainerLeft}>
+          <View
+            style={[
+              ringStyles.halfCircleLeft,
+              { transform: [{ rotate: `${leftDeg}deg` }] },
+            ]}
+          />
+        </View>
+      )}
+
+      <View style={ringStyles.innerMaskCircle}>
+        <Text style={ringStyles.ringNumber}>{currentWeek}</Text>
+        <Text style={ringStyles.ringTotal}>Weeks</Text>
+      </View>
+    </View>
+  );
+}
+
+const ringStyles = StyleSheet.create({
+  ringContainer: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  trackCircle: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 7,
+    borderColor: '#FFEBEE',
+    position: 'absolute',
+  },
+  halfCircleContainerRight: {
+    width: 52,
+    height: 104,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    overflow: 'hidden',
+  },
+  halfCircleRight: {
+    width: 52,
+    height: 104,
+    borderTopRightRadius: 52,
+    borderBottomRightRadius: 52,
+    borderWidth: 7,
+    borderColor: '#DC2626',
+    borderLeftWidth: 0,
+    transformOrigin: 'left center',
+  },
+  halfCircleContainerLeft: {
+    width: 52,
+    height: 104,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    overflow: 'hidden',
+  },
+  halfCircleLeft: {
+    width: 52,
+    height: 104,
+    borderTopLeftRadius: 52,
+    borderBottomLeftRadius: 52,
+    borderWidth: 7,
+    borderColor: '#DC2626',
+    borderRightWidth: 0,
+    transformOrigin: 'right center',
+  },
+  innerMaskCircle: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  ringNumber: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#DC2626',
+  },
+  ringTotal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+});
 
 export default function PregnancyScreen({
   dueDate = 'Dec 24, 2026',
   conceptionDate = 'Apr 2, 2026',
   currentWeek = 16,
+  greetingDisplayName = 'Amara',
+  weekDays = null,
   onSwitchToCycleMode,
   onBookDoctor,
+  onOpenDoctorPage,
 }) {
-  const [selectedDateNum, setSelectedDateNum] = useState(27);
+  const [selectedDateKey, setSelectedDateKey] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  });
+
+  const [selectedArticle, setSelectedArticle] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showSymptomsModal, setShowSymptomsModal] = useState(false);
   const [showWombLifeModal, setShowWombLifeModal] = useState(false);
   const [showTipsModal, setShowTipsModal] = useState(false);
 
@@ -50,13 +164,41 @@ export default function PregnancyScreen({
     { id: 2, date: 'Yesterday, 8:15 PM', count: 10, duration: '15 min' },
   ]);
 
-  // Contraction State
-  const [showContractionModal, setShowContractionModal] = useState(false);
-  const [contractionState, setContractionState] = useState('idle');
-  const [contractionLogs, setContractionLogs] = useState([]);
+  // Dynamic Gestational & Baby Milestone State
+  const [liveWeek, setLiveWeek] = useState(currentWeek);
+  const [liveDueDate, setLiveDueDate] = useState(dueDate);
+  const [milestoneTitle, setMilestoneTitle] = useState('Patterned Hair & Heart Development');
+  const [milestoneDesc, setMilestoneDesc] = useState('Eyes are becoming sensitive to light and facial expressions develop.');
 
-  // Logged Symptoms State
-  const [selectedSymptoms, setSelectedSymptoms] = useState(['Nausea', 'Backache']);
+  useEffect(() => {
+    loadLivePregnancyData();
+  }, []);
+
+  const loadLivePregnancyData = async () => {
+    try {
+      const res = await pregnancyService.getPregnancyStatus();
+      if (res?.pregnancy) {
+        setLiveWeek(res.pregnancy.current_week || currentWeek);
+        setLiveDueDate(res.pregnancy.estimated_due_date || dueDate);
+        if (res.pregnancy.weekly_milestone_title) setMilestoneTitle(res.pregnancy.weekly_milestone_title);
+        if (res.pregnancy.weekly_milestone_description) setMilestoneDesc(res.pregnancy.weekly_milestone_description);
+        scheduleAntenatalReminders(res.pregnancy.current_week, res.pregnancy.estimated_due_date).catch(() => { });
+      }
+      const kicksRes = await pregnancyService.getKickHistory();
+      if (kicksRes?.sessions && kicksRes.sessions.length > 0) {
+        setKickLogs(
+          kicksRes.sessions.map((k) => ({
+            id: k.id,
+            date: new Date(k.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            count: k.kick_count,
+            duration: `${k.duration_minutes} min`,
+          }))
+        );
+      }
+    } catch (e) {
+      console.warn('[PregnancyScreen] Error loading live pregnancy data:', e);
+    }
+  };
 
   useEffect(() => {
     let interval = null;
@@ -79,11 +221,16 @@ export default function PregnancyScreen({
 
     if (newCount >= 10) {
       setIsTimerRunning(false);
+      const minutesSpent = Math.max(1, Math.ceil(timerSeconds / 60));
       const formattedTime = `${Math.floor(timerSeconds / 60)} min ${timerSeconds % 60} sec`;
       setKickLogs([
         { id: Date.now(), date: 'Just now', count: 10, duration: formattedTime },
         ...kickLogs,
       ]);
+
+      pregnancyService.logKickSession(10, minutesSpent, 'Completed 10-kick count').catch((err) => {
+        console.warn('[PregnancyScreen] Kick log sync error:', err?.message);
+      });
     }
   };
 
@@ -91,14 +238,6 @@ export default function PregnancyScreen({
     setKickCount(0);
     setTimerSeconds(0);
     setIsTimerRunning(false);
-  };
-
-  const toggleSymptom = (symName) => {
-    if (selectedSymptoms.includes(symName)) {
-      setSelectedSymptoms(selectedSymptoms.filter((s) => s !== symName));
-    } else {
-      setSelectedSymptoms([...selectedSymptoms, symName]);
-    }
   };
 
   const formatTimer = (secs) => {
@@ -111,200 +250,299 @@ export default function PregnancyScreen({
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    await loadLivePregnancyData();
     await new Promise((res) => setTimeout(res, 600));
     setIsRefreshing(false);
   };
 
+  // Calendar Week Strip
+  const calendarWeekDays = useMemo(() => {
+    const today = new Date();
+    const currentDayOfWeek = today.getDay();
+    const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+
+    const days = [];
+    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const isToday = d.toDateString() === today.toDateString();
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      days.push({
+        singleLetter: letters[i],
+        dayNum: d.getDate(),
+        isToday,
+        dateKey,
+      });
+    }
+    return days;
+  }, []);
+
+  const trimester = liveWeek <= 13 ? 'First Trimester' : liveWeek <= 27 ? 'Second Trimester' : 'Third Trimester';
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor="#E11D48"
-            colors={['#E11D48', '#FA4A14']}
-            progressBackgroundColor="#FFFFFF"
-          />
-        }
-      >
-
-
-      {/* FLO-INSPIRED ATMOSPHERIC HERO CONTAINER */}
-      <View style={styles.floHeroContainer}>
-        {/* Top Navigation Row: Back Button, Date Title, Alignment Spacer */}
-        <View style={styles.floTopNavRow}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.floBackBtn}
-            onPress={() => onSwitchToCycleMode && onSwitchToCycleMode()}
-          >
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
-
-          <Text style={styles.floDateTitle}>July 27</Text>
-
-          <View style={styles.floNavSpacer} />
-        </View>
-
-        {/* Horizontal Calendar Week Strip */}
-        <View style={styles.floWeekStrip}>
-          {WEEK_DAYS.map((item) => {
-            const isSelected = selectedDateNum === item.dateNum;
-            return (
-              <TouchableOpacity
-                key={item.dateNum}
-                activeOpacity={0.75}
-                style={styles.floDayCol}
-                onPress={() => setSelectedDateNum(item.dateNum)}
+    <ScrollView
+      contentContainerStyle={styles.pageScrollContent}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          tintColor="#DC2626"
+          colors={['#DC2626', '#FA4A14']}
+          progressBackgroundColor="#FFFFFF"
+        />
+      }
+    >
+      {/* CAL AI STYLE 7-DAY CALENDAR STRIP */}
+      <View style={styles.calAiCalendarRow}>
+        {calendarWeekDays.map((item) => {
+          const isSelected = selectedDateKey === item.dateKey;
+          return (
+            <TouchableOpacity
+              key={item.dateKey}
+              activeOpacity={0.75}
+              style={styles.calAiDayCol}
+              onPress={() => setSelectedDateKey(item.dateKey)}
+            >
+              <View
+                style={[
+                  styles.calAiCircle,
+                  item.isToday
+                    ? styles.calAiCircleToday
+                    : styles.calAiCircleDashed,
+                  isSelected && !item.isToday && styles.calAiCircleSelected,
+                ]}
               >
-                <Text style={[styles.floDayName, item.isToday && styles.floDayNameToday]}>
-                  {item.dayName}
-                </Text>
-                <View
+                <Text
                   style={[
-                    styles.floDateCircle,
-                    isSelected && styles.floDateCircleSelected,
+                    styles.calAiDayLetter,
+                    item.isToday
+                      ? styles.calAiDayLetterToday
+                      : styles.calAiDayLetterNormal,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.floDateNum,
-                      isSelected && styles.floDateNumSelected,
-                    ]}
-                  >
-                    {item.dateNum}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+                  {item.singleLetter}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.calAiDateNum,
+                  item.isToday && styles.calAiDateNumToday,
+                  isSelected && styles.calAiDateNumSelected,
+                ]}
+              >
+                {item.dayNum}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* HERO FEATURED WHITE CARD (HEADER REMOVED AS REQUESTED) */}
+      <TouchableOpacity
+        activeOpacity={0.92}
+        style={styles.heroCardContainer}
+        onPress={() => setShowDetailsModal(true)}
+      >
+        <View style={styles.heroWhiteCard}>
+          {/* Big Display Headline */}
+          <Text style={styles.heroHeadlineDisplay}>
+            Nurturing Life & Growing{"\n"}Strong Together.
+          </Text>
+
+          {/* Functional Ring & Key Health Details */}
+          <View style={styles.heroRingRow}>
+            <PregnancyMilestoneRing currentWeek={liveWeek} totalWeeks={40} />
+            <View style={styles.heroMetricsCol}>
+              <View style={styles.metricItemRow}>
+                <View style={[styles.metricDot, { backgroundColor: '#DC2626' }]} />
+                <Text style={styles.metricItemText}>
+                  Status: <Text style={{ fontWeight: '800', color: '#111827' }}>{trimester} ({liveWeek}w 2d)</Text>
+                </Text>
+              </View>
+              <View style={styles.metricItemRow}>
+                <View style={[styles.metricDot, { backgroundColor: '#0284C7' }]} />
+                <Text style={styles.metricItemText}>
+                  Baby Heartbeat: <Text style={{ fontWeight: '700', color: '#111827' }}>Optimal & Active</Text>
+                </Text>
+              </View>
+              <View style={styles.metricItemRow}>
+                <View style={[styles.metricDot, { backgroundColor: '#D97706' }]} />
+                <Text style={styles.metricItemText}>
+                  Est. Due Date: <Text style={{ fontWeight: '700', color: '#111827' }}>{liveDueDate}</Text>
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Card Footer */}
+          <View style={styles.heroFooterRow}>
+            <Text style={styles.heroFooterMeta}>Personalized for your maternal vitality & fetal development</Text>
+          </View>
         </View>
+      </TouchableOpacity>
 
-        {/* FETUS DEVELOPMENT CALENDAR STAGE CARD */}
+      {/* FEATURED CARD: TALK TO A DOCTOR */}
+      <TouchableOpacity
+        activeOpacity={0.88}
+        style={styles.doctorFeaturedCard}
+        onPress={() => {
+          if (onOpenDoctorPage) {
+            onOpenDoctorPage();
+          } else if (onBookDoctor) {
+            onBookDoctor({
+              name: 'Dr. Chioma Nwachukwu',
+              specialty: 'Obstetrician & Gynecologist',
+              experience: '12 Yrs Exp',
+              nextAvailable: 'Today, 10:00 AM',
+              fee: '₦15,000',
+              avatarBg: '#008080',
+            });
+          }
+        }}
+      >
+        <View style={styles.doctorFeaturedTopRow}>
+          <View style={styles.doctorBadgeIconLarge}>
+            <Ionicons name="videocam" size={26} color="#008080" />
+          </View>
+          <View style={styles.doctorActionPill}>
+            <Text style={styles.doctorActionPillText}>Consult</Text>
+            <Ionicons name="arrow-forward" size={13} color="#008080" />
+          </View>
+        </View>
+        <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
+        <Text style={styles.doctorFeaturedSubtitle}>
+          Book an HD video consultation with a certified OB-GYN & maternal care specialist.
+        </Text>
+      </TouchableOpacity>
+
+      {/* 2-COLUMN BENTO GRID: CYCLE MODE & KICK COUNTER */}
+      <View style={styles.bentoSectionGrid}>
         <TouchableOpacity
-          activeOpacity={0.9}
-          style={styles.fetusStageCard}
-          onPress={() => setShowWombLifeModal(true)}
+          activeOpacity={0.88}
+          style={styles.bentoWhiteCard}
+          onPress={onSwitchToCycleMode}
         >
-          <View style={styles.fetusImageWrapper}>
-            <Image source={FETUS_IMAGE} style={styles.fetusImage} resizeMode="cover" />
-            <View style={styles.fetusBadge}>
-              <Text style={styles.fetusBadgeText}>WEEK 16 OF PREGNANCY</Text>
-            </View>
+          <View style={[styles.bentoIconSquare, { backgroundColor: '#FFE5E9' }]}>
+            <Ionicons name="sparkles" size={22} color="#DC2626" />
           </View>
+          <Text style={styles.bentoCardHeading}>Cycle Mode</Text>
+          <Text style={styles.bentoCardSub}>Fertile & period tracker</Text>
+        </TouchableOpacity>
 
-          <View style={styles.fetusInfoRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fetusInfoTitle}>Baby's Growth</Text>
-              <Text style={styles.fetusInfoSub}>16 weeks 2 days • Second Trimester</Text>
-            </View>
-            <View style={styles.fetusViewPill}>
-              <Text style={styles.fetusViewPillText}>View Details</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-            </View>
+        <TouchableOpacity
+          activeOpacity={0.88}
+          style={styles.bentoWhiteCard}
+          onPress={() => setShowKickCounterModal(true)}
+        >
+          <View style={[styles.bentoIconSquare, { backgroundColor: '#FFEBEE' }]}>
+            <Ionicons name="fitness" size={22} color="#DC2626" />
           </View>
+          <Text style={styles.bentoCardHeading}>Kick Counter</Text>
+          <Text style={styles.bentoCardSub}>Fetal movement tracker</Text>
         </TouchableOpacity>
       </View>
 
-      {/* FLO-INSPIRED CURVED BOTTOM SHEET FOR DAILY INSIGHTS */}
-      <View style={styles.floBottomSheetContainer}>
-        <Text style={styles.floSectionTitle}>My daily insights</Text>
-
-        {/* Horizontal Insights Cards Carousel */}
-        <ScrollView
-          horizontal
-          nestedScrollEnabled={true}
-          showsHorizontalScrollIndicator={false}
-          style={styles.floCarousel}
-          contentContainerStyle={styles.floCarouselContent}
-        >
-          {/* Card 1: Log your symptoms */}
+      {/* UPCOMING SCREENINGS & MILESTONES SECTION */}
+      <View style={styles.predictionsContainer}>
+        <Text style={styles.sectionHeaderLabelDark}>UPCOMING SCREENINGS & MILESTONES</Text>
+        <View style={{ gap: 12 }}>
           <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.floSymptomCard}
-            onPress={() => setShowSymptomsModal(true)}
-          >
-            <Text style={styles.floSymptomCardTitle}>Log your symptoms</Text>
-            <View style={styles.floSymptomCardBtnCircle}>
-              <Ionicons name="add" size={26} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 2: Your baby's life in the womb */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[styles.floInsightCard, { backgroundColor: '#E6F4F1' }]}
+            activeOpacity={0.8}
+            style={styles.upcomingPredictionCardClean}
             onPress={() => setShowWombLifeModal(true)}
           >
-            <Text style={styles.floInsightCardTitle}>Your baby's life in the womb</Text>
-            <View style={styles.floInsightCardIconRow}>
-              <Ionicons name="body-outline" size={44} color="#00695C" />
+            <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FFEBEE' }]}>
+              <Ionicons name="fitness" size={22} color="#DC2626" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.upcomingCardMainTitle}>Anatomy Ultrasound Scan</Text>
+              <Text style={styles.upcomingCardSubTitle}>Mid-pregnancy anomaly & fetal growth review</Text>
+            </View>
+            <View style={styles.upcomingPillRed}>
+              <Text style={styles.upcomingPillRedText}>Week 20</Text>
             </View>
           </TouchableOpacity>
 
-          {/* Card 3: Tips & Tricks */}
           <TouchableOpacity
-            activeOpacity={0.85}
-            style={[styles.floInsightCard, { backgroundColor: '#FEECEC' }]}
+            activeOpacity={0.8}
+            style={styles.upcomingPredictionCardClean}
+            onPress={() => setShowDetailsModal(true)}
+          >
+            <View style={[styles.upcomingIconSquircle, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="heart" size={22} color="#0284C7" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.upcomingCardMainTitle}>Glucose Challenge Test</Text>
+              <Text style={styles.upcomingCardSubTitle}>Gestational diabetes & metabolic wellness check</Text>
+            </View>
+            <View style={styles.upcomingPillBlue}>
+              <Text style={styles.upcomingPillBlueText}>Week 24</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.upcomingPredictionCardClean}
             onPress={() => setShowTipsModal(true)}
           >
-            <View style={styles.floTagBadge}>
-              <Text style={styles.floTagBadgeText}>Tips & Tricks</Text>
+            <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="shield-checkmark" size={22} color="#D97706" />
             </View>
-            <Text style={styles.floInsightCardTitle}>7 Tips on How to Snack Healthily</Text>
-            <View style={styles.floInsightCardIconRow}>
-              <Ionicons name="restaurant-outline" size={40} color="#D81B60" />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.upcomingCardMainTitle}>Routine Prenatal Checkup</Text>
+              <Text style={styles.upcomingCardSubTitle}>Fundal height, blood pressure & fetal review</Text>
             </View>
-          </TouchableOpacity>
-
-
-          {/* Card 5: Consult OB-GYN */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[styles.floInsightCard, { backgroundColor: '#F3E8FF' }]}
-            onPress={() =>
-              onBookDoctor &&
-              onBookDoctor({
-                name: 'Dr. Mesal Okubor',
-                specialty: 'Obstetrician & Gynecologist',
-                experience: '12 Yrs Exp',
-                nextAvailable: 'Today, 10:00 AM',
-                fee: '₦15,000',
-                avatarBg: '#008080',
-              })
-            }
-          >
-            <View style={[styles.floTagBadge, { backgroundColor: '#8E24AA' }]}>
-              <Text style={styles.floTagBadgeText}>Doctor Care</Text>
-            </View>
-            <Text style={styles.floInsightCardTitle}>Talk to a Women's Health Doctor</Text>
-            <View style={styles.floInsightCardIconRow}>
-              <Ionicons name="videocam-outline" size={40} color="#8E24AA" />
+            <View style={[styles.upcomingPillRed, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.upcomingPillRedText, { color: '#B45309' }]}>Upcoming</Text>
             </View>
           </TouchableOpacity>
-        </ScrollView>
-
-        {/* Fruit Size Developmental Card */}
-        <View style={styles.fruitSizeCard}>
-          <View style={styles.fruitIconCircle}>
-            <Ionicons name="nutrition-outline" size={28} color="#C35738" />
-          </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.fruitCardTitle}>Baby is the size of an Avocado</Text>
-            <Text style={styles.fruitCardSub}>Approx. 4.5 inches • 3.5 ounces</Text>
-            <Text style={styles.fruitDetailText}>
-              Your baby can now move tiny facial muscles, make expressions, and process gentle sounds!
-            </Text>
-          </View>
         </View>
-
-
       </View>
 
-      {/* 1. DETAILS BREAKDOWN MODAL */}
+      {/* PERSONALIZED INSIGHTS CAROUSEL OF ARTICLES */}
+      <View style={{ marginBottom: 16 }}>
+        <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
+          <Text style={styles.sectionHeaderLabelDark}>PERSONALIZED INSIGHTS</Text>
+        </View>
+        <ArticleCarousel onSelectArticle={(article) => setSelectedArticle(article)} />
+      </View>
+
+      <View style={{ height: 100 }} />
+
+      {/* ARTICLE READER MODAL (FOR CAROUSEL ARTICLES) */}
+      <Modal
+        visible={!!selectedArticle}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setSelectedArticle(null)}
+      >
+        <View style={styles.modalFullContainer}>
+          <View style={styles.modalFullHeader}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.closeBtn}
+              onPress={() => setSelectedArticle(null)}
+            >
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.modalHeaderTitle}>{selectedArticle?.category || 'Maternal Insight'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalPadding}>
+            <Text style={styles.articleTitle}>{selectedArticle?.title}</Text>
+            <Text style={styles.articleMeta}>{selectedArticle?.readTime}</Text>
+            <Text style={styles.articleBody}>{selectedArticle?.fullContent}</Text>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* 1. GESTATIONAL DETAILS MODAL */}
       <Modal
         visible={showDetailsModal}
         animationType="slide"
@@ -326,8 +564,8 @@ export default function PregnancyScreen({
 
           <ScrollView contentContainerStyle={styles.modalPadding}>
             <View style={styles.detailsHeroCard}>
-              <Text style={styles.detailsHeroWeek}>Week 16, Day 2</Text>
-              <Text style={styles.detailsHeroSub}>2nd Trimester • Month 4</Text>
+              <Text style={styles.detailsHeroWeek}>Week {liveWeek}, Day 2</Text>
+              <Text style={styles.detailsHeroSub}>{trimester} • Estimated Due Date: {liveDueDate}</Text>
             </View>
 
             <View style={styles.detailMetricRow}>
@@ -337,94 +575,25 @@ export default function PregnancyScreen({
               </View>
               <View style={styles.detailMetricBox}>
                 <Text style={styles.detailMetricLabel}>ESTIMATED DUE DATE</Text>
-                <Text style={styles.detailMetricVal}>{dueDate}</Text>
+                <Text style={styles.detailMetricVal}>{liveDueDate}</Text>
               </View>
             </View>
 
             <View style={styles.detailsCard}>
-              <Text style={styles.detailsCardTitle}>Developmental Milestones</Text>
+              <Text style={styles.detailsCardTitle}>{milestoneTitle}</Text>
               <Text style={styles.detailsCardBody}>
-                - Facial muscle nerve connections forming.{'\n'}
-                - Eyes can perform slow side-to-side movements.{'\n'}
-                - Ears have reached final position for hearing ambient sounds.{'\n'}
-                - Bone mineralization accelerating rapidly.
+                {milestoneDesc}{'\n\n'}
+                - Facial muscle nerve connections actively forming.{'\n'}
+                - Ears have reached their final anatomical position.{'\n'}
+                - Bone mineralization accelerating rapidly.{'\n'}
+                - Heart pumping robustly to nourish growing tissue.
               </Text>
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* 2. SYMPTOMS LOGGER MODAL */}
-      <Modal
-        visible={showSymptomsModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowSymptomsModal(false)}
-      >
-        <View style={styles.modalFullContainer}>
-          <View style={styles.modalFullHeader}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.closeBtn}
-              onPress={() => setShowSymptomsModal(false)}
-            >
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle}>Log Symptoms</Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.saveHeaderBtn}
-              onPress={() => setShowSymptomsModal(false)}
-            >
-              <Text style={styles.saveHeaderBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.modalPadding}>
-            <Text style={styles.symptomsIntroText}>
-              Select the symptoms you are experiencing today to personalize recommendations:
-            </Text>
-
-            <View style={styles.symptomsGrid}>
-              {[
-                { name: 'Nausea', icon: 'medical-outline' },
-                { name: 'Backache', icon: 'fitness-outline' },
-                { name: 'Fatigue', icon: 'moon-outline' },
-                { name: 'Cravings', icon: 'restaurant-outline' },
-                { name: 'Swelling', icon: 'body-outline' },
-                { name: 'Heartburn', icon: 'flame-outline' },
-                { name: 'Mood Swings', icon: 'sunny-outline' },
-                { name: 'Headaches', icon: 'pulse-outline' },
-              ].map((item, idx) => {
-                const isSelected = selectedSymptoms.includes(item.name);
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.symptomPillButton,
-                      isSelected && styles.symptomPillActive,
-                    ]}
-                    onPress={() => toggleSymptom(item.name)}
-                  >
-                    <Ionicons
-                      name={item.icon}
-                      size={16}
-                      color={isSelected ? '#FFFFFF' : colors.textPrimary}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={[styles.symptomPillText, isSelected && styles.symptomPillTextActive]}>
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* 3. BABY IN WOMB ARTICLE MODAL */}
+      {/* 2. WOMB DEVELOPMENT ARTICLE MODAL */}
       <Modal
         visible={showWombLifeModal}
         animationType="slide"
@@ -446,17 +615,17 @@ export default function PregnancyScreen({
 
           <ScrollView contentContainerStyle={styles.modalPadding}>
             <Text style={styles.articleTitle}>Your Baby's Life in the Womb</Text>
-            <Text style={styles.articleMeta}>Week 16 Guidance • 4 min read</Text>
+            <Text style={styles.articleMeta}>Week {liveWeek} Guidance • 4 min read</Text>
             <Text style={styles.articleBody}>
-              At Week 16 of pregnancy, your baby is roughly the size of an avocado, measuring about 4.5 inches from crown to rump and weighing around 3.5 ounces.{'\n\n'}
-              Your baby is actively exploring their environment: sucking their thumb, flexing tiny limb joints, and making facial expressions. The umbilical cord has grown thick and robust to transport nutrients, oxygen, and antibodies.{'\n\n'}
+              At Week {liveWeek} of pregnancy, your baby is actively exploring their environment: flexing tiny limb joints, sucking their thumb, and making gentle facial expressions.{'\n\n'}
+              The umbilical cord has grown thick and robust to transport nutrients, oxygen, and protective antibodies.{'\n\n'}
               The heart is pumping approximately 25 quarts of blood daily, and hearing structures are sensitive enough to recognize your heartbeat, voice, and external music.
             </Text>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* 4. SNACKING TIPS ARTICLE MODAL */}
+      {/* 3. NUTRITION TIPS ARTICLE MODAL */}
       <Modal
         visible={showTipsModal}
         animationType="slide"
@@ -492,7 +661,7 @@ export default function PregnancyScreen({
         </View>
       </Modal>
 
-      {/* 5. KICK COUNTER MODAL */}
+      {/* 4. KICK COUNTER MODAL */}
       <Modal
         visible={showKickCounterModal}
         animationType="slide"
@@ -506,417 +675,356 @@ export default function PregnancyScreen({
               style={styles.closeBtn}
               onPress={() => setShowKickCounterModal(false)}
             >
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle}>Fetal Kick Counter</Text>
+            <Text style={styles.modalHeaderTitle}>Fetal Movement Counter</Text>
             <View style={{ width: 40 }} />
           </View>
 
           <ScrollView contentContainerStyle={styles.modalPadding}>
-            <View style={styles.kickTimerCard}>
-              <Text style={styles.kickTimerHeader}>SESSION TIMER</Text>
-              <Text style={styles.kickTimerValue}>{formatTimer(timerSeconds)}</Text>
+            <View style={styles.kickHeroCard}>
+              <Text style={styles.kickHeroTitle}>Target: 10 Movements</Text>
+              <Text style={styles.kickHeroSub}>
+                A healthy baby typically completes 10 distinct movements within 2 hours during active cycles.
+              </Text>
+              <Text style={styles.kickTimerText}>{formatTimer(timerSeconds)}</Text>
+            </View>
 
-              <View style={styles.kickProgressWrapper}>
-                <Text style={styles.kickProgressCount}>{kickCount} / 10</Text>
-                <Text style={styles.kickProgressSub}>Kicks Logged</Text>
-              </View>
+            {/* BIG INTERACTIVE KICK BUTTON */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[
+                styles.kickBigBtn,
+                kickCount >= 10 && { backgroundColor: '#C81E3A', borderColor: '#059669' },
+              ]}
+              onPress={handleRegisterKick}
+            >
+              <Ionicons name="footsteps" size={38} color="#FFFFFF" />
+              <Text style={styles.kickBigCount}>{kickCount}</Text>
+              <Text style={styles.kickBigSub}>
+                {kickCount >= 10 ? 'Session Complete 🎉' : 'Tap on Each Movement'}
+              </Text>
+            </TouchableOpacity>
 
+            <View style={styles.kickActionsRow}>
               <TouchableOpacity
-                activeOpacity={0.85}
-                style={[styles.bigKickButton, kickCount >= 10 && styles.bigKickButtonDone]}
-                onPress={handleRegisterKick}
-                disabled={kickCount >= 10}
+                activeOpacity={0.7}
+                style={styles.kickResetBtn}
+                onPress={resetKickSession}
               >
-                <Ionicons name="footsteps" size={32} color="#FFFFFF" />
-                <Text style={styles.bigKickButtonText}>
-                  {kickCount >= 10 ? 'Session Complete!' : 'TAP TO LOG KICK'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity activeOpacity={0.7} style={styles.resetSessionButton} onPress={resetKickSession}>
-                <Text style={styles.resetSessionText}>Reset Session</Text>
+                <Ionicons name="refresh" size={18} color={colors.textSecondary} style={{ marginRight: 6 }} />
+                <Text style={styles.kickResetText}>Reset Counter</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.sectionTitle}>Recent Kick Sessions</Text>
+            {/* HISTORY LOGS */}
+            <Text style={styles.kickHistoryTitle}>Past Kick Sessions</Text>
             {kickLogs.map((log) => (
               <View key={log.id} style={styles.kickLogRow}>
-                <Ionicons name="checkmark-circle" size={22} color={colors.primary} style={{ marginRight: 12 }} />
-                <View style={{ flex: 1 }}>
+                <View>
                   <Text style={styles.kickLogDate}>{log.date}</Text>
-                  <Text style={styles.kickLogSub}>{log.count} kicks in {log.duration}</Text>
+                  <Text style={styles.kickLogDuration}>Duration: {log.duration}</Text>
+                </View>
+                <View style={styles.kickLogBadge}>
+                  <Text style={styles.kickLogBadgeText}>{log.count} kicks</Text>
                 </View>
               </View>
             ))}
           </ScrollView>
         </View>
       </Modal>
-
-      {/* 6. CONTRACTION TIMER MODAL */}
-      <Modal
-        visible={showContractionModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowContractionModal(false)}
-      >
-        <View style={styles.modalFullContainer}>
-          <View style={styles.modalFullHeader}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.closeBtn}
-              onPress={() => setShowContractionModal(false)}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle}>Contraction Timer</Text>
-            <View style={{ width: 40 }} />
-          </View>
-
-          <ScrollView contentContainerStyle={styles.modalPadding}>
-            <View style={styles.contractionCard}>
-              <Text style={styles.contractionHeader}>LABOR MONITORING</Text>
-              <Text style={styles.contractionSubText}>
-                Press Start when a contraction begins and Stop when it eases off.
-              </Text>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[
-                  styles.contractionActionButton,
-                  contractionState === 'active' ? styles.contractionActiveBtn : styles.contractionIdleBtn,
-                ]}
-                onPress={() => {
-                  if (contractionState === 'idle' || contractionState === 'rest') {
-                    setContractionState('active');
-                  } else {
-                    setContractionState('rest');
-                    setContractionLogs([
-                      { id: Date.now(), duration: '45 sec', frequency: '5 min apart' },
-                      ...contractionLogs,
-                    ]);
-                  }
-                }}
-              >
-                <Ionicons
-                  name={contractionState === 'active' ? 'stop-circle' : 'play-circle'}
-                  size={36}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.contractionActionText}>
-                  {contractionState === 'active' ? 'STOP CONTRACTION' : 'START CONTRACTION'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingBottom: 110,
+  pageScrollContent: {
+    paddingBottom: 40,
     backgroundColor: '#FFFFFF',
   },
 
-  /* FLO HERO CONTAINER */
-  floHeroContainer: {
-    backgroundColor: colors.backgroundLight,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-  },
-  floTopNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  floBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#EAE1D7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  floNavSpacer: {
-    width: 36,
-    height: 36,
-  },
-  floDateTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-
-  /* Week Strip */
-  floWeekStrip: {
+  /* Cal AI Style 7-Day Calendar Strip */
+  calAiCalendarRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+  calAiDayCol: {
     alignItems: 'center',
-    marginBottom: 24,
+    width: (SCREEN_WIDTH - 32) / 7,
   },
-  floDayCol: {
-    alignItems: 'center',
-  },
-  floDayName: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  floDayNameToday: {
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  floDateCircle: {
+  calAiCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  floDateCircleSelected: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+  calAiCircleToday: {
+    backgroundColor: '#DC2626',
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 3,
   },
-  floDateNum: {
-    fontSize: 15,
-    fontWeight: '700',
+  calAiCircleDashed: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  calAiCircleSelected: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+  },
+  calAiDayLetter: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  calAiDayLetterToday: {
+    color: '#FFFFFF',
+  },
+  calAiDayLetterNormal: {
     color: colors.textSecondary,
   },
-  floDateNumSelected: {
+  calAiDateNum: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  calAiDateNumToday: {
+    color: '#DC2626',
     fontWeight: '900',
-    color: colors.primary,
+  },
+  calAiDateNumSelected: {
+    color: '#DC2626',
+    fontWeight: '900',
   },
 
-  /* Central Aura Stage */
-  floAuraStage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 10,
+  /* Hero Featured White Card */
+  heroCardContainer: {
+    marginHorizontal: 16,
+    marginBottom: 14,
   },
-  floOuterGlowCircle: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(220, 38, 38, 0.08)',
-  },
-  floMiddleGlowCircle: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(220, 38, 38, 0.16)',
-  },
-  floInnerOrbCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
+  heroWhiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
     shadowRadius: 10,
-    elevation: 6,
-    marginBottom: 20,
+    elevation: 2,
   },
-  floTimeRow: {
+  heroHeadlineDisplay: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+    lineHeight: 28,
+    letterSpacing: -0.4,
+    marginBottom: 18,
+  },
+  heroRingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  floTimeText: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.textPrimary,
+  heroMetricsCol: {
+    flex: 1,
+    marginLeft: 18,
+    gap: 8,
   },
-  floDetailsButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 28,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+  metricItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  floDetailsButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.primary,
+  metricDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
-
-  /* FLO CURVED BOTTOM SHEET CONTAINER */
-  floBottomSheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 80,
-    minHeight: 500,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 4,
+  metricItemText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
-  floSectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 16,
+  heroFooterRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 12,
+  },
+  heroFooterMeta: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
 
-  /* Carousel */
-  floCarousel: {
-    marginHorizontal: -20,
-    marginBottom: 24,
-  },
-  floCarouselContent: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  floSymptomCard: {
-    width: 140,
-    height: 160,
+  /* Featured Card: Talk to a Doctor */
+  doctorFeaturedCard: {
+    marginHorizontal: 16,
+    marginBottom: 14,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
-    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  floSymptomCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    lineHeight: 20,
+  doctorFeaturedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  floSymptomCardBtnCircle: {
+  doctorBadgeIconLarge: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#D81B60',
+    backgroundColor: '#E0F2F1',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
   },
-
-  floInsightCard: {
-    width: 150,
-    height: 160,
-    borderRadius: 20,
-    padding: 16,
-    justifyContent: 'space-between',
+  doctorActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2F1',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    gap: 4,
   },
-  floTagBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#00695C',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  floTagBadgeText: {
-    fontSize: 10,
+  doctorActionPillText: {
+    fontSize: 12,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#008080',
   },
-  floInsightCardTitle: {
-    fontSize: 14,
+  doctorFeaturedTitle: {
+    fontSize: 17,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#111827',
+    marginBottom: 4,
+  },
+  doctorFeaturedSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
     lineHeight: 18,
   },
-  floInsightCardIconRow: {
-    alignItems: 'flex-end',
-  },
 
-  /* Fruit Card */
-  fruitSizeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FDF6F0',
-    borderColor: '#F7D6C2',
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-  },
-  fruitIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fruitCardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  fruitCardSub: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#C35738',
-    marginTop: 2,
-  },
-  fruitDetailText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-
-  /* Quick Tools Grid */
-  quickToolsGrid: {
+  /* 2-Column Bento Grid */
+  bentoSectionGrid: {
     flexDirection: 'row',
     gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
-  quickToolTile: {
+  bentoWhiteCard: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  quickToolIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  bentoIconSquare: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  quickToolTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
+  bentoCardHeading: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 2,
   },
-  quickToolSub: {
+  bentoCardSub: {
     fontSize: 11,
     color: colors.textMuted,
+    fontWeight: '600',
+  },
+
+  /* Upcoming Screenings Section */
+  predictionsContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  sectionHeaderLabelDark: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  upcomingPredictionCardClean: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  upcomingIconSquircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upcomingCardMainTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  upcomingCardSubTitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
     marginTop: 2,
+  },
+  upcomingPillRed: {
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  upcomingPillRedText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  upcomingPillBlue: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  upcomingPillBlueText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284C7',
   },
 
   /* Modals */
@@ -928,60 +1036,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 48,
-    paddingBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderBottomColor: '#F3F4F6',
   },
   modalHeaderTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#111827',
   },
-  saveHeaderBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-  },
-  saveHeaderBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalPadding: {
     padding: 20,
   },
-
-  /* Details Modal */
   detailsHeroCard: {
-    backgroundColor: '#FDF6F0',
-    borderColor: '#F7D6C2',
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderRadius: 18,
+    padding: 18,
     marginBottom: 16,
   },
   detailsHeroWeek: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#C35738',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginBottom: 4,
   },
   detailsHeroSub: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    marginTop: 4,
+    fontSize: 13,
+    color: '#B91C1C',
+    fontWeight: '600',
   },
   detailMetricRow: {
     flexDirection: 'row',
@@ -991,7 +1082,7 @@ const styles = StyleSheet.create({
   detailMetricBox: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -1000,12 +1091,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: colors.textMuted,
+    marginBottom: 4,
   },
   detailMetricVal: {
     fontSize: 14,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginTop: 4,
+    fontWeight: '700',
+    color: '#111827',
   },
   detailsCard: {
     backgroundColor: '#FFFFFF',
@@ -1017,340 +1108,142 @@ const styles = StyleSheet.create({
   detailsCardTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#111827',
     marginBottom: 8,
   },
   detailsCardBody: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
     color: colors.textSecondary,
   },
-
-  /* Symptoms Modal */
-  symptomsIntroText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  symptomsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  symptomPillButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-  },
-  symptomPillActive: {
-    backgroundColor: colors.primary,
-  },
-  symptomPillText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  symptomPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  /* Article Readers */
   articleTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 8,
+    color: '#111827',
+    marginBottom: 6,
   },
   articleMeta: {
-    fontSize: 12,
+    fontSize: 13,
+    color: '#DC2626',
     fontWeight: '700',
-    color: colors.textMuted,
     marginBottom: 16,
   },
   articleBody: {
     fontSize: 15,
     lineHeight: 24,
-    color: colors.textPrimary,
+    color: '#374151',
   },
 
-  /* Kick Counter */
-  kickTimerCard: {
-    backgroundColor: '#F9FAFB',
+  /* Kick Counter Modal */
+  kickHeroCard: {
+    backgroundColor: '#FEF2F2',
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#FECACA',
   },
-  kickTimerHeader: {
-    fontSize: 11,
+  kickHeroTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
+    color: '#DC2626',
   },
-  kickTimerValue: {
+  kickHeroSub: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  kickTimerText: {
     fontSize: 32,
     fontWeight: '900',
-    color: colors.primary,
-    marginVertical: 8,
+    color: '#111827',
+    marginTop: 12,
   },
-  kickProgressWrapper: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  kickProgressCount: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  kickProgressSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  bigKickButton: {
-    flexDirection: 'row',
+  kickBigBtn: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#DC2626',
+    alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 24,
-    width: '100%',
-    marginBottom: 10,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 6,
+    borderColor: '#FECACA',
+    marginBottom: 20,
   },
-  bigKickButtonDone: {
-    backgroundColor: '#10B981',
-  },
-  bigKickButtonText: {
-    fontSize: 15,
-    fontWeight: '800',
+  kickBigCount: {
+    fontSize: 48,
+    fontWeight: '900',
     color: '#FFFFFF',
-    marginLeft: 8,
+    marginTop: 4,
   },
-  resetSessionButton: {
-    paddingVertical: 6,
+  kickBigSub: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 2,
   },
-  resetSessionText: {
+  kickActionsRow: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  kickResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+  },
+  kickResetText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  sectionTitle: {
+  kickHistoryTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.textPrimary,
+    color: '#111827',
     marginBottom: 12,
   },
   kickLogRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 12,
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
+    padding: 14,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   kickLogDate: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: '#111827',
   },
-  kickLogSub: {
+  kickLogDuration: {
     fontSize: 12,
-    color: colors.textSecondary,
-  },
-
-  /* Contraction */
-  contractionCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  contractionHeader: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-  },
-  contractionSubText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginVertical: 12,
-    lineHeight: 18,
-  },
-  contractionActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 28,
-    width: '100%',
-  },
-  contractionIdleBtn: {
-    backgroundColor: colors.primary,
-  },
-  contractionActiveBtn: {
-    backgroundColor: '#EF4444',
-  },
-  contractionActionText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginLeft: 10,
-  },
-
-  /* FETUS STAGE CARD IN CALENDAR */
-  fetusStageCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginTop: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#EAE1D7',
-  },
-  fetusImageWrapper: {
-    height: 150,
-    width: '100%',
-    position: 'relative',
-  },
-  fetusImage: {
-    width: '100%',
-    height: '100%',
-  },
-  fetusBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  fetusBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  fetusInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  fetusInfoTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  fetusInfoSub: {
-    fontSize: 12,
-    fontWeight: '600',
     color: colors.textSecondary,
     marginTop: 2,
   },
-  fetusViewPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  kickLogBadge: {
     backgroundColor: '#FFEBEE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  fetusViewPillText: {
+  kickLogBadgeText: {
     fontSize: 12,
     fontWeight: '800',
-    color: colors.primary,
-    marginRight: 2,
-  },
-
-  /* EXIT MODAL STYLES */
-  exitModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  exitModalCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  exitModalIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFEBEE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  exitModalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  exitModalSubTitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  exitModalActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-  },
-  exitModalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-  },
-  exitModalCancelText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  exitModalConfirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-  },
-  exitModalConfirmText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#DC2626',
   },
 });

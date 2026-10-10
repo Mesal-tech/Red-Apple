@@ -14,13 +14,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as telemedService from '../services/telemedicineService';
+import PaystackCheckoutModal from '../components/PaystackCheckoutModal';
+import { initializeConsultationPayment } from '../services/paymentService';
 
 const STATUSBAR_HEIGHT =
   Platform.OS === 'android'
     ? (StatusBar.currentHeight || 38)
     : Platform.OS === 'ios'
-    ? 44
-    : 0;
+      ? 44
+      : 0;
 
 export default function AppointmentsListModal({
   visible,
@@ -34,6 +36,27 @@ export default function AppointmentsListModal({
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'past'
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [internalBookings, setInternalBookings] = useState(bookings || []);
+
+  // Paystack Telemedicine Payment State
+  const [showPaystackModal, setShowPaystackModal] = useState(false);
+  const [paystackPaymentData, setPaystackPaymentData] = useState(null);
+
+  const handlePayForBooking = async (booking) => {
+    try {
+      const payRes = await initializeConsultationPayment(booking.booking_id);
+      if (payRes.success && payRes.payment) {
+        setPaystackPaymentData({
+          booking,
+          authorizationUrl: payRes.payment.authorization_url,
+          reference: payRes.payment.reference,
+          amount: payRes.payment.amount,
+        });
+        setShowPaystackModal(true);
+      }
+    } catch (err) {
+      Alert.alert('Payment Error', err.message || 'Could not initiate payment.');
+    }
+  };
 
   // Sync with parent bookings prop
   useEffect(() => {
@@ -88,7 +111,7 @@ export default function AppointmentsListModal({
   const handleCancelPrompt = (booking) => {
     Alert.alert(
       'Cancel Consultation?',
-      `Are you sure you want to cancel your consultation with ${booking.doctor_name || 'Dr. Mesal Okubor'}?`,
+      `Are you sure you want to cancel your consultation with ${booking.doctor_name || 'your specialist'}?`,
       [
         { text: 'Keep Appointment', style: 'cancel' },
         {
@@ -247,7 +270,7 @@ export default function AppointmentsListModal({
               </Text>
               <Text style={styles.emptySub}>
                 {activeTab === 'upcoming'
-                  ? 'You do not have any scheduled appointments with Dr. Mesal Okubor right now. Book a 1-on-1 virtual HD video consultation.'
+                  ? 'You do not have any scheduled appointments right now. Book a 1-on-1 virtual HD video consultation.'
                   : 'Your completed consultations, doctor notes, and follow-up guidance will be archived here.'}
               </Text>
 
@@ -261,14 +284,15 @@ export default function AppointmentsListModal({
                   }}
                 >
                   <Ionicons name="calendar" size={16} color="#FFFFFF" />
-                  <Text style={styles.emptyBookBtnText}>Book with Dr. Mesal</Text>
+                  <Text style={styles.emptyBookBtnText}>Book a Specialist</Text>
                 </TouchableOpacity>
               )}
             </View>
           ) : (
             /* LIST OF CONSULTATION CARDS */
             displayedList.map((booking) => {
-              const isConfirmed = !booking.status || booking.status === 'confirmed';
+              const isRequested = booking.status === 'requested';
+              const isConfirmed = booking.status === 'confirmed';
               const isCancelled = booking.status === 'cancelled';
               const isCompleted = booking.status === 'completed';
 
@@ -286,34 +310,46 @@ export default function AppointmentsListModal({
                     <View
                       style={[
                         styles.statusBadge,
-                        isConfirmed
-                          ? styles.statusBadgeConfirmed
-                          : isCancelled
-                          ? styles.statusBadgeCancelled
-                          : styles.statusBadgeCompleted,
+                        isRequested
+                          ? styles.statusBadgeRequested
+                          : isConfirmed
+                            ? styles.statusBadgeConfirmed
+                            : isCancelled
+                              ? styles.statusBadgeCancelled
+                              : styles.statusBadgeCompleted,
                       ]}
                     >
                       <View
                         style={[
                           styles.statusDot,
-                          isConfirmed
-                            ? { backgroundColor: '#10B981' }
-                            : isCancelled
-                            ? { backgroundColor: '#EF4444' }
-                            : { backgroundColor: '#64748B' },
+                          isRequested
+                            ? { backgroundColor: '#F59E0B' }
+                            : isConfirmed
+                              ? { backgroundColor: '#C81E3A' }
+                              : isCancelled
+                                ? { backgroundColor: '#EF4444' }
+                                : { backgroundColor: '#64748B' },
                         ]}
                       />
                       <Text
                         style={[
                           styles.statusBadgeText,
-                          isConfirmed
-                            ? { color: '#047857' }
-                            : isCancelled
-                            ? { color: '#B91C1C' }
-                            : { color: '#475569' },
+                          isRequested
+                            ? { color: '#B45309' }
+                            : isConfirmed
+                              ? { color: '#047857' }
+                              : isCancelled
+                                ? { color: '#B91C1C' }
+                                : { color: '#475569' },
                         ]}
                       >
-                        {isConfirmed ? 'Confirmed' : isCancelled ? 'Cancelled' : 'Completed'}
+                        {isRequested
+                          ? 'Payment Pending'
+                          : isConfirmed
+                            ? 'Confirmed'
+                            : isCancelled
+                              ? 'Cancelled'
+                              : 'Completed'}
                       </Text>
                     </View>
                   </View>
@@ -336,7 +372,7 @@ export default function AppointmentsListModal({
 
                     <View style={styles.doctorTextCol}>
                       <Text style={styles.doctorName}>
-                        {booking.doctor_name || 'Dr. Mesal Okubor'}
+                        {booking.doctor_name || 'Consulting Specialist'}
                       </Text>
                       <Text style={styles.doctorSpec}>
                         {booking.doctor_specialty || 'Obstetrician & Gynecologist'}
@@ -394,19 +430,31 @@ export default function AppointmentsListModal({
                         <Text style={styles.cancelBtnText}>Cancel</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        style={styles.joinVideoBtn}
-                        onPress={() => {
-                          if (onJoinVideoCall) {
-                            onJoinVideoCall(booking);
-                          }
-                        }}
-                      >
-                        <Ionicons name="videocam" size={17} color="#FFFFFF" />
-                        <Text style={styles.joinVideoBtnText}>Join Video Consultation</Text>
-                        <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
-                      </TouchableOpacity>
+                      {booking.status === 'requested' ? (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          style={[styles.joinVideoBtn, { backgroundColor: '#059669' }]}
+                          onPress={() => handlePayForBooking(booking)}
+                        >
+                          <Ionicons name="card" size={17} color="#FFFFFF" />
+                          <Text style={styles.joinVideoBtnText}>Pay Fee (₦15,000)</Text>
+                          <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          style={styles.joinVideoBtn}
+                          onPress={() => {
+                            if (onJoinVideoCall) {
+                              onJoinVideoCall(booking);
+                            }
+                          }}
+                        >
+                          <Ionicons name="videocam" size={17} color="#FFFFFF" />
+                          <Text style={styles.joinVideoBtnText}>Join Video Consultation</Text>
+                          <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
                 </View>
@@ -414,6 +462,24 @@ export default function AppointmentsListModal({
             })
           )}
         </ScrollView>
+
+        {/* PAYSTACK CHECKOUT MODAL */}
+        <PaystackCheckoutModal
+          visible={showPaystackModal}
+          authorizationUrl={paystackPaymentData?.authorizationUrl}
+          reference={paystackPaymentData?.reference}
+          amount={paystackPaymentData?.amount}
+          doctorName={paystackPaymentData?.booking?.doctor_name || 'Consulting Specialist'}
+          onSuccess={() => {
+            setShowPaystackModal(false);
+            fetchLiveBookings();
+            if (onRefreshBookings) onRefreshBookings();
+          }}
+          onClose={() => {
+            setShowPaystackModal(false);
+            fetchLiveBookings();
+          }}
+        />
       </View>
     </Modal>
   );
@@ -638,6 +704,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 10,
+  },
+  statusBadgeRequested: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   statusBadgeConfirmed: {
     backgroundColor: '#ECFDF5',

@@ -21,5 +21,12 @@ export const config = {
     apiKey: process.env.STREAM_API_KEY || 'mmhfdzb5evj2',
     apiSecret: process.env.STREAM_API_SECRET || '',
   },
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY || '',
+    publicKey: process.env.PAYSTACK_PUBLIC_KEY || '',
+  },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+  },
   dataDir: process.env.DATA_DIR || path.join(__dirname, '../../data'),
 };

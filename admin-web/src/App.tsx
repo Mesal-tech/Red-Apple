@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Header, type AdminView } from './components/Header';
+import { DashboardOverview } from './components/DashboardOverview';
+import { EducationArticlesManager } from './components/EducationArticlesManager';
+import { DoctorTelemedicineManager } from './components/DoctorTelemedicineManager';
 import { EmailComposer } from './components/EmailComposer';
 import { EmailPreview } from './components/EmailPreview';
 import { EmailInboxView } from './components/EmailInboxView';
@@ -24,7 +27,7 @@ import { Edit3, Eye } from 'lucide-react';
 
 export function App() {
   // Navigation & View State
-  const [currentView, setCurrentView] = useState<AdminView>('compose');
+  const [currentView, setCurrentView] = useState<AdminView>('overview');
   const [inboxCount, setInboxCount] = useState<number>(0);
   const [sentCount, setSentCount] = useState<number>(0);
 
@@ -318,6 +321,18 @@ export function App() {
               </div>
             </div>
           </>
+        )}
+
+        {currentView === 'overview' && (
+          <DashboardOverview onNavigate={setCurrentView} />
+        )}
+
+        {currentView === 'articles' && (
+          <EducationArticlesManager />
+        )}
+
+        {currentView === 'doctors' && (
+          <DoctorTelemedicineManager />
         )}
 
         {currentView === 'inbox' && (

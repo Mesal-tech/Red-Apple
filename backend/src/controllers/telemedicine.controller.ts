@@ -316,11 +316,11 @@ export async function getStreamToken(
 
     if (!userName && authReq.user?.userId) {
       const user = await userStore.findById(authReq.user.userId);
-      userName = user?.name || (authReq.user.role === 'doctor' ? 'Dr. Mesal Okubor' : 'Red Apple Patient');
+      userName = user?.name || (authReq.user.role === 'doctor' ? 'Consulting Doctor' : 'Red Apple Patient');
     }
 
     if (!userName) {
-      userName = userRole === 'doctor' ? 'Dr. Mesal Okubor' : 'Amara Okonkwo';
+      userName = userRole === 'doctor' ? 'Consulting Doctor' : 'Red Apple Patient';
     }
 
     const userImage = `https://getstream.io/random_png/?id=${userId}&name=${encodeURIComponent(userName)}`;
@@ -368,6 +368,42 @@ export async function getStreamToken(
         image: userImage,
       },
       isConfigured: Boolean(config.stream.apiSecret),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPartnerClinics(req: Request, res: Response, next: NextFunction) {
+  try {
+    const category = req.query.category as string | undefined;
+    const city = req.query.city as string | undefined;
+    const search = req.query.search as string | undefined;
+
+    const clinics = await telemedicineStore.getPartnerClinics({ category, city, search });
+    return res.json({
+      success: true,
+      count: clinics.length,
+      clinics,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPartnerClinicById(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const clinic = await telemedicineStore.getPartnerClinicById(id);
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: 'Partner clinic not found.',
+      });
+    }
+    return res.json({
+      success: true,
+      clinic,
     });
   } catch (error) {
     next(error);
