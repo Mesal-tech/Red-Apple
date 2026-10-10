@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import gsap from 'gsap';
-import { ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ArrowRigh } from 'lucide-react';
 
 export const IntroMissionSection: React.FC = () => {
   const containerRef = useRef<HTMLElement>(null);
