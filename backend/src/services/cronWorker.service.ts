@@ -186,7 +186,7 @@ export class CronWorkerService {
       });
 
       if (pushTokens.length > 0) {
-        const messages: ExpoPushMessage[] = pushTokens.map((pt) => ({
+        const messages: ExpoPushMessage[] = pushTokens.map((pt: { token: string }) => ({
           to: pt.token,
           sound: 'default',
           title: opts.title,
