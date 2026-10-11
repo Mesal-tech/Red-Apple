@@ -306,6 +306,11 @@ class UserStore {
     this.persistSync();
     return user;
   }
+
+  public async getAllUsers(): Promise<User[]> {
+    await this.init();
+    return Array.from(this.users.values());
+  }
 }
 
 export const userStore = new UserStore();

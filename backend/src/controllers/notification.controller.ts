@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { notificationService } from '../services/notification.service';
 import { userStore } from '../data/user.store';
+import prisma from '../db/prisma';
 
 export async function getReminders(
   req: AuthenticatedRequest,
@@ -55,6 +56,35 @@ export async function registerPushToken(
     await userStore.updateUser(userId, {
       push_tokens: Array.from(tokens),
     });
+
+    // Also sync to Prisma / PostgreSQL if available
+    try {
+      await prisma.user.upsert({
+        where: { user_id: userId },
+        update: {
+          pregnancy_mode: user.pregnancy_mode || false,
+          health_profile: (user.health_profile as any) || undefined,
+        },
+        create: {
+          user_id: userId,
+          name: user.name || 'User',
+          email: user.email,
+          phone: user.phone,
+          password_hash: user.password_hash || '',
+          pregnancy_mode: user.pregnancy_mode || false,
+          role: user.role || 'user',
+          health_profile: (user.health_profile as any) || undefined,
+        },
+      });
+
+      await prisma.pushToken.upsert({
+        where: { token },
+        update: { user_id: userId },
+        create: { user_id: userId, token },
+      });
+    } catch (prismaErr: any) {
+      console.warn('[registerPushToken] Prisma pushToken sync notice:', prismaErr?.message);
+    }
 
     return res.json({
       success: true,

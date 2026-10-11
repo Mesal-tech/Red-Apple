@@ -1,4 +1,5 @@
 import prisma from '../db/prisma';
+import { userStore } from '../data/user.store';
 import { calculateFertilityPrediction } from '../utils/cycleCalculators';
 
 interface ExpoPushMessage {
@@ -58,6 +59,41 @@ export class CronWorkerService {
         const cycleLength = profile.cycleLength || 28;
         const periodDuration = profile.periodDuration || 5;
         const lastDate = new Date(profile.lastPeriodDate);
+
+        const predictions = calculateFertilityPrediction(
+          profile.lastPeriodDate,
+          periodDuration,
+          cycleLength,
+          now
+        );
+
+        if (predictions?.daysUntilNextPeriod === 2) {
+          await this.queueAndSendReminder({
+            userId: u.user_id,
+            type: 'CYCLE_PREDICTION',
+            title: 'Period Predicted Soon',
+            body: `Your period is estimated to begin in 2 days. Keep your period essentials handy.`,
+          });
+        } else if (predictions?.currentPhase === 'Ovulation' || predictions?.isFertileWindow) {
+          await this.queueAndSendReminder({
+            userId: u.user_id,
+            type: 'FERTILE_WINDOW',
+            title: 'Peak Fertility Today',
+            body: 'You are currently in your peak fertile window with the highest likelihood of conception.',
+          });
+        }
+      }
+
+      // Also sweep userStore non-pregnant users with health_profile
+      const storeUsers = await userStore.getAllUsers();
+      const prismaUserIds = new Set(usersWithProfile.map((u) => u.user_id));
+      for (const u of storeUsers) {
+        if (prismaUserIds.has(u.user_id) || u.pregnancy_mode) continue;
+        const profile = u.health_profile as any;
+        if (!profile?.lastPeriodDate) continue;
+
+        const cycleLength = profile.cycleLength || 28;
+        const periodDuration = profile.periodDuration || 5;
 
         const predictions = calculateFertilityPrediction(
           profile.lastPeriodDate,
@@ -180,14 +216,29 @@ export class CronWorkerService {
         },
       });
 
-      // Dispatch to Expo Push Token if registered
+      // Dispatch to Expo Push Token if registered (check both Prisma and userStore)
       const pushTokens = await prisma.pushToken.findMany({
         where: { user_id: opts.userId },
       });
 
-      if (pushTokens.length > 0) {
-        const messages: ExpoPushMessage[] = pushTokens.map((pt: { token: string }) => ({
-          to: pt.token,
+      const userFromStore = await userStore.findById(opts.userId);
+      const storeTokens = userFromStore?.push_tokens || [];
+
+      const tokenSet = new Set<string>();
+      for (const pt of pushTokens) {
+        if (pt.token) tokenSet.add(pt.token);
+      }
+      for (const st of storeTokens) {
+        if (st) tokenSet.add(st);
+      }
+
+      const validTokens = Array.from(tokenSet).filter(
+        (t) => typeof t === 'string' && (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken'))
+      );
+
+      if (validTokens.length > 0) {
+        const messages: ExpoPushMessage[] = validTokens.map((token: string) => ({
+          to: token,
           sound: 'default',
           title: opts.title,
           body: opts.body,
