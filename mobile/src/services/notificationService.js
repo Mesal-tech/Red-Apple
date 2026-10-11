@@ -9,9 +9,11 @@ try {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
-      priority: Notifications.AndroidNotificationPriority?.HIGH,
+      priority: Notifications?.AndroidNotificationPriority?.MAX || 'max',
     }),
   });
 } catch (e) {
@@ -52,22 +54,32 @@ class NotificationService {
 
     try {
       if (Platform.OS === 'android') {
+        const visibility = Notifications.AndroidNotificationVisibility?.PUBLIC || 1;
+
         // 1. General Default Channel
         await Notifications.setNotificationChannelAsync('default', {
           name: 'General Health Alerts',
-          importance: Notifications.AndroidImportance.HIGH,
+          importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FA4A14',
           sound: 'default',
+          enableVibrate: true,
+          enableLights: true,
+          showBadge: true,
+          lockscreenVisibility: visibility,
         });
 
         // 2. Cycle & Fertility Channel
         await Notifications.setNotificationChannelAsync('cycle', {
           name: 'Cycle & Ovulation Tracking',
-          importance: Notifications.AndroidImportance.HIGH,
+          importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 300, 200, 300],
           lightColor: '#FA4A14',
           sound: 'default',
+          enableVibrate: true,
+          enableLights: true,
+          showBadge: true,
+          lockscreenVisibility: visibility,
         });
 
         // 3. Telemedicine Appointments Channel (Max priority)
@@ -77,15 +89,23 @@ class NotificationService {
           vibrationPattern: [0, 500, 250, 500],
           lightColor: '#059669',
           sound: 'default',
+          enableVibrate: true,
+          enableLights: true,
+          showBadge: true,
+          lockscreenVisibility: visibility,
         });
 
         // 4. Medication & Habits Channel
         await Notifications.setNotificationChannelAsync('medication', {
           name: 'Medication & Health Habits',
-          importance: Notifications.AndroidImportance.DEFAULT,
+          importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250],
           lightColor: '#2563EB',
           sound: 'default',
+          enableVibrate: true,
+          enableLights: true,
+          showBadge: true,
+          lockscreenVisibility: visibility,
         });
       }
 
@@ -122,18 +142,17 @@ class NotificationService {
     await this.init();
 
     try {
-      // Android 13+ runtime permission
-      if (Platform.OS === 'android' && Platform.Version >= 33) {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          return { success: false, reason: 'permission_denied' };
-        }
-      }
-
       if (!Notifications) {
         return { success: true, fallback: true };
+      }
+
+      // Android 13+ runtime permission
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        try {
+          await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+          );
+        } catch (pErr) {}
       }
 
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -146,6 +165,7 @@ class NotificationService {
             allowBadge: true,
             allowSound: true,
           },
+          android: {},
         });
         finalStatus = status;
       }
@@ -158,7 +178,8 @@ class NotificationService {
       try {
         const projectId =
           Constants?.expoConfig?.extra?.eas?.projectId ||
-          Constants?.easConfig?.projectId;
+          Constants?.easConfig?.projectId ||
+          '69965fdb-1050-4f5b-b3c3-24125f8865ad';
 
         const tokenData = await Notifications.getExpoPushTokenAsync(
           projectId ? { projectId } : undefined
@@ -229,7 +250,7 @@ class NotificationService {
   }
 
   /**
-   * Schedules a local notification
+   * Schedules a local notification with proper SDK 52/57 typed triggers
    */
   async scheduleLocalNotification({
     identifier,
@@ -247,17 +268,47 @@ class NotificationService {
         await this.cancelNotification(identifier).catch(() => {});
       }
 
+      // Format trigger to be strictly compliant with Expo SDK 52/57 SchedulableNotificationTriggerInput
+      let formattedTrigger = null;
+      if (trigger) {
+        if (trigger instanceof Date || typeof trigger === 'number') {
+          formattedTrigger = {
+            type: Notifications.SchedulableTriggerInputTypes?.DATE || 'date',
+            date: trigger,
+            channelId: channelId || 'default',
+          };
+        } else if (trigger.seconds !== undefined) {
+          formattedTrigger = {
+            type: Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL || 'timeInterval',
+            seconds: Math.max(1, Math.round(trigger.seconds)),
+            repeats: !!trigger.repeats,
+            channelId: channelId || 'default',
+          };
+        } else if (trigger.hour !== undefined) {
+          formattedTrigger = {
+            type: Notifications.SchedulableTriggerInputTypes?.DAILY || 'daily',
+            hour: trigger.hour,
+            minute: trigger.minute ?? 0,
+            channelId: channelId || 'default',
+          };
+        } else if (trigger.type) {
+          formattedTrigger = { ...trigger, channelId: channelId || 'default' };
+        } else {
+          formattedTrigger = trigger;
+        }
+      }
+
       const id = await Notifications.scheduleNotificationAsync({
         identifier: identifier || undefined,
         content: {
           title,
           body,
           sound: 'default',
-          priority: Notifications.AndroidNotificationPriority?.HIGH,
-          channelId,
+          priority: Notifications.AndroidNotificationPriority?.MAX || 'max',
+          channelId: channelId || 'default',
           data,
         },
-        trigger,
+        trigger: formattedTrigger,
       });
 
       return id;
@@ -299,7 +350,7 @@ class NotificationService {
       title: 'Red Apple Health Alert 🍎',
       body: 'Notifications are active! You will receive timely alerts for your cycle, medication & appointments.',
       trigger: { seconds: 1 },
-      channelId: 'cycle',
+      channelId: 'default',
       data: { type: 'test' },
     });
 

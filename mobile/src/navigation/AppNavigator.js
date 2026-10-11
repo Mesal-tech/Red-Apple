@@ -6,11 +6,13 @@ import AppLockModal, { PIN_STORAGE_KEY } from '../components/AppLockModal';
 import syncQueueService from '../services/syncQueueService';
 import {
   savePrivacyStatusSafe,
+  getOnboardingStatusSafe,
   saveOnboardingStatusSafe,
   getActiveHealthModeSafe,
   saveActiveHealthModeSafe,
   clearAppSessionSafe,
   getCachedActiveHealthMode,
+  getHealthProfileSafe,
 } from '../utils/storage';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
@@ -25,15 +27,9 @@ import DoctorDashboardScreen from '../screens/DoctorDashboardScreen';
 const splashStyles = StyleSheet.create({
   splashContainer: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    zIndex: 999,
   },
   logoContainer: {
     width: 120,
@@ -42,14 +38,16 @@ const splashStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoImage: {
-    width: 110,
-    height: 110,
+    width: 100,
+    height: 100,
+    borderRadius: 22,
   },
   appNameText: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '900',
     color: colors.textPrimary,
     letterSpacing: -0.5,
+    marginTop: 16,
   },
   appSloganText: {
     fontSize: 14,
@@ -85,13 +83,44 @@ function MainNavigation() {
   const [setupCompletedOverride, setSetupCompletedOverride] = useState(null);
   const [localMode, setLocalMode] = useState(getCachedActiveHealthMode);
   const [previewPatientMode, setPreviewPatientMode] = useState(false);
+  const [localOnboarded, setLocalOnboarded] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function checkInitialOnboarding() {
+      try {
+        const [isCompleted, healthProfile] = await Promise.all([
+          getOnboardingStatusSafe(),
+          getHealthProfileSafe(),
+        ]);
+        if (isMounted) {
+          const hasLocalData =
+            !!isCompleted ||
+            !!(healthProfile && (healthProfile.stage || healthProfile.completedAt || healthProfile.lastPeriodDate));
+          if (hasLocalData) {
+            setLocalOnboarded(true);
+            setAuthScreen('login');
+          }
+        }
+      } catch (e) {
+      } finally {
+        if (isMounted) setInitialLoading(false);
+      }
+    }
+    checkInitialOnboarding();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const isDoctor = user?.role === 'doctor' || user?.email === 'mesalokubor63@gmail.com';
 
-  // Synchronous, instant evaluation from the active user object — zero render lag, zero flash
+  // Synchronous + cached evaluation:
+  // If user has completed on backend OR locally on device, do not show onboarding wizard
   const hasOnboarded = setupCompletedOverride !== null
     ? setupCompletedOverride
-    : isUserOnboarded(user);
+    : (isUserOnboarded(user) || localOnboarded);
 
   const activeMode =
     localMode ||
@@ -188,6 +217,7 @@ function MainNavigation() {
   const handleCompleteSetup = async (healthProfile, stage) => {
     await savePrivacyStatusSafe();
     await saveOnboardingStatusSafe();
+    setLocalOnboarded(true);
     if (stage) {
       await saveActiveHealthModeSafe(stage);
       setLocalMode(stage);
@@ -204,13 +234,31 @@ function MainNavigation() {
     setAuthScreen('login');
   };
 
+  // Loading Splash Screen (Zero flash of onboarding screens while checking session)
+  if (authLoading || initialLoading) {
+    return (
+      <View style={splashStyles.splashContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={splashStyles.logoContainer}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={splashStyles.logoImage}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={splashStyles.appNameText}>Red Apple</Text>
+        <Text style={splashStyles.appSloganText}>Intelligent Women's Health</Text>
+      </View>
+    );
+  }
+
   // Unauthenticated Stack
   if (!isAuthenticated) {
     return (
       <View style={{ flex: 1 }}>
         {authScreen === 'signup' ? (
           <SignUpScreen
-            onBack={() => setAuthScreen('onboarding')}
+            onBack={() => setAuthScreen(localOnboarded ? 'login' : 'onboarding')}
             onNavigateLogin={() => setAuthScreen('login')}
           />
         ) : authScreen === 'login' ? (
