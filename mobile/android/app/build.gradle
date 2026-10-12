@@ -187,3 +187,15 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Apply Google Services plugin for Firebase/FCM push notifications if google-services.json is present
+if (file("../../google-services.json").exists() && !file("google-services.json").exists()) {
+    copy {
+        from "../../google-services.json"
+        into "."
+    }
+}
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+

@@ -205,6 +205,18 @@ function MainNavigation() {
             }
           });
         }
+
+        // Handle cold start launch from tapped notification
+        if (Notifications?.getLastNotificationResponseAsync) {
+          Notifications.getLastNotificationResponseAsync().then((response) => {
+            if (response?.notification?.request?.content?.data) {
+              const data = response.notification.request.content.data;
+              if (data?.screen === 'DoctorCareScreen' && isDoctor) {
+                setPreviewPatientMode(false);
+              }
+            }
+          });
+        }
       } catch (e) {}
     }
 

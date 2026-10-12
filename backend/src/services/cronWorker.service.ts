@@ -7,6 +7,8 @@ interface ExpoPushMessage {
   sound?: string;
   title: string;
   body: string;
+  priority?: 'default' | 'normal' | 'high';
+  channelId?: string;
   data?: Record<string, any>;
 }
 
@@ -237,12 +239,19 @@ export class CronWorkerService {
       );
 
       if (validTokens.length > 0) {
+        let channelId = 'default';
+        if (opts.type === 'appointment') channelId = 'appointments';
+        else if (['period_alert', 'ovulation', 'fertile_window'].includes(opts.type)) channelId = 'cycle';
+        else if (opts.type === 'medication') channelId = 'medication';
+
         const messages: ExpoPushMessage[] = validTokens.map((token: string) => ({
           to: token,
           sound: 'default',
           title: opts.title,
           body: opts.body,
-          data: { type: opts.type },
+          priority: 'high',
+          channelId,
+          data: { type: opts.type, channelId },
         }));
 
         await this.sendExpoPushNotifications(messages);

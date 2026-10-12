@@ -209,8 +209,27 @@ export async function sendTestNotification(
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
+    const tokenSet = new Set<string>();
     const user = await userStore.findById(userId);
-    const tokens = user?.push_tokens || [];
+    if (user?.push_tokens) {
+      for (const t of user.push_tokens) if (t) tokenSet.add(t);
+    }
+
+    try {
+      if (prisma && (prisma as any).pushToken) {
+        const dbTokens = await (prisma as any).pushToken.findMany({
+          where: { userId },
+          select: { token: true },
+        });
+        for (const row of dbTokens) {
+          if (row.token) tokenSet.add(row.token);
+        }
+      }
+    } catch (dbErr) {
+      // Ignore if table not present
+    }
+
+    const tokens = Array.from(tokenSet);
 
     const testPayload = {
       id: `rem_test_${Date.now()}`,
@@ -224,7 +243,7 @@ export async function sendTestNotification(
         tokens,
         testPayload.title,
         testPayload.body,
-        { test: true }
+        { test: true, channelId: 'default' }
       );
       return res.json({
         success: true,
