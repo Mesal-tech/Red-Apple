@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "584160197738",
+    "project_id": "video-chat-app-72c8c",
+    "storage_bucket": "video-chat-app-72c8c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:584160197738:android:b8b9f5b5cf4d5b4f7dde13",
+        "android_client_info": {
+          "package_name": "com.archer.redapple"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDzPU410vOTy7DeNU4nMtszym65dVx93Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
