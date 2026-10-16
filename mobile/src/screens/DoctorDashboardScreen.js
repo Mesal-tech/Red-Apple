@@ -23,6 +23,7 @@ import StreamVideoCallModal from './StreamVideoCallModal';
 import * as telemedService from '../services/telemedicineService';
 import WebSidebar from '../components/WebSidebar';
 import AppBottomSheet from '../components/AppBottomSheet';
+import { DoctorDashboardSkeleton } from '../components/DoctorCareSkeleton';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'web' ? 6 : (StatusBar.currentHeight || 40);
@@ -344,10 +345,7 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
         }
       >
         {isLoading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={THEME.primary} />
-            <Text style={styles.loadingText}>Syncing clinical telemedicine feed...</Text>
-          </View>
+          <DoctorDashboardSkeleton />
         ) : activeTab === 'queue' ? (
           /* ======================================================================= */
           /* TAB 1: PATIENT QUEUE & TODAY'S SCHEDULE                                 */

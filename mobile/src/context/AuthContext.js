@@ -23,10 +23,6 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  /**
-   * Check for existing session on app startup.
-   * Strictly verifies token validity against backend (zero bypass).
-   */
   const checkInitialSession = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -38,14 +34,12 @@ export function AuthProvider({ children }) {
           setUser(session.user);
         }
 
-        // Verify active token against backend
         try {
           const freshUser = await fetchCurrentUser();
           if (freshUser) {
             setUser(freshUser);
           }
         } catch (verifyErr) {
-          // Only refresh or logout if the server explicitly rejected the token (401)
           if (verifyErr?.status === 401) {
             if (session.refreshToken) {
               try {
@@ -56,7 +50,6 @@ export function AuthProvider({ children }) {
                   setUser(freshUser);
                 }
               } catch (refreshErr) {
-                console.warn('[AuthContext] Session refresh failed, logging out:', refreshErr.message);
                 await logoutUser();
                 setUser(null);
                 setAccessToken(null);
@@ -66,9 +59,6 @@ export function AuthProvider({ children }) {
               setUser(null);
               setAccessToken(null);
             }
-          } else {
-            // Backend offline or unreachable: preserve stored user session for offline continuity
-            console.warn('[AuthContext] Backend unreachable on startup, using offline cached user session:', verifyErr.message);
           }
         }
       }

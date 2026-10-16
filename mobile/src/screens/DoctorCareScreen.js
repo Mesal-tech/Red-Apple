@@ -31,6 +31,12 @@ import LeafletClinicsMap from '../components/LeafletClinicsMap';
 import DoctorAppointmentCalendar from '../components/DoctorAppointmentCalendar';
 import { LinearGradient } from 'expo-linear-gradient';
 import notificationService from '../services/notificationService';
+import {
+  UpcomingCardSkeleton,
+  SpecialistsListSkeleton,
+  SlotsGridSkeleton,
+  DoctorSeeAllSkeleton,
+} from '../components/DoctorCareSkeleton';
 
 const getClinicPhoto = (clinic) => {
   if (clinic?.photo_url) return clinic.photo_url;
@@ -591,7 +597,9 @@ export default function DoctorCareScreen({
           </View>
 
           {/* UPCOMING CARD (ACTIVE BOOKING OR EMPTY STATE) */}
-          {displayedUpcoming ? (
+          {isLoading ? (
+            <UpcomingCardSkeleton />
+          ) : displayedUpcoming ? (
             <View style={styles.upcomingCard}>
               {/* Top Doctor Profile Row */}
               <View style={styles.upcomingTopRow}>
@@ -712,19 +720,19 @@ export default function DoctorCareScreen({
           </View>
 
           {/* RECENT WHITE CARD */}
-          <View style={styles.recentWhiteCard}>
-            {displayedRecentList.length === 0 ? (
+          {isLoading ? (
+            <SpecialistsListSkeleton count={3} />
+          ) : displayedRecentList.length === 0 ? (
+            <View style={styles.recentWhiteCard}>
               <View style={styles.emptyRecentWrap}>
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#111827" />
-                ) : (
-                  <Text style={styles.emptyRecentText}>
-                    No specialists available at the moment. Pull down to refresh.
-                  </Text>
-                )}
+                <Text style={styles.emptyRecentText}>
+                  No specialists available at the moment. Pull down to refresh.
+                </Text>
               </View>
-            ) : (
-              displayedRecentList.map((item, idx) => (
+            </View>
+          ) : (
+            <View style={styles.recentWhiteCard}>
+              {displayedRecentList.map((item, idx) => (
                 <View key={item.id || idx}>
                   <TouchableOpacity
                     activeOpacity={0.75}
@@ -756,9 +764,9 @@ export default function DoctorCareScreen({
                     <View style={styles.recentDivider} />
                   )}
                 </View>
-              ))
-            )}
-          </View>
+              ))}
+            </View>
+          )}
 
           {/* BOTTOM PROMO CARD */}
           <TouchableOpacity
@@ -834,74 +842,87 @@ export default function DoctorCareScreen({
             contentContainerStyle={styles.seeAllScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {filteredAllDoctors.map((doc) => (
-              <TouchableOpacity
-                key={doc.doctor_id}
-                activeOpacity={0.85}
-                style={styles.horizontalDoctorCard}
-                onPress={() => {
-                  setShowSeeAll(false);
-                  handleOpenBooking(doc);
-                }}
-              >
-                <View style={styles.horizontalPhotoWrap}>
-                  <Image
-                    source={{
-                      uri:
-                        doc.photo_url ||
-                        'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-                    }}
-                    style={styles.horizontalPhoto}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.horizontalRatingPill}>
-                    <Ionicons name="star" size={10} color="#DC2626" />
-                    <Text style={styles.horizontalRatingScore}>
-                      {Number(doc.rating || 5.0).toFixed(1)}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.horizontalContentCol}>
-                  <View style={styles.horizontalNameHeader}>
-                    <View style={{ flex: 1, marginRight: 6 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Text style={styles.horizontalDoctorName} numberOfLines={1}>
-                          {doc.name}
-                        </Text>
-                        <Ionicons name="checkmark-circle" size={15} color="#059669" />
-                      </View>
-                      <Text style={styles.horizontalDoctorSpec} numberOfLines={1}>
-                        {doc.specialty}
+            {isLoading ? (
+              <DoctorSeeAllSkeleton count={4} />
+            ) : filteredAllDoctors.length === 0 ? (
+              <View style={styles.emptyRecentWrap}>
+                <Ionicons name="medical-outline" size={42} color="#9CA3AF" />
+                <Text style={[styles.emptyRecentText, { marginTop: 10 }]}>
+                  {seeAllSearchQuery
+                    ? `No specialists found matching "${seeAllSearchQuery}".`
+                    : 'No specialists listed at the moment. Pull down to refresh.'}
+                </Text>
+              </View>
+            ) : (
+              filteredAllDoctors.map((doc) => (
+                <TouchableOpacity
+                  key={doc.doctor_id}
+                  activeOpacity={0.85}
+                  style={styles.horizontalDoctorCard}
+                  onPress={() => {
+                    setShowSeeAll(false);
+                    handleOpenBooking(doc);
+                  }}
+                >
+                  <View style={styles.horizontalPhotoWrap}>
+                    <Image
+                      source={{
+                        uri:
+                          doc.photo_url ||
+                          'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
+                      }}
+                      style={styles.horizontalPhoto}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.horizontalRatingPill}>
+                      <Ionicons name="star" size={10} color="#DC2626" />
+                      <Text style={styles.horizontalRatingScore}>
+                        {Number(doc.rating || 5.0).toFixed(1)}
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={styles.horizontalHospitalText} numberOfLines={1}>
-                    {doc.hospital_affiliation || 'Red Apple Telemedicine Clinic'}
-                  </Text>
+                  <View style={styles.horizontalContentCol}>
+                    <View style={styles.horizontalNameHeader}>
+                      <View style={{ flex: 1, marginRight: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={styles.horizontalDoctorName} numberOfLines={1}>
+                            {doc.name}
+                          </Text>
+                          <Ionicons name="checkmark-circle" size={15} color="#059669" />
+                        </View>
+                        <Text style={styles.horizontalDoctorSpec} numberOfLines={1}>
+                          {doc.specialty}
+                        </Text>
+                      </View>
+                    </View>
 
-                  <View style={styles.horizontalFooterRow}>
-                    <Text style={styles.horizontalFeeText}>
-                      ₦{Number(doc.fee_ngn || 0).toLocaleString()}
-                      <Text style={styles.horizontalFeeSubText}> / session</Text>
+                    <Text style={styles.horizontalHospitalText} numberOfLines={1}>
+                      {doc.hospital_affiliation || 'Red Apple Telemedicine Clinic'}
                     </Text>
 
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={styles.horizontalBookBtn}
-                      onPress={() => {
-                        setShowSeeAll(false);
-                        handleOpenBooking(doc);
-                      }}
-                    >
-                      <Text style={styles.horizontalBookBtnText}>View Profile</Text>
-                      <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 3 }} />
-                    </TouchableOpacity>
+                    <View style={styles.horizontalFooterRow}>
+                      <Text style={styles.horizontalFeeText}>
+                        ₦{Number(doc.fee_ngn || 0).toLocaleString()}
+                        <Text style={styles.horizontalFeeSubText}> / session</Text>
+                      </Text>
+
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={styles.horizontalBookBtn}
+                        onPress={() => {
+                          setShowSeeAll(false);
+                          handleOpenBooking(doc);
+                        }}
+                      >
+                        <Text style={styles.horizontalBookBtnText}>View Profile</Text>
+                        <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 3 }} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              ))
+            )}
 
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -1121,10 +1142,7 @@ export default function DoctorCareScreen({
 
             <Text style={[styles.profileSectionTitle, { marginTop: 18 }]}>Available Time Slots</Text>
             {isLoadingSlots ? (
-              <View style={styles.slotsLoadingWrap}>
-                <ActivityIndicator size="small" color="#DC2626" />
-                <Text style={styles.slotsLoadingText}>Checking doctor availability...</Text>
-              </View>
+              <SlotsGridSkeleton count={6} />
             ) : doctorSlots.length === 0 ? (
               <View style={styles.noSlotsWrap}>
                 <Ionicons name="calendar-outline" size={24} color="#9CA3AF" />
@@ -1959,6 +1977,69 @@ const styles = StyleSheet.create({
   },
 
   /* -------------------------------------------------------------------------- */
+  /* EMPTY UPCOMING CARD                                                        */
+  /* -------------------------------------------------------------------------- */
+  emptyUpcomingCard: {
+    backgroundColor: '#E8D7F9',
+    borderRadius: 28,
+    padding: 20,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  emptyUpcomingTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emptyUpcomingIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  emptyUpcomingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    letterSpacing: -0.2,
+  },
+  emptyUpcomingSub: {
+    fontSize: 13,
+    color: '#555160',
+    marginTop: 4,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  emptyUpcomingBookBtn: {
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: '#000000',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  emptyUpcomingBookBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  /* -------------------------------------------------------------------------- */
   /* RECENT WHITE CARD                                                          */
   /* -------------------------------------------------------------------------- */
   recentWhiteCard: {
@@ -1971,6 +2052,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
+  },
+  emptyRecentWrap: {
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyRecentText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   recentDoctorItem: {
     flexDirection: 'row',
