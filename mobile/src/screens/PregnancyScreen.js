@@ -394,14 +394,7 @@ export default function PregnancyScreen({
           if (onOpenDoctorPage) {
             onOpenDoctorPage();
           } else if (onBookDoctor) {
-            onBookDoctor({
-              name: 'Dr. Chioma Nwachukwu',
-              specialty: 'Obstetrician & Gynecologist',
-              experience: '12 Yrs Exp',
-              nextAvailable: 'Today, 10:00 AM',
-              fee: '₦15,000',
-              avatarBg: '#008080',
-            });
+            onBookDoctor();
           }
         }}
       >
@@ -753,7 +746,7 @@ const styles = StyleSheet.create({
   },
   calAiDayCol: {
     alignItems: 'center',
-    width: (SCREEN_WIDTH - 32) / 7,
+    width: `${100 / 7}%`,
   },
   calAiCircle: {
     width: 36,

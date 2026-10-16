@@ -8,6 +8,7 @@ import {
   ScrollView,
   RefreshControl,
   Dimensions,
+  useWindowDimensions,
   Modal,
   Image,
   Platform,
@@ -37,6 +38,7 @@ import cycleService, {
   computeLocalFertilityPrediction,
   computeLocalCycleStats,
 } from '../services/cycleService';
+import streakService from '../services/streakService';
 import FunctionalCycleRing from '../components/FunctionalCycleRing';
 import CycleLengthChart from '../components/CycleLengthChart';
 import AdditionalAnalyticsMetrics from '../components/AdditionalAnalyticsMetrics';
@@ -44,9 +46,10 @@ import MiniCalendarDatePicker from '../components/MiniCalendarDatePicker';
 import AIAssistantDrawer from '../components/AIAssistantDrawer';
 import { getUserBookings } from '../services/telemedicineService';
 import notificationService from '../services/notificationService';
+import WebSidebar from '../components/WebSidebar';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const STATUSBAR_HEIGHT = StatusBar.currentHeight || 38;
+const STATUSBAR_HEIGHT = Platform.OS === 'web' ? 6 : (StatusBar.currentHeight || 38);
 
 function TopProfileHeader({
   user,
@@ -124,6 +127,9 @@ export default function HomeScreen({
   onRedoSetup,
 }) {
   const { user, updateProfile } = useAuth();
+  const { width: windowWidth } = useWindowDimensions();
+  const isLargeScreen = (Platform.OS === 'web' && windowWidth >= 768) || windowWidth >= 1024;
+  const screenWidth = Platform.OS === 'web' ? Math.min(windowWidth, 880) : windowWidth;
 
   const isDoctorAccount =
     user?.role === 'doctor' ||
@@ -396,6 +402,7 @@ export default function HomeScreen({
 
   useEffect(() => {
     loadCycleData();
+    streakService.recordStreakActivity({ activityType: 'app_open' }).catch(() => {});
   }, [user?.id, healthProfile?.lastPeriodDate, user?.health_profile?.lastPeriodDate]);
 
   const displayCurrentDay = cyclePrediction.currentCycleDay || 1;
@@ -573,8 +580,9 @@ export default function HomeScreen({
   const scrollViewRef = useRef(null);
 
   const handleScroll = (event) => {
+    if (isLargeScreen) return;
     const xOffset = event.nativeEvent.contentOffset.x;
-    const pageIndex = Math.round(xOffset / SCREEN_WIDTH);
+    const pageIndex = Math.round(xOffset / screenWidth);
     if (pageIndex >= 0 && pageIndex <= 2 && pageIndex !== currentPage) {
       setCurrentPage(pageIndex);
     }
@@ -582,11 +590,12 @@ export default function HomeScreen({
 
   const scrollToPage = (pageIndex) => {
     setCurrentPage(pageIndex);
-    scrollViewRef.current?.scrollTo({ x: pageIndex * SCREEN_WIDTH, animated: true });
+    if (!isLargeScreen) {
+      scrollViewRef.current?.scrollTo({ x: pageIndex * screenWidth, animated: true });
+    }
   };
 
-  const handleBookDoctorFromHome = (doc) => {
-    setSelectedDoctorForBooking(doc);
+  const handleBookDoctorFromHome = () => {
     scrollToPage(2);
   };
 
@@ -873,33 +882,53 @@ export default function HomeScreen({
     setSelectedArticle(null);
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+  const renderPage0 = () => {
+    if (isLargeScreen) {
+      return (
+        <View style={styles.desktopPageContent}>
+          {/* DESKTOP TOP BAR (Clean title & actions, no duplicate profile) */}
+          <View style={styles.desktopTopBar}>
+            <View>
+              <Text style={styles.desktopGreeting}>
+                Welcome back, <Text style={{ color: colors.primary }}>{greetingDisplayName}</Text> 👋
+              </Text>
+              <Text style={styles.desktopDateSubtitle}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} · {isPregnancyMode ? 'Pregnancy Tracking' : isPostmenopauseMode ? 'Menopause Care' : `Cycle Day ${displayCurrentDay || 1} of ${displayCycleLength || 28}`}
+              </Text>
+            </View>
 
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled
-        nestedScrollEnabled={true}
-        directionalLockEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handleScroll}
-        contentOffset={{ x: 0, y: 0 }}
-        style={{ flex: 1 }}
-      >
-        {/* PAGE 0: MERGED HOMEPAGE & MODE PAGE (CYCLE / PREGNANCY / POSTMENOPAUSE) */}
-        <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
-          <TopProfileHeader
-            user={user}
-            isDoctorAccount={isDoctorAccount}
-            userName={userName}
-            userSubtitle={userSubtitle}
-            onOpenProfile={() => setShowProfileModal(true)}
-            onOpenSettings={() => setShowSettingsModal(true)}
-            onOpenNotifications={handleOpenNotifications}
-            unreadNotificationsCount={unreadNotificationsCount}
-          />
+            <View style={styles.desktopTopBarActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.desktopLogBtn}
+                onPress={() => setShowDailyLogDrawer(true)}
+              >
+                <Ionicons name="sparkles" size={15} color="#FFFFFF" />
+                <Text style={styles.desktopLogBtnText}>Log Today & AI</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.desktopIconBtn}
+                onPress={handleOpenNotifications}
+              >
+                <Ionicons name="notifications-outline" size={19} color="#1E293B" />
+                {unreadNotificationsCount > 0 && (
+                  <View style={styles.desktopNotifBadge}>
+                    <Text style={styles.desktopNotifBadgeText}>{unreadNotificationsCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.desktopIconBtn}
+                onPress={() => setShowSettingsModal(true)}
+              >
+                <Ionicons name="settings-outline" size={19} color="#1E293B" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {isPregnancyMode ? (
             <PregnancyScreen
@@ -923,7 +952,8 @@ export default function HomeScreen({
             />
           ) : (
             <ScrollView
-              contentContainerStyle={styles.pageScrollContentDark}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.desktopGridContent}
               showsVerticalScrollIndicator={false}
               refreshControl={
                 <RefreshControl
@@ -935,213 +965,488 @@ export default function HomeScreen({
                 />
               }
             >
-              <View style={styles.welcomeSection}>
-                <Text style={styles.welcomeGreeting}>
-                  Welcome, <Text style={styles.welcomeNameText}>{greetingDisplayName}</Text> 👋
-                </Text>
-                <Text style={styles.welcomeSubtitle}>
-                  Here's your cycle & health overview for today
-                </Text>
-              </View>
+              <View style={styles.desktopGridRow}>
+                {/* LEFT COLUMN: HERO CYCLE CARD + PREDICTIONS TIMELINE */}
+                <View style={styles.desktopGridColLeft}>
+                  {/* Hero Functional Ring Card */}
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    style={styles.desktopHeroCard}
+                    onPress={() => setShowCycleCalendarModal(true)}
+                  >
+                    <View style={styles.desktopHeroHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={styles.activeDotPulse} />
+                        <Text style={styles.desktopHeroBadge}>ACTIVE CYCLE STATUS</Text>
+                      </View>
+                      <Text style={styles.desktopHeroCalendarLink}>View Full Calendar →</Text>
+                    </View>
 
-              {/* HERO FEATURED WHITE CARD - OPENS CYCLE CALENDAR ON TAP */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.heroCardContainer}
-                onPress={() => setShowCycleCalendarModal(true)}
-              >
-                <View style={styles.heroWhiteCard}>
-                  {/* Functional Ring & Cycle Details */}
-                  <View style={styles.heroRingRow}>
-                    <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
-                    <View style={styles.heroMetricsCol}>
-                      <View style={styles.metricItemRow}>
-                        <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
-                        <Text style={styles.metricItemText}>
-                          Next period <Text style={{ fontWeight: '800', color: '#111827' }}>{nextPeriodFormatted}</Text>
-                        </Text>
+                    <View style={styles.desktopHeroRingRow}>
+                      <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
+                      <View style={styles.desktopMetricsList}>
+                        <View style={styles.desktopMetricRow}>
+                          <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
+                          <Text style={styles.desktopMetricTitle}>Next period:</Text>
+                          <Text style={styles.desktopMetricVal}>{nextPeriodFormatted}</Text>
+                        </View>
+                        <View style={styles.desktopMetricRow}>
+                          <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
+                          <Text style={styles.desktopMetricTitle}>Cycle length:</Text>
+                          <Text style={styles.desktopMetricVal}>{displayCycleLength} days (Regular)</Text>
+                        </View>
+                        <View style={styles.desktopMetricRow}>
+                          <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
+                          <Text style={styles.desktopMetricTitle}>Fertility phase:</Text>
+                          <Text style={styles.desktopMetricVal}>{ovulationLabel}</Text>
+                        </View>
                       </View>
-                      <View style={styles.metricItemRow}>
-                        <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
-                        <Text style={styles.metricItemText}>Cycle length: {displayCycleLength} days</Text>
-                      </View>
-                      <View style={styles.metricItemRow}>
-                        <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
-                        <Text style={styles.metricItemText}>{ovulationLabel}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Cycle Forecast Card */}
+                  <View style={styles.desktopForecastCard}>
+                    <Text style={styles.desktopCardHeading}>CYCLE FORECAST & TIMELINE</Text>
+                    <View style={styles.upcomingPredictionCardClean}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
+                        <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
                       </View>
                     </View>
                   </View>
                 </View>
-              </TouchableOpacity>
 
-              {/* FEATURED CARD: TALK TO A DOCTOR */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.doctorFeaturedCard}
-                onPress={() => scrollToPage(2)}
-              >
-                <View style={styles.doctorFeaturedTopRow}>
-                  <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
-                  <View style={styles.doctorActionPill}>
-                    <Text style={styles.doctorActionPillText}>Consult</Text>
-                    <Ionicons name="arrow-forward" size={13} color="#008080" />
-                  </View>
-                </View>
-                <Text style={styles.doctorFeaturedSubtitle}>
-                  Book a video consultation with a certified women's health specialist.
-                </Text>
-              </TouchableOpacity>
-
-              {/* 2-COLUMN BENTO GRID: PREGNANCY & POSTMENOPAUSE */}
-              <View style={styles.bentoSectionGrid}>
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  style={styles.bentoWhiteCard}
-                  onPress={() => openModeChangeOnboarding('pregnancy')}
-                >
-                  <Text style={styles.bentoCardHeading}>Pregnancy</Text>
-                  <Text style={styles.bentoCardSub}>Baby growth & tracker</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  style={styles.bentoWhiteCard}
-                  onPress={() => openModeChangeOnboarding('postmenopause')}
-                >
-                  <Text style={styles.bentoCardHeading}>Menopause</Text>
-                  <Text style={styles.bentoCardSub}>Hormones & vitality</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* CYCLE FORECAST SECTION */}
-              <View style={styles.predictionsContainer}>
-                <Text style={styles.sectionHeaderLabelDark}>CYCLE FORECAST</Text>
-                <View style={{ gap: 12 }}>
-                  <View style={styles.upcomingPredictionCardClean}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
-                      <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
+                {/* RIGHT COLUMN: AI ASSISTANT + TELEMEDICINE + LIFE STAGES */}
+                <View style={styles.desktopGridColRight}>
+                  {/* AI Health Companion Card */}
+                  <View style={styles.desktopAiCard}>
+                    <View style={styles.desktopAiHeader}>
+                      <View style={styles.desktopAiIconWrap}>
+                        <Ionicons name="sparkles" size={16} color="#DC2626" />
+                      </View>
+                      <Text style={styles.desktopAiTitle}>Dr. Apple AI Companion</Text>
+                      <View style={styles.desktopOnlinePill}>
+                        <View style={styles.desktopGreenDot} />
+                        <Text style={styles.desktopOnlineText}>Ready</Text>
+                      </View>
                     </View>
+                    <Text style={styles.desktopAiDesc}>
+                      Ask questions about cycle symptoms, hormonal health, or log your flow today.
+                    </Text>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.desktopAiBtn}
+                      onPress={() => setShowDailyLogDrawer(true)}
+                    >
+                      <Text style={styles.desktopAiBtnText}>Open AI Assistant & Log</Text>
+                      <Ionicons name="arrow-forward" size={13} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Telemedicine Spotlight */}
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    style={styles.desktopDoctorCard}
+                    onPress={() => scrollToPage(2)}
+                  >
+                    <View style={styles.desktopDoctorHeader}>
+                      <View style={styles.desktopDoctorIconWrap}>
+                        <Ionicons name="videocam" size={18} color="#059669" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.desktopDoctorTitle}>Talk to an OB-GYN</Text>
+                        <Text style={styles.desktopDoctorSub}>Certified specialists online now</Text>
+                      </View>
+                      <View style={styles.doctorActionPill}>
+                        <Text style={styles.doctorActionPillText}>Consult</Text>
+                        <Ionicons name="arrow-forward" size={13} color="#008080" />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Life Stages Bento: Pregnancy & Menopause */}
+                  <View style={styles.desktopModesRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.88}
+                      style={styles.desktopModeCard}
+                      onPress={() => openModeChangeOnboarding('pregnancy')}
+                    >
+                      <Text style={styles.desktopModeEmoji}>🤰</Text>
+                      <Text style={styles.desktopModeHeading}>Pregnancy</Text>
+                      <Text style={styles.desktopModeSub}>Baby tracker</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.88}
+                      style={styles.desktopModeCard}
+                      onPress={() => openModeChangeOnboarding('postmenopause')}
+                    >
+                      <Text style={styles.desktopModeEmoji}>🌿</Text>
+                      <Text style={styles.desktopModeHeading}>Menopause</Text>
+                      <Text style={styles.desktopModeSub}>Hormone care</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
-
-
-
-              <View style={{ height: 100 }} />
             </ScrollView>
           )}
         </View>
+      );
+    }
 
-        {/* PAGE 1: LEARN & INSIGHTS */}
-        <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
-          <TopProfileHeader
-            user={user}
-            isDoctorAccount={isDoctorAccount}
-            userName={userName}
-            userSubtitle={userSubtitle}
-            onOpenProfile={() => setShowProfileModal(true)}
-            onOpenSettings={() => setShowSettingsModal(true)}
-            onOpenNotifications={handleOpenNotifications}
-            unreadNotificationsCount={unreadNotificationsCount}
-          />
+    // Mobile View (< 768px)
+    return (
+      <View style={[styles.pageWidth, { width: screenWidth, backgroundColor: '#FFFFFF' }]}>
+        <TopProfileHeader
+          user={user}
+          isDoctorAccount={isDoctorAccount}
+          userName={userName}
+          userSubtitle={userSubtitle}
+          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onOpenNotifications={handleOpenNotifications}
+          unreadNotificationsCount={unreadNotificationsCount}
+        />
 
-          <LearnScreen openArticleDetails={openArticleDetails} />
-        </View>
-
-        {/* PAGE 2: DOCTOR CARE / TELEMEDICINE */}
-        <View style={[styles.pageWidth, { backgroundColor: '#FFFFFF' }]}>
-          <DoctorCareScreen
-            initialDoctor={selectedDoctorForBooking}
+        {isPregnancyMode ? (
+          <PregnancyScreen
+            dueDate={pregnancyDueDate}
+            conceptionDate={pregnancyConceptionDate}
+            currentWeek={16}
+            greetingDisplayName={greetingDisplayName}
+            weekDays={weekDays}
+            onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
             onBookDoctor={handleBookDoctorFromHome}
-            onOpenProfile={() => setShowProfileModal(true)}
-            onOpenSettings={() => setShowSettingsModal(true)}
-            onOpenNotifications={handleOpenNotifications}
-            unreadNotificationsCount={unreadNotificationsCount}
-            onNavigateHome={() => scrollToPage(0)}
+            onOpenDoctorPage={() => scrollToPage(2)}
           />
-        </View>
-      </ScrollView>
-
-      {/* PERSISTENT BOTTOM NAVIGATION BAR WITH ROUNDED PARENT CONTAINER */}
-      <View style={styles.bottomBarParentContainer}>
-        <View style={styles.persistentBottomBar}>
-          {/* TAB 1: HOMEPAGE */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.bottomBarTab}
-            onPress={() => scrollToPage(0)}
+        ) : isPostmenopauseMode ? (
+          <PostmenopauseScreen
+            greetingDisplayName={greetingDisplayName}
+            weekDays={weekDays}
+            onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
+            onOpenSetupWizard={(stage) => openModeChangeOnboarding(stage || 'postmenopause')}
+            onBookDoctor={handleBookDoctorFromHome}
+            onOpenDoctorPage={() => scrollToPage(2)}
+          />
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.pageScrollContentDark}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.primary}
+                colors={[colors.primary, '#FA4A14']}
+                progressBackgroundColor="#FFFFFF"
+              />
+            }
           >
-            <Ionicons
-              name={currentPage === 0 ? "home" : "home-outline"}
-              size={22}
-              color={currentPage === 0 ? colors.primary : "#8E8E93"}
-            />
-            <Text
-              style={[
-                styles.bottomBarTabLabel,
-                currentPage === 0 && styles.bottomBarTabLabelActive,
-              ]}
-            >
-              Home
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.welcomeSection}>
+              <Text style={styles.welcomeGreeting}>
+                Welcome, <Text style={styles.welcomeNameText}>{greetingDisplayName}</Text> 👋
+              </Text>
+              <Text style={styles.welcomeSubtitle}>
+                Here's your cycle & health overview for today
+              </Text>
+            </View>
 
-          {/* TAB 2: CENTER AI AGENT ASSISTANT & SYMPTOM LOG */}
-          <View style={styles.bottomBarCenterBtnWrapper}>
             <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.bottomBarCenterBtn}
-              onPress={() => setShowDailyLogDrawer(true)}
-              accessibilityLabel="AI Health Companion"
+              activeOpacity={0.88}
+              style={styles.heroCardContainer}
+              onPress={() => setShowCycleCalendarModal(true)}
             >
-              <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+              <View style={styles.heroWhiteCard}>
+                <View style={styles.heroRingRow}>
+                  <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
+                  <View style={styles.heroMetricsCol}>
+                    <View style={styles.metricItemRow}>
+                      <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
+                      <Text style={styles.metricItemText}>
+                        Next period <Text style={{ fontWeight: '800', color: '#111827' }}>{nextPeriodFormatted}</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.metricItemRow}>
+                      <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
+                      <Text style={styles.metricItemText}>Cycle length: {displayCycleLength} days</Text>
+                    </View>
+                    <View style={styles.metricItemRow}>
+                      <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
+                      <Text style={styles.metricItemText}>{ovulationLabel}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.88}
+              style={styles.doctorFeaturedCard}
+              onPress={() => scrollToPage(2)}
+            >
+              <View style={styles.doctorFeaturedTopRow}>
+                <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
+                <View style={styles.doctorActionPill}>
+                  <Text style={styles.doctorActionPillText}>Consult</Text>
+                  <Ionicons name="arrow-forward" size={13} color="#008080" />
+                </View>
+              </View>
+              <Text style={styles.doctorFeaturedSubtitle}>
+                Book a video consultation with a certified women's health specialist.
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.bentoSectionGrid}>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={styles.bentoWhiteCard}
+                onPress={() => openModeChangeOnboarding('pregnancy')}
+              >
+                <Text style={styles.bentoCardHeading}>Pregnancy</Text>
+                <Text style={styles.bentoCardSub}>Baby growth & tracker</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={styles.bentoWhiteCard}
+                onPress={() => openModeChangeOnboarding('postmenopause')}
+              >
+                <Text style={styles.bentoCardHeading}>Menopause</Text>
+                <Text style={styles.bentoCardSub}>Hormones & vitality</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.predictionsContainer}>
+              <Text style={styles.sectionHeaderLabelDark}>CYCLE FORECAST</Text>
+              <View style={{ gap: 12 }}>
+                <View style={styles.upcomingPredictionCardClean}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
+                    <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        )}
+      </View>
+    );
+  };
+
+  const renderPage1 = () => (
+    <View style={isLargeScreen ? styles.desktopPageContent : [styles.pageWidth, { width: screenWidth, backgroundColor: '#FFFFFF' }]}>
+      {isLargeScreen ? (
+        <View style={styles.desktopTopBar}>
+          <View>
+            <Text style={styles.desktopGreeting}>Learn & Health Library</Text>
+            <Text style={styles.desktopDateSubtitle}>Curated, evidence-based articles by certified OB-GYNs</Text>
+          </View>
+          <View style={styles.desktopTopBarActions}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={styles.desktopIconBtn}
+              onPress={handleOpenNotifications}
+            >
+              <Ionicons name="notifications-outline" size={19} color="#1E293B" />
+              {unreadNotificationsCount > 0 && (
+                <View style={styles.desktopNotifBadge}>
+                  <Text style={styles.desktopNotifBadgeText}>{unreadNotificationsCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={styles.desktopIconBtn}
+              onPress={() => setShowSettingsModal(true)}
+            >
+              <Ionicons name="settings-outline" size={19} color="#1E293B" />
             </TouchableOpacity>
           </View>
-
-          {/* TAB 3: LEARN */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.bottomBarTab}
-            onPress={() => scrollToPage(1)}
-          >
-            <Ionicons
-              name={currentPage === 1 ? "book" : "book-outline"}
-              size={22}
-              color={currentPage === 1 ? colors.primary : "#8E8E93"}
-            />
-            <Text
-              style={[
-                styles.bottomBarTabLabel,
-                currentPage === 1 && styles.bottomBarTabLabelActive,
-              ]}
-            >
-              Learn
-            </Text>
-          </TouchableOpacity>
-
-          {/* TAB 4: TELEMEDICINE */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.bottomBarTab}
-            onPress={() => scrollToPage(2)}
-          >
-            <Ionicons
-              name={currentPage === 2 ? "videocam" : "videocam-outline"}
-              size={22}
-              color={currentPage === 2 ? colors.primary : "#8E8E93"}
-            />
-            <Text
-              style={[
-                styles.bottomBarTabLabel,
-                currentPage === 2 && styles.bottomBarTabLabelActive,
-              ]}
-            >
-              Telemed
-            </Text>
-          </TouchableOpacity>
         </View>
+      ) : (
+        <TopProfileHeader
+          user={user}
+          isDoctorAccount={isDoctorAccount}
+          userName={userName}
+          userSubtitle={userSubtitle}
+          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onOpenNotifications={handleOpenNotifications}
+          unreadNotificationsCount={unreadNotificationsCount}
+        />
+      )}
+      <View style={{ flex: 1 }}>
+        <LearnScreen openArticleDetails={openArticleDetails} />
       </View>
+    </View>
+  );
+
+  const renderPage2 = () => (
+    <View style={isLargeScreen ? styles.desktopPageContent : [styles.pageWidth, { width: screenWidth, backgroundColor: '#FFFFFF' }]}>
+      <DoctorCareScreen
+        initialDoctor={selectedDoctorForBooking}
+        onBookDoctor={handleBookDoctorFromHome}
+        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenNotifications={handleOpenNotifications}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onNavigateHome={() => scrollToPage(0)}
+      />
+    </View>
+  );
+
+  return (
+    <View style={[styles.container, isLargeScreen && styles.desktopContainer]}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+
+      {/* WEB SIDEBAR ON LARGER SCREENS (PC / WEB) */}
+      {isLargeScreen && (
+        <WebSidebar
+          variant="patient"
+          currentPage={currentPage}
+          onNavigateTab={(index) => scrollToPage(index)}
+          onOpenAiCompanion={() => setShowDailyLogDrawer(true)}
+          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onOpenNotifications={handleOpenNotifications}
+          unreadNotificationsCount={unreadNotificationsCount}
+          activeMode={activeHealthMode}
+          onSwitchMode={openModeChangeOnboarding}
+          user={user}
+          onSignOut={onSignOut}
+          isDoctor={isDoctorAccount}
+        />
+      )}
+
+      {/* MAIN CONTENT AREA */}
+      {isLargeScreen ? (
+        <View style={styles.desktopContentArea}>
+          <View
+            style={[
+              styles.desktopPagePane,
+              currentPage === 0 ? styles.desktopPagePaneActive : styles.desktopPagePaneHidden,
+            ]}
+          >
+            {renderPage0()}
+          </View>
+          <View
+            style={[
+              styles.desktopPagePane,
+              currentPage === 1 ? styles.desktopPagePaneActive : styles.desktopPagePaneHidden,
+            ]}
+          >
+            {renderPage1()}
+          </View>
+          <View
+            style={[
+              styles.desktopPagePane,
+              currentPage === 2 ? styles.desktopPagePaneActive : styles.desktopPagePaneHidden,
+            ]}
+          >
+            {renderPage2()}
+          </View>
+        </View>
+      ) : (
+        <ScrollView
+          ref={scrollViewRef}
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled={true}
+          directionalLockEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScroll}
+          contentOffset={{ x: 0, y: 0 }}
+          style={{ flex: 1 }}
+        >
+          {renderPage0()}
+          {renderPage1()}
+          {renderPage2()}
+        </ScrollView>
+      )}
+
+      {/* PERSISTENT BOTTOM NAVIGATION BAR: Only on mobile/smaller viewports */}
+      {!isLargeScreen && (
+        <View style={styles.bottomBarParentContainer}>
+          <View style={styles.persistentBottomBar}>
+            {/* TAB 1: HOMEPAGE */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.bottomBarTab}
+              onPress={() => scrollToPage(0)}
+            >
+              <Ionicons
+                name={currentPage === 0 ? "home" : "home-outline"}
+                size={22}
+                color={currentPage === 0 ? colors.primary : "#8E8E93"}
+              />
+              <Text
+                style={[
+                  styles.bottomBarTabLabel,
+                  currentPage === 0 && styles.bottomBarTabLabelActive,
+                ]}
+              >
+                Home
+              </Text>
+            </TouchableOpacity>
+
+            {/* TAB 2: CENTER AI AGENT ASSISTANT & SYMPTOM LOG */}
+            <View style={styles.bottomBarCenterBtnWrapper}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.bottomBarCenterBtn}
+                onPress={() => setShowDailyLogDrawer(true)}
+                accessibilityLabel="AI Health Companion"
+              >
+                <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* TAB 3: LEARN */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.bottomBarTab}
+              onPress={() => scrollToPage(1)}
+            >
+              <Ionicons
+                name={currentPage === 1 ? "book" : "book-outline"}
+                size={22}
+                color={currentPage === 1 ? colors.primary : "#8E8E93"}
+              />
+              <Text
+                style={[
+                  styles.bottomBarTabLabel,
+                  currentPage === 1 && styles.bottomBarTabLabelActive,
+                ]}
+              >
+                Learn
+              </Text>
+            </TouchableOpacity>
+
+            {/* TAB 4: TELEMEDICINE */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.bottomBarTab}
+              onPress={() => scrollToPage(2)}
+            >
+              <Ionicons
+                name={currentPage === 2 ? "videocam" : "videocam-outline"}
+                size={22}
+                color={currentPage === 2 ? colors.primary : "#8E8E93"}
+              />
+              <Text
+                style={[
+                  styles.bottomBarTabLabel,
+                  currentPage === 2 && styles.bottomBarTabLabelActive,
+                ]}
+              >
+                Telemed
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <Modal
         visible={showNotificationsModal}
@@ -2022,12 +2327,354 @@ export default function HomeScreen({
 }
 
 const styles = StyleSheet.create({
+  /* Desktop Web Layout Styles (Sidebar + Main Content Area) */
+  desktopContainer: {
+    flexDirection: 'row',
+    height: '100%',
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    overflow: 'hidden',
+  },
+  desktopContentArea: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  desktopPagePane: {
+    width: '100%',
+    height: '100%',
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  desktopPagePaneActive: {
+    display: 'flex',
+  },
+  desktopPagePaneHidden: {
+    display: 'none',
+  },
+  desktopPageContent: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+  },
+
+  /* Desktop Top Bar */
+  desktopTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 32,
+    paddingVertical: 18,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  desktopGreeting: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.4,
+  },
+  desktopDateSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  desktopTopBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  desktopLogBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    gap: 6,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  desktopLogBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  desktopIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  desktopNotifBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: colors.primary,
+    borderRadius: 7,
+    minWidth: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  desktopNotifBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+
+  /* Desktop Bento Grid */
+  desktopGridContent: {
+    paddingHorizontal: 32,
+    paddingTop: 28,
+    paddingBottom: 60,
+  },
+  desktopGridRow: {
+    flexDirection: 'row',
+    gap: 24,
+    width: '100%',
+    maxWidth: 1180,
+    alignSelf: 'center',
+  },
+  desktopGridColLeft: {
+    flex: 1.35,
+    gap: 20,
+  },
+  desktopGridColRight: {
+    flex: 1,
+    gap: 18,
+  },
+
+  /* Desktop Hero Card */
+  desktopHeroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+  },
+  desktopHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  desktopHeroBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  activeDotPulse: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.primary,
+  },
+  desktopHeroCalendarLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  desktopHeroRingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  desktopMetricsList: {
+    flex: 1,
+    gap: 12,
+  },
+  desktopMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  desktopMetricTitle: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  desktopMetricVal: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+
+  /* Desktop Forecast Card */
+  desktopForecastCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  desktopCardHeading: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+
+  /* Desktop AI Card */
+  desktopAiCard: {
+    backgroundColor: '#FFF9F9',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#FFE4E6',
+  },
+  desktopAiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  desktopAiIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  desktopAiTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  desktopOnlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    gap: 4,
+  },
+  desktopGreenDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+  },
+  desktopOnlineText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  desktopAiDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+    marginBottom: 14,
+  },
+  desktopAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    gap: 6,
+  },
+  desktopAiBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  /* Desktop Doctor Card */
+  desktopDoctorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  desktopDoctorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  desktopDoctorIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  desktopDoctorTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  desktopDoctorSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+
+  /* Desktop Modes Bento */
+  desktopModesRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  desktopModeCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  desktopModeEmoji: {
+    fontSize: 18,
+    marginBottom: 4,
+  },
+  desktopModeHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  desktopModeSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+
   /* Persistent Floating Bottom Navigation Bar Parent Container */
   bottomBarParentContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 24 : 16,
     left: 16,
     right: 16,
+    maxWidth: 640,
+    alignSelf: 'center',
     height: 64,
     borderRadius: 32,
     backgroundColor: '#FFFFFF',
@@ -3756,7 +4403,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   quickLogCard: {
-    width: (SCREEN_WIDTH - 76) / 3,
+    flex: 1,
+    minWidth: 90,
     backgroundColor: '#FAF0F2',
     borderRadius: 18,
     paddingVertical: 12,

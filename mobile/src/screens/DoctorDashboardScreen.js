@@ -13,15 +13,19 @@ import {
   ActivityIndicator,
   StatusBar,
   Image,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import StreamVideoCallModal from './StreamVideoCallModal';
 import * as telemedService from '../services/telemedicineService';
+import WebSidebar from '../components/WebSidebar';
+import AppBottomSheet from '../components/AppBottomSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const STATUSBAR_HEIGHT = StatusBar.currentHeight || 40;
+const STATUSBAR_HEIGHT = Platform.OS === 'web' ? 6 : (StatusBar.currentHeight || 40);
 
 // SIGNATURE RED APPLE CLINICAL THEME
 const THEME = {
@@ -57,6 +61,8 @@ const THEME = {
 
 export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView }) {
   const { user } = useAuth();
+  const { width: windowWidth } = useWindowDimensions();
+  const isLargeScreen = (Platform.OS === 'web' && windowWidth >= 768) || windowWidth >= 1024;
   const doctorName = user?.name || 'Consulting Doctor';
   const doctorEmail = user?.email || 'doctor@redapple.health';
 
@@ -218,13 +224,28 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
   }, [doctorSlots, selectedSlotDayIndex, calendarDays]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLargeScreen && styles.desktopContainer]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* ========================================================================= */}
-      {/* 1. TOP HEADER: DOCTOR IDENTITY & QUICK CONTROLS                           */}
-      {/* ========================================================================= */}
-      <View style={styles.topHeader}>
+      {/* WEB SIDEBAR ON LARGER SCREENS (PC / WEB) */}
+      {isLargeScreen && (
+        <WebSidebar
+          variant="doctor"
+          currentPage={activeTab}
+          onNavigateTab={(tabId) => setActiveTab(tabId)}
+          user={user}
+          onSignOut={onSignOut}
+          isDoctor={true}
+          onPreviewPatientView={onPreviewPatientView}
+          activeQueueCount={activeQueue.length}
+        />
+      )}
+
+      <View style={isLargeScreen ? styles.desktopMainContent : { flex: 1 }}>
+        {/* ========================================================================= */}
+        {/* 1. TOP HEADER: DOCTOR IDENTITY & QUICK CONTROLS                           */}
+        {/* ========================================================================= */}
+        <View style={styles.topHeader}>
         <View style={styles.doctorHeaderLeft}>
           <View style={styles.doctorAvatarRing}>
             <Image
@@ -619,209 +640,180 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
           </View>
         )}
       </ScrollView>
-
-      {/* ========================================================================= */}
-      {/* 4. FLOATING BOTTOM NAVIGATION BAR                                         */}
-      {/* ========================================================================= */}
-      <View style={styles.floatingBottomBarContainer}>
-        <View style={styles.floatingBottomBar}>
-          {/* Tab 1: Queue */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.floatingTabItem, activeTab === 'queue' && styles.floatingTabItemActive]}
-            onPress={() => setActiveTab('queue')}
-          >
-            <View style={styles.floatingTabIconWrapper}>
-              <Ionicons
-                name={activeTab === 'queue' ? 'videocam' : 'videocam-outline'}
-                size={22}
-                color={activeTab === 'queue' ? THEME.primary : THEME.textSecondary}
-              />
-              {activeQueue.length > 0 && (
-                <View style={styles.floatingBadge}>
-                  <Text style={styles.floatingBadgeText}>{activeQueue.length}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={[styles.floatingTabLabel, activeTab === 'queue' && styles.floatingTabLabelActive]}>
-              Queue
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab 2: Availability */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.floatingTabItem, activeTab === 'slots' && styles.floatingTabItemActive]}
-            onPress={() => setActiveTab('slots')}
-          >
-            <View style={styles.floatingTabIconWrapper}>
-              <Ionicons
-                name={activeTab === 'slots' ? 'calendar' : 'calendar-outline'}
-                size={22}
-                color={activeTab === 'slots' ? THEME.primary : THEME.textSecondary}
-              />
-            </View>
-            <Text style={[styles.floatingTabLabel, activeTab === 'slots' && styles.floatingTabLabelActive]}>
-              Availability
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab 3: Records */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.floatingTabItem, activeTab === 'records' && styles.floatingTabItemActive]}
-            onPress={() => setActiveTab('records')}
-          >
-            <View style={styles.floatingTabIconWrapper}>
-              <Ionicons
-                name={activeTab === 'records' ? 'document-text' : 'document-text-outline'}
-                size={22}
-                color={activeTab === 'records' ? THEME.primary : THEME.textSecondary}
-              />
-            </View>
-            <Text style={[styles.floatingTabLabel, activeTab === 'records' && styles.floatingTabLabelActive]}>
-              Records
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* ========================================================================= */}
-      {/* 6. MODAL: CLINICAL NOTES & PRESCRIPTION WRITER (RED APPLE BOTTOM SHEET)   */}
+      {/* 4. FLOATING BOTTOM NAVIGATION BAR (MOBILE ONLY)                           */}
       {/* ========================================================================= */}
-      <Modal
-        visible={!!selectedBookingForNotes}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSelectedBookingForNotes(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.notesDrawerCard}>
-            {/* Top Sheet Drag Handle */}
-            <View style={styles.sheetHandleBar} />
-
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={styles.modalTitle}>Consultation Notes & Rx</Text>
-                <Text style={styles.modalSubtitle}>
-                  Patient: {selectedBookingForNotes?.user_name || 'Patient'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedBookingForNotes(null)}
-                style={styles.closeCircleBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={18} color={THEME.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>Clinical Observations & Recommendations</Text>
-            <TextInput
-              style={styles.textArea}
-              placeholder="Record clinical assessment, ultrasound notes, and medical guidance..."
-              placeholderTextColor={THEME.textMuted}
-              multiline
-              numberOfLines={4}
-              value={clinicalNotesText}
-              onChangeText={setClinicalNotesText}
-            />
-
-            <Text style={styles.inputLabel}>Prescription Summary (Optional)</Text>
-            <TextInput
-              style={styles.textArea}
-              placeholder="e.g. Folate 5mg daily, Prenatal Multivitamins 1 tab..."
-              placeholderTextColor={THEME.textMuted}
-              multiline
-              numberOfLines={3}
-              value={prescriptionText}
-              onChangeText={setPrescriptionText}
-            />
-
+      {!isLargeScreen && (
+        <View style={styles.floatingBottomBarContainer}>
+          <View style={styles.floatingBottomBar}>
+            {/* Tab 1: Queue */}
             <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.saveNotesTouchWrapper}
-              onPress={handleSaveNotes}
-              disabled={isSavingNotes}
+              activeOpacity={0.8}
+              style={[styles.floatingTabItem, activeTab === 'queue' && styles.floatingTabItemActive]}
+              onPress={() => setActiveTab('queue')}
             >
-              <LinearGradient
-                colors={['#DC2626', '#B91C1C']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.saveNotesBtn}
-              >
-                {isSavingNotes ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={17} color="#FFFFFF" />
-                    <Text style={styles.saveNotesBtnText}>Save & Finalize Consultation</Text>
-                  </>
+              <View style={styles.floatingTabIconWrapper}>
+                <Ionicons
+                  name={activeTab === 'queue' ? 'videocam' : 'videocam-outline'}
+                  size={22}
+                  color={activeTab === 'queue' ? THEME.primary : THEME.textSecondary}
+                />
+                {activeQueue.length > 0 && (
+                  <View style={styles.floatingBadge}>
+                    <Text style={styles.floatingBadgeText}>{activeQueue.length}</Text>
+                  </View>
                 )}
-              </LinearGradient>
+              </View>
+              <Text style={[styles.floatingTabLabel, activeTab === 'queue' && styles.floatingTabLabelActive]}>
+                Queue
+              </Text>
+            </TouchableOpacity>
+
+            {/* Tab 2: Availability */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.floatingTabItem, activeTab === 'slots' && styles.floatingTabItemActive]}
+              onPress={() => setActiveTab('slots')}
+            >
+              <View style={styles.floatingTabIconWrapper}>
+                <Ionicons
+                  name={activeTab === 'slots' ? 'calendar' : 'calendar-outline'}
+                  size={22}
+                  color={activeTab === 'slots' ? THEME.primary : THEME.textSecondary}
+                />
+              </View>
+              <Text style={[styles.floatingTabLabel, activeTab === 'slots' && styles.floatingTabLabelActive]}>
+                Availability
+              </Text>
+            </TouchableOpacity>
+
+            {/* Tab 3: Records */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.floatingTabItem, activeTab === 'records' && styles.floatingTabItemActive]}
+              onPress={() => setActiveTab('records')}
+            >
+              <View style={styles.floatingTabIconWrapper}>
+                <Ionicons
+                  name={activeTab === 'records' ? 'document-text' : 'document-text-outline'}
+                  size={22}
+                  color={activeTab === 'records' ? THEME.primary : THEME.textSecondary}
+                />
+              </View>
+              <Text style={[styles.floatingTabLabel, activeTab === 'records' && styles.floatingTabLabelActive]}>
+                Records
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      )}
 
       {/* ========================================================================= */}
-      {/* 7. MODAL: ADD TIME SLOT (RED APPLE MODAL)                                 */}
+      {/* 6. BOTTOM SHEET: CLINICAL NOTES & PRESCRIPTION WRITER (AppBottomSheet)    */}
       {/* ========================================================================= */}
-      <Modal
-        visible={showAddSlotModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowAddSlotModal(false)}
+      <AppBottomSheet
+        visible={!!selectedBookingForNotes}
+        onClose={() => setSelectedBookingForNotes(null)}
+        title="Consultation Notes & Rx"
+        subtitle={`Patient: ${selectedBookingForNotes?.user_name || 'Patient'}`}
+        showHandle={true}
+        showCloseChevron={true}
+        scrollable={true}
+        footer={
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={styles.saveNotesTouchWrapper}
+            onPress={handleSaveNotes}
+            disabled={isSavingNotes}
+          >
+            <LinearGradient
+              colors={['#DC2626', '#B91C1C']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.saveNotesBtn}
+            >
+              {isSavingNotes ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={17} color="#FFFFFF" />
+                  <Text style={styles.saveNotesBtnText}>Save & Finalize Consultation</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        }
       >
-        <View style={styles.modalOverlayCenter}>
-          <View style={styles.addSlotCard}>
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={styles.modalTitle}>Add Appointment Slot</Text>
-                <Text style={styles.modalSubtitle}>
-                  Date: {calendarDays[selectedSlotDayIndex]?.dayName}{' '}
-                  {calendarDays[selectedSlotDayIndex]?.dayNum}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowAddSlotModal(false)}
-                style={styles.closeCircleBtn}
-              >
-                <Ionicons name="close" size={18} color={THEME.textPrimary} />
-              </TouchableOpacity>
-            </View>
+        <View style={{ paddingBottom: 16 }}>
+          <Text style={styles.inputLabel}>Clinical Observations & Recommendations</Text>
+          <TextInput
+            style={styles.textArea}
+            placeholder="Record clinical assessment, ultrasound notes, and medical guidance..."
+            placeholderTextColor={THEME.textMuted}
+            multiline
+            numberOfLines={4}
+            value={clinicalNotesText}
+            onChangeText={setClinicalNotesText}
+          />
 
-            <Text style={styles.inputLabel}>Start Time (e.g. 10:00, 14:30)</Text>
-            <TextInput
-              style={styles.singleLineInput}
-              placeholder="10:00"
-              placeholderTextColor={THEME.textMuted}
-              value={newSlotTime}
-              onChangeText={setNewSlotTime}
-            />
+          <Text style={styles.inputLabel}>Prescription Summary (Optional)</Text>
+          <TextInput
+            style={styles.textArea}
+            placeholder="e.g. Folate 5mg daily, Prenatal Multivitamins 1 tab..."
+            placeholderTextColor={THEME.textMuted}
+            multiline
+            numberOfLines={3}
+            value={prescriptionText}
+            onChangeText={setPrescriptionText}
+          />
+        </View>
+      </AppBottomSheet>
 
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setShowAddSlotModal(false)}
-              >
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmSlotBtn}
-                onPress={handleAddCustomSlot}
-                disabled={isAddingSlot}
-              >
-                {isAddingSlot ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.confirmSlotBtnText}>Create Slot</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+      {/* ========================================================================= */}
+      {/* 7. BOTTOM SHEET: ADD TIME SLOT (AppBottomSheet)                           */}
+      {/* ========================================================================= */}
+      <AppBottomSheet
+        visible={showAddSlotModal}
+        onClose={() => setShowAddSlotModal(false)}
+        title="Add Appointment Slot"
+        subtitle={`Date: ${calendarDays[selectedSlotDayIndex]?.dayName} ${calendarDays[selectedSlotDayIndex]?.dayNum}`}
+        showHandle={true}
+        showCloseChevron={true}
+        scrollable={false}
+      >
+        <View style={{ paddingBottom: 16 }}>
+          <Text style={styles.inputLabel}>Start Time (e.g. 10:00, 14:30)</Text>
+          <TextInput
+            style={styles.singleLineInput}
+            placeholder="10:00"
+            placeholderTextColor={THEME.textMuted}
+            value={newSlotTime}
+            onChangeText={setNewSlotTime}
+          />
+
+          <View style={styles.modalActionsRow}>
+            <TouchableOpacity
+              style={styles.cancelModalBtn}
+              onPress={() => setShowAddSlotModal(false)}
+            >
+              <Text style={styles.cancelModalBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.confirmSlotBtn}
+              onPress={handleAddCustomSlot}
+              disabled={isAddingSlot}
+            >
+              {isAddingSlot ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.confirmSlotBtnText}>Create Slot</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+      </AppBottomSheet>
 
       {/* ========================================================================= */}
       {/* 8. FULLSCREEN VIDEO CONSULTATION ROOM                                     */}
@@ -1643,6 +1635,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+
+  /* -------------------------------------------------------------------------- */
+  /* DESKTOP SIDEBAR & LAYOUT STYLES                                            */
+  /* -------------------------------------------------------------------------- */
+  desktopContainer: {
+    flexDirection: 'row',
+    height: '100%',
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  desktopMainContent: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: THEME.pageBg,
+    overflow: 'hidden',
   },
 
   /* -------------------------------------------------------------------------- */

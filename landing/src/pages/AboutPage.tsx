@@ -49,9 +49,12 @@ export const AboutPage: React.FC<AboutPageProps> = () => {
           </div>
 
           {/* Centered Editorial Manifesto Paragraph */}
-          <div className="max-w-2xl mx-auto pt-1">
-            <p className="font-sans text-base sm:text-lg md:text-xl text-neutral-700 leading-relaxed font-normal">
-              At Red Apple, we refuse to accept preventable maternal mortality as inevitable. We are clinicians, maternal health advocates, and engineers dedicated to transforming obstetric care across Africa. We turn frontline clinical insight into intelligent protocols and paper clinics into digital systems. From maternal vulnerability to generational dignity.
+          <div className="max-w-2xl mx-auto pt-2 space-y-3">
+            <p className="font-sans text-lg sm:text-xl md:text-[21px] text-neutral-800 leading-relaxed font-normal">
+              Healthcare was built to react after something goes wrong. We’re building for everything that comes before.
+            </p>
+            <p className="font-sans text-base sm:text-lg text-neutral-600 leading-relaxed font-normal">
+              Founded by doctors and engineers, Red Apple replaces hospital queues, medical guesswork, and silence with dignified, private care—putting trusted clinical answers right in your hands.
             </p>
           </div>
 
@@ -87,12 +90,12 @@ export const AboutPage: React.FC<AboutPageProps> = () => {
         </div>
       </header>
 
-      {/* 3. The Clinical Squad (Matching Homepage TeamSquadSection Design with Header from attached reference) */}
+      {/* 3. The Founding Team Section */}
       <TeamSquadSection
         id="team"
         subtitle="The Frontline Minds Behind Red Apple"
         titlePrefix="the "
-        titleBubble="CLINICAL SQUAD"
+        titleBubble="FOUNDING TEAM"
         showOvalBadge={false}
         showBottomCta={false}
       />

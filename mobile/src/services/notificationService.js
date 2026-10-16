@@ -4,20 +4,28 @@ import Constants from 'expo-constants';
 import { apiRequest } from './apiClient';
 
 let Notifications = null;
-try {
-  Notifications = require('expo-notifications');
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      priority: Notifications?.AndroidNotificationPriority?.MAX || 'max',
-    }),
-  });
-} catch (e) {
-  console.warn('[notificationService] expo-notifications module not loaded:', e?.message);
+if (Platform.OS !== 'web') {
+  try {
+    const isExpoGo =
+      Constants?.appOwnership === 'expo' ||
+      Constants?.executionEnvironment === 'storeClient';
+    // In Expo Go on Android SDK 53+, remote notifications module throws when imported.
+    if (!(Platform.OS === 'android' && isExpoGo)) {
+      Notifications = require('expo-notifications');
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+          priority: Notifications?.AndroidNotificationPriority?.MAX || 'max',
+        }),
+      });
+    }
+  } catch (e) {
+    console.warn('[notificationService] expo-notifications module not loaded:', e?.message);
+  }
 }
 
 export const NOTIFICATION_SETTINGS_KEY = '@redapple_notification_settings';
@@ -176,6 +184,13 @@ class NotificationService {
 
       // Retrieve Expo Push Token
       try {
+        const isExpoGo =
+          Constants?.appOwnership === 'expo' ||
+          Constants?.executionEnvironment === 'storeClient';
+        if (isExpoGo && Platform.OS === 'android') {
+          return { success: true, localOnly: true };
+        }
+
         const projectId =
           Constants?.expoConfig?.extra?.eas?.projectId ||
           Constants?.easConfig?.projectId ||

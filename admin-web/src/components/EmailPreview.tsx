@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Monitor, Smartphone, Code2, Eye, UserCheck } from 'lucide-react';
-import { replaceVariables } from '../services/emailService';
 
 interface EmailPreviewProps {
   fromName: string;
@@ -9,21 +8,6 @@ interface EmailPreviewProps {
   subject: string;
   html: string;
 }
-
-const SAMPLE_VARIABLES: Record<string, string> = {
-  name: 'Amara Okafor',
-  doctor_name: 'Dr. Chidinma Eze',
-  specialty: 'Obstetrics & Gynecology',
-  appointment_date: 'Thursday, Sept 18',
-  appointment_time: '10:30 AM WAT',
-  booking_reference: 'RA-7829-NG',
-  video_session_url: 'https://redapple.health/telemedicine/session/RA-7829-NG',
-  app_url: 'https://redapple.health/app',
-  article_url: 'https://redapple.health/library/fertility/follicular-phase',
-  issue_number: '42',
-  notice_title: 'Scheduled Telemedicine Core Upgrades',
-  unsubscribe_url: 'https://redapple.health/unsubscribe',
-};
 
 export const EmailPreview: React.FC<EmailPreviewProps> = ({
   fromName,
@@ -37,11 +21,11 @@ export const EmailPreview: React.FC<EmailPreviewProps> = ({
   const [viewSource, setViewSource] = useState(false);
 
   const renderedSubject = useMemo(() => {
-    return useSampleVars ? replaceVariables(subject, SAMPLE_VARIABLES) : subject;
+    return subject;
   }, [subject, useSampleVars]);
 
   const renderedHtml = useMemo(() => {
-    const raw = useSampleVars ? replaceVariables(html, SAMPLE_VARIABLES) : html;
+    const raw = html;
     return raw;
   }, [html, useSampleVars]);
 

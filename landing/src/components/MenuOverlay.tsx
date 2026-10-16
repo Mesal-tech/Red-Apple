@@ -55,7 +55,7 @@ export const MenuOverlay: React.FC<MenuOverlayProps> = ({
     {
       num: '03',
       title: 'About Us',
-      subtitle: 'The frontline clinical squad & mission',
+      subtitle: 'The frontline founding team & mission',
       href: '/about',
       id: 'about',
     },
@@ -65,13 +65,6 @@ export const MenuOverlay: React.FC<MenuOverlayProps> = ({
       subtitle: 'Dispatches, clinical research & whitepapers',
       href: '/newsroom',
       id: 'newsroom',
-    },
-    {
-      num: '05',
-      title: 'Contact',
-      subtitle: 'Talk to clinicians, partner clinics & patients',
-      href: '/contact',
-      id: 'contact',
     },
   ];
 

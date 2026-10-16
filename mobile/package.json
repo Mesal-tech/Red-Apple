@@ -4,6 +4,7 @@
   "main": "index.js",
   "dependencies": {
     "@config-plugins/react-native-webrtc": "^15.0.2",
+    "@expo/metro-runtime": "~57.0.17",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "^12.0.1",
@@ -23,12 +24,14 @@
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.2",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-incall-manager": "^4.2.2",
     "react-native-maps": "1.27.2",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-sideswipe": "^1.5.0",
     "react-native-svg": "^15.15.5",
+    "react-native-web": "^0.21.2",
     "react-native-webview": "13.16.1"
   },
   "scripts": {
@@ -36,6 +39,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web",
     "build:apk": "cd android && gradlew assembleRelease",
     "build:apk:arm64": "cd android && gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a",
     "build:bundle": "cd android && gradlew bundleRelease",

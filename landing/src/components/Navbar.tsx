@@ -4,7 +4,7 @@ import { MenuOverlay } from './MenuOverlay';
 interface NavbarProps {
   brandName?: string;
   transparentOnTop?: boolean;
-  activePage?: 'home' | 'about' | 'newsroom' | 'contact';
+  activePage?: 'home' | 'about' | 'newsroom';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -45,7 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Seamless Floating Header (Transparent Background to Never Obstruct the Page) */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-transparent py-3.5 transition-colors duration-300 pointer-events-none">
         <nav className="max-w-7xl mx-auto px-6 sm:px-10 flex items-center justify-between">
-          
+
           {/* Brand Logo & Name (Switches between Dark and Light mode seamlessly) */}
           <a
             href="/"
@@ -57,9 +57,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="w-9 h-9 sm:w-10 sm:h-10 object-contain group-hover:scale-105 transition-all drop-shadow-2xs"
             />
             <span
-              className={`font-sans font-extrabold text-lg sm:text-xl tracking-tight transition-colors duration-300 ${
-                isDark ? 'text-white' : 'text-neutral-950'
-              }`}
+              className={`font-sans font-extrabold text-lg sm:text-xl tracking-tight transition-colors duration-300 ${isDark ? 'text-white' : 'text-neutral-950'
+                }`}
             >
               {brandName}
             </span>
@@ -67,14 +66,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action Group: Dot Contact Button & Grid Menu Toggle */}
           <div className="flex items-center gap-2.5 pointer-events-auto">
-            <a
-              href="/contact"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-neutral-200/80 bg-white/95 backdrop-blur-md hover:bg-white text-[11px] font-bold uppercase tracking-wider text-neutral-900 transition-all shadow-md cursor-pointer group"
-            >
-              <span className="w-2 h-2 rounded-full bg-crimson" />
-              <span>Contact</span>
-            </a>
-
             <button
               onClick={() => setIsMenuOpen(true)}
               type="button"

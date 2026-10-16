@@ -68,6 +68,7 @@ export interface ConsultationBooking {
   doctor_name: string;
   doctor_specialty: string;
   doctor_credentials?: string;
+  doctor_photo_url?: string;
   doctor_initials?: string;
   doctor_avatar_bg?: string;
   doctor_avatar_color?: string;
@@ -78,6 +79,7 @@ export interface ConsultationBooking {
   reason: string;
   symptoms_notes?: string;
   status: BookingStatus;
+  fee_ngn?: number;
   fee_paid_ngn: number;
   video_room_url: string;
   doctor_notes?: string;

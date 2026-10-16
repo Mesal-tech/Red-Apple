@@ -1346,6 +1346,9 @@ const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
     justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 540,
+    alignSelf: 'center',
   },
 
   /* HEADER */
@@ -1458,7 +1461,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   bentoCardHalfWidth: {
-    width: CARD_WIDTH,
+    width: '48%',
+    minWidth: 140,
+    flexGrow: 1,
   },
   bentoCardFullWidth: {
     width: '100%',

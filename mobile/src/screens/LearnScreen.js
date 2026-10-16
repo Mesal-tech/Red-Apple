@@ -598,7 +598,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bentoCard: {
-    width: (SCREEN_WIDTH - 36) / 2,
+    width: '48%',
+    flexGrow: 1,
+    minWidth: 155,
     height: 205,
     borderRadius: 22,
     overflow: 'hidden',

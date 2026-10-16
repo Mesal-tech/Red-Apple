@@ -28,5 +28,4 @@ export const config = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
   },
-  dataDir: process.env.DATA_DIR || path.join(__dirname, '../../data'),
 };

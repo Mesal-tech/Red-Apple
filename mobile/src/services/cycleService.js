@@ -6,6 +6,7 @@ import {
   addCycleLogSafe,
   getHealthProfileSafe,
 } from '../utils/storage';
+import { recordStreakActivity } from './streakService';
 
 /**
  * Calculates fertility prediction locally when offline.
@@ -289,7 +290,15 @@ export const cycleService = {
     // 1. Immediately persist to local storage
     await addCycleLogSafe(newLog);
 
-    // 2. Sync to backend API
+    // 2. Advance streak activity deterministically
+    try {
+      await recordStreakActivity({
+        activityType: 'cycle_log',
+        date: newLog.date,
+      });
+    } catch (_) {}
+
+    // 3. Sync to backend API
     try {
       const res = await apiRequest('/cycles/log', {
         method: 'POST',

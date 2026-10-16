@@ -29,7 +29,6 @@ async function main() {
   const saltRounds = 10;
   const amaraPasswordHash = await bcrypt.hash('Amara@2026', saltRounds);
   const adminPasswordHash = await bcrypt.hash('Admin@2026', saltRounds);
-  const doctorPasswordHash = await bcrypt.hash('Doctor@2026', saltRounds);
 
   // 3. Users
   const amara = await prisma.user.upsert({
@@ -76,117 +75,9 @@ async function main() {
     },
   });
 
-  const doctorUser = await prisma.user.upsert({
-    where: { email: 'mesalokubor63@gmail.com' },
-    update: { password_hash: doctorPasswordHash, role: 'doctor' },
-    create: {
-      user_id: 'fb5e54b9-7b39-41af-9a77-6a34e0471b18',
-      name: 'Dr. Chioma Nwachukwu',
-      email: 'mesalokubor63@gmail.com',
-      phone: '+2348033334444',
-      password_hash: doctorPasswordHash,
-      pregnancy_mode: false,
-      role: 'doctor',
-    },
-  });
-  console.log('✅ Users seeded (Amara, Admin, Doctor)');
+  console.log('✅ Users seeded (Amara, Admin)');
 
-  // 4. Clinics
-  const arkClinic = await prisma.clinic.upsert({
-    where: { clinic_id: 'clinic_ark_warri' },
-    update: {},
-    create: {
-      clinic_id: 'clinic_ark_warri',
-      name: 'The Ark Clinic & Reproductive Care',
-      location: 'Warri, Delta State',
-      address: 'Plot 14 Airport Road, Effurun-Warri',
-      contact_email: 'notifications@arkclinicwarri.com',
-      contact_phone: '+2348055556666',
-      latitude: 5.5442,
-      longitude: 5.7603,
-    },
-  });
-
-  const redAppleClinic = await prisma.clinic.upsert({
-    where: { clinic_id: 'clinic_redapple_telemed' },
-    update: {},
-    create: {
-      clinic_id: 'clinic_redapple_telemed',
-      name: 'Red Apple Virtual Care & Telemedicine',
-      location: 'Lagos & Pan-Nigeria Virtual Network',
-      address: 'Victoria Island, Lagos, Nigeria',
-      contact_email: 'support@redapple.health',
-      contact_phone: '+2348000001234',
-      latitude: 6.4281,
-      longitude: 3.4219,
-    },
-  });
-  console.log('✅ Clinics seeded');
-
-  // 5. Doctors
-  const docChioma = await prisma.doctor.upsert({
-    where: { doctor_id: 'doc_mesal_okubor' },
-    update: { clinic_id: arkClinic.clinic_id },
-    create: {
-      doctor_id: 'doc_mesal_okubor',
-      clinic_id: arkClinic.clinic_id,
-      name: 'Dr. Chioma Nwachukwu',
-      specialty: 'Obstetrician & Gynecologist',
-      subspecialty: 'Telemedicine & Reproductive Healthcare',
-      rating: 5.0,
-      consultation_fee: 15000,
-      avatar_url: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-    },
-  });
-
-  const docAmina = await prisma.doctor.upsert({
-    where: { doctor_id: 'doc_amina_bello' },
-    update: { clinic_id: redAppleClinic.clinic_id },
-    create: {
-      doctor_id: 'doc_amina_bello',
-      clinic_id: redAppleClinic.clinic_id,
-      name: 'Dr. Amina Bello',
-      specialty: 'Reproductive Endocrinologist',
-      subspecialty: 'Fertility & Hormonal Health',
-      rating: 4.9,
-      consultation_fee: 20000,
-      avatar_url: 'https://images.unsplash.com/photo-1594824813593-3932a3928157?w=500&auto=format&fit=crop&q=80',
-    },
-  });
-  console.log('✅ Doctors seeded');
-
-  // 6. Availability Slots for Tomorrow & this week
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  tomorrow.setHours(10, 0, 0, 0);
-
-  const slot1 = new Date(tomorrow);
-  const slot1End = new Date(tomorrow);
-  slot1End.setHours(11, 0, 0, 0);
-
-  await prisma.availabilitySlot.createMany({
-    data: [
-      {
-        slot_id: 'slot_chioma_tomorrow_10am',
-        doctor_id: docChioma.doctor_id,
-        start_time: slot1,
-        end_time: slot1End,
-        is_booked: false,
-      },
-      {
-        slot_id: 'slot_amina_tomorrow_12pm',
-        doctor_id: docAmina.doctor_id,
-        start_time: new Date(tomorrow.getTime() + 2 * 3600000),
-        end_time: new Date(tomorrow.getTime() + 3 * 3600000),
-        is_booked: false,
-      },
-    ],
-    skipDuplicates: true,
-  });
-  console.log('✅ Availability Slots seeded');
-
-  // 7. Education Articles
+  // 4. Education Articles
   const articles = [
     {
       article_id: 'art_1',

@@ -13,8 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 const ToastContext = createContext(null);
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 export function ToastProvider({ children }) {
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState(null); // { id, message, type: 'error' | 'success' | 'info' }
@@ -217,7 +215,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    maxWidth: SCREEN_WIDTH - 32,
+    maxWidth: 440,
     backgroundColor: '#180407',
     borderWidth: 1.2,
     borderRadius: 26,

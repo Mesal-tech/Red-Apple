@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, StatusBar, AppState } from 'react-native';
+import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, StatusBar, AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
 import AppLockModal, { PIN_STORAGE_KEY } from '../components/AppLockModal';
@@ -179,45 +179,49 @@ function MainNavigation() {
         stage: activeMode,
       });
 
-      try {
-        const Notifications = require('expo-notifications');
-        if (Notifications?.addNotificationReceivedListener) {
-          notifReceivedSub = Notifications.addNotificationReceivedListener((notification) => {
-            const { title, body, data } = notification.request.content;
-            notificationService.addInAppNotification({
-              id: notification.request.identifier || `notif_${Date.now()}`,
-              title,
-              body,
-              time: 'Just now',
-              type: data?.type || 'general',
-              data: data || {},
-              icon: data?.type === 'appointment' ? 'videocam-outline' : 'notifications-outline',
-              iconBg: data?.type === 'appointment' ? '#E6F4EA' : '#FFE5E9',
-              iconColor: data?.type === 'appointment' ? '#059669' : colors.primary,
+      if (Platform.OS !== 'web') {
+        try {
+          const Notifications = require('expo-notifications');
+          if (Notifications?.addNotificationReceivedListener) {
+            notifReceivedSub = Notifications.addNotificationReceivedListener((notification) => {
+              const { title, body, data } = notification.request.content;
+              notificationService.addInAppNotification({
+                id: notification.request.identifier || `notif_${Date.now()}`,
+                title,
+                body,
+                time: 'Just now',
+                type: data?.type || 'general',
+                data: data || {},
+                icon: data?.type === 'appointment' ? 'videocam-outline' : 'notifications-outline',
+                iconBg: data?.type === 'appointment' ? '#E6F4EA' : '#FFE5E9',
+                iconColor: data?.type === 'appointment' ? '#059669' : colors.primary,
+              });
             });
-          });
-        }
-        if (Notifications?.addNotificationResponseReceivedListener) {
-          notifResponseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-            const data = response.notification.request.content.data;
-            if (data?.screen === 'DoctorCareScreen' && isDoctor) {
-              setPreviewPatientMode(false);
-            }
-          });
-        }
-
-        // Handle cold start launch from tapped notification
-        if (Notifications?.getLastNotificationResponseAsync) {
-          Notifications.getLastNotificationResponseAsync().then((response) => {
-            if (response?.notification?.request?.content?.data) {
+          }
+          if (Notifications?.addNotificationResponseReceivedListener) {
+            notifResponseSub = Notifications.addNotificationResponseReceivedListener((response) => {
               const data = response.notification.request.content.data;
               if (data?.screen === 'DoctorCareScreen' && isDoctor) {
                 setPreviewPatientMode(false);
               }
-            }
-          });
-        }
-      } catch (e) {}
+            });
+          }
+
+          // Handle cold start launch from tapped notification
+          if (Notifications?.getLastNotificationResponseAsync) {
+            Notifications.getLastNotificationResponseAsync()
+              .then((response) => {
+                if (response?.notification?.request?.content?.data) {
+                  const data = response.notification.request.content.data;
+                  if (data?.screen === 'DoctorCareScreen' && isDoctor) {
+                    setPreviewPatientMode(false);
+                  }
+                }
+              })
+              .catch(() => {});
+          }
+        } catch (e) {}
+      }
     }
 
     return () => {

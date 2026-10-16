@@ -182,7 +182,7 @@ export const InvestorOpportunitySection: React.FC = () => {
             </span>
 
             <a
-              href="/contact"
+              href="mailto:partner@redapplehealth.com?subject=Request%20Briefing%20Deck"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xs bg-neutral-950 text-white font-bold text-xs uppercase tracking-wider hover:bg-[#C81E3A] transition-colors"
             >
               <Download className="w-3.5 h-3.5" />

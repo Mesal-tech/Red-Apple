@@ -4,6 +4,7 @@ import {
   Text,
   View,
   Dimensions,
+  useWindowDimensions,
   FlatList,
   TouchableOpacity,
   Animated,
@@ -11,8 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - 56;
 const CARD_SPACING = 14;
 
 export const DEFAULT_PREGNANCY_ARTICLES = [
@@ -69,9 +68,12 @@ export default function ArticleCarousel({
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef(null);
 
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = Math.min(windowWidth - 56, 420);
+
   const handleScroll = (event) => {
     const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / (CARD_WIDTH + CARD_SPACING));
+    const index = Math.round(scrollPosition / (cardWidth + CARD_SPACING));
     if (index >= 0 && index < articles.length && index !== activeIndex) {
       setActiveIndex(index);
     }
@@ -81,7 +83,7 @@ export default function ArticleCarousel({
     return (
       <TouchableOpacity
         activeOpacity={0.92}
-        style={styles.cardContainer}
+        style={[styles.cardContainer, { width: cardWidth }]}
         onPress={() => onSelectArticle && onSelectArticle(item)}
       >
         <View style={styles.cardHeaderRow}>
@@ -127,7 +129,7 @@ export default function ArticleCarousel({
         renderItem={renderCard}
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={CARD_WIDTH + CARD_SPACING}
+        snapToInterval={cardWidth + CARD_SPACING}
         snapToAlignment="start"
         decelerationRate="fast"
         nestedScrollEnabled={true}
@@ -165,7 +167,6 @@ const styles = StyleSheet.create({
     gap: CARD_SPACING,
   },
   cardContainer: {
-    width: CARD_WIDTH,
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     padding: 18,

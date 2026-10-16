@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppBottomSheet from '../components/AppBottomSheet';
 import * as telemedService from '../services/telemedicineService';
 import PaystackCheckoutModal from '../components/PaystackCheckoutModal';
 import { initializeConsultationPayment } from '../services/paymentService';
@@ -133,48 +134,46 @@ export default function AppointmentsListModal({
   if (!visible) return null;
 
   return (
-    <Modal
+    <AppBottomSheet
       visible={visible}
-      animationType="slide"
-      statusBarTranslucent={true}
-      onRequestClose={onClose}
+      onClose={onClose}
+      showHandle={true}
+      showCloseChevron={false}
+      maxHeight="94%"
+      noPadding={true}
+      scrollable={false}
+      headerLeft={
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={styles.headerIconBtn}
+          onPress={onClose}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-back" size={22} color="#111827" />
+        </TouchableOpacity>
+      }
+      headerRight={
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={styles.headerIconBtn}
+          onPress={handleRefresh}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons
+            name={isRefreshing ? 'hourglass-outline' : 'refresh-outline'}
+            size={20}
+            color="#111827"
+          />
+        </TouchableOpacity>
+      }
+      title="My Consultations"
+      subtitle={
+        activeTab === 'upcoming'
+          ? `${upcomingBookings.length} Scheduled Appointment${upcomingBookings.length === 1 ? '' : 's'}`
+          : `${pastBookings.length} Past Consultation${pastBookings.length === 1 ? '' : 's'}`
+      }
     >
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
       <View style={styles.modalRoot}>
-        {/* TOP SAFE AREA HEADER */}
-        <View style={styles.headerContainer}>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.headerIconBtn}
-            onPress={onClose}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={22} color="#111827" />
-          </TouchableOpacity>
-
-          <View style={styles.headerCenterCol}>
-            <Text style={styles.headerTitle}>My Consultations</Text>
-            <Text style={styles.headerSubtitle}>
-              {activeTab === 'upcoming'
-                ? `${upcomingBookings.length} Scheduled Appointment${upcomingBookings.length === 1 ? '' : 's'}`
-                : `${pastBookings.length} Past Consultation${pastBookings.length === 1 ? '' : 's'}`}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.headerIconBtn}
-            onPress={handleRefresh}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons
-              name={isRefreshing ? 'hourglass-outline' : 'refresh-outline'}
-              size={20}
-              color="#111827"
-            />
-          </TouchableOpacity>
-        </View>
-
         {/* MODERN SEGMENTED TABS */}
         <View style={styles.tabsWrapper}>
           <TouchableOpacity
@@ -437,7 +436,9 @@ export default function AppointmentsListModal({
                           onPress={() => handlePayForBooking(booking)}
                         >
                           <Ionicons name="card" size={17} color="#FFFFFF" />
-                          <Text style={styles.joinVideoBtnText}>Pay Fee (₦15,000)</Text>
+                          <Text style={styles.joinVideoBtnText}>
+                            Pay Fee {booking.fee_ngn ? `(₦${Number(booking.fee_ngn).toLocaleString()})` : ''}
+                          </Text>
                           <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
                         </TouchableOpacity>
                       ) : (
@@ -481,7 +482,7 @@ export default function AppointmentsListModal({
           }}
         />
       </View>
-    </Modal>
+    </AppBottomSheet>
   );
 }
 

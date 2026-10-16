@@ -261,4 +261,29 @@ export async function addCycleLogSafe(log) {
   return updatedLogs;
 }
 
+export const STREAK_DATA_KEY = '@red_apple_streak_vault';
+
+/* ================= STREAK STORAGE ================= */
+
+export async function getStreakDataSafe() {
+  try {
+    const val = await AsyncStorage.getItem(STREAK_DATA_KEY);
+    if (val) {
+      try {
+        return JSON.parse(val);
+      } catch (err) {
+        return null;
+      }
+    }
+  } catch (e) {}
+  return inMemorySession.streakData || null;
+}
+
+export async function saveStreakDataSafe(data) {
+  inMemorySession.streakData = data;
+  try {
+    await AsyncStorage.setItem(STREAK_DATA_KEY, JSON.stringify(data));
+  } catch (e) {}
+}
+
 

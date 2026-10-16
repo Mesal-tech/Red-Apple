@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, Dimensions } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/colors';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function CycleLengthChart({ historyData = null, averageLength = 28 }) {
   const months = React.useMemo(() => {

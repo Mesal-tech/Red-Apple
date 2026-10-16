@@ -1,51 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Cookie, X, Check, Lock, Sliders } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 
 export interface CookiePreferences {
-  essential: boolean;
-  analytics: boolean;
-  functional: boolean;
+  necessary: boolean;
+  preferences: boolean;
+  statistics: boolean;
+  marketing: boolean;
   timestamp: string;
 }
 
-const STORAGE_KEY = 'red_apple_cookie_consent_v1';
+const STORAGE_KEY = 'red_apple_cookie_consent_v2';
 
 export const CookieConsent: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
-  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
-  const [functionalEnabled, setFunctionalEnabled] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
+
+  // Category toggles matching the reference Cookiebot design
+  const [preferencesEnabled, setPreferencesEnabled] = useState(true);
+  const [statisticsEnabled, setStatisticsEnabled] = useState(true);
+  const [marketingEnabled, setMarketingEnabled] = useState(true);
 
   useEffect(() => {
-    // Check if consent has already been given
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) {
-        // Small delay so page renders smoothly first
-        const timer = setTimeout(() => setIsVisible(true), 800);
+        // Small delay so initial page loads smoothly
+        const timer = setTimeout(() => setIsVisible(true), 600);
         return () => clearTimeout(timer);
       }
     } catch {
-      // If local storage is disabled, show banner
       setIsVisible(true);
     }
   }, []);
 
-  // Listen for global request to open cookie settings (e.g. from footer link)
+  // Listen for global event to reopen cookie settings (e.g. from footer)
   useEffect(() => {
     const handleOpenSettings = () => {
-      // Load current preferences if stored
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved) as CookiePreferences;
-          setAnalyticsEnabled(parsed.analytics);
-          setFunctionalEnabled(parsed.functional);
+          setPreferencesEnabled(parsed.preferences ?? true);
+          setStatisticsEnabled(parsed.statistics ?? true);
+          setMarketingEnabled(parsed.marketing ?? true);
         }
       } catch {
         // Ignore parse errors
       }
-      setIsPreferencesOpen(true);
       setIsVisible(true);
     };
 
@@ -57,38 +58,38 @@ export const CookieConsent: React.FC = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     } catch {
-      // LocalStorage access issues
+      // Ignore storage errors
     }
     setIsVisible(false);
-    setIsPreferencesOpen(false);
-
-    // Dispatch event in case analytics/scripts need to initialize
     window.dispatchEvent(new CustomEvent('cookie_consent_updated', { detail: prefs }));
   };
 
-  const handleAcceptAll = () => {
+  const handleAllowAll = () => {
     saveConsent({
-      essential: true,
-      analytics: true,
-      functional: true,
+      necessary: true,
+      preferences: true,
+      statistics: true,
+      marketing: true,
       timestamp: new Date().toISOString(),
     });
   };
 
-  const handleRejectNonEssential = () => {
+  const handleAllowSelection = () => {
     saveConsent({
-      essential: true,
-      analytics: false,
-      functional: false,
+      necessary: true,
+      preferences: preferencesEnabled,
+      statistics: statisticsEnabled,
+      marketing: marketingEnabled,
       timestamp: new Date().toISOString(),
     });
   };
 
-  const handleSaveCustom = () => {
+  const handleRejectAll = () => {
     saveConsent({
-      essential: true,
-      analytics: analyticsEnabled,
-      functional: functionalEnabled,
+      necessary: true,
+      preferences: false,
+      statistics: false,
+      marketing: false,
       timestamp: new Date().toISOString(),
     });
   };
@@ -97,221 +98,228 @@ export const CookieConsent: React.FC = () => {
 
   return (
     <>
-      {/* 1. Main Floating Consent Card */}
-      {!isPreferencesOpen && (
-        <aside
-          role="region"
-          aria-label="Cookie consent banner"
-          className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-md z-50 bg-white/95 backdrop-blur-md rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-neutral-200 font-sans animate-in slide-in-from-bottom-6 duration-300"
-        >
-          <div className="space-y-4">
-            
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-red-50 text-crimson flex items-center justify-center shrink-0 border border-red-100">
-                  <Cookie className="w-5 h-5 text-crimson" />
-                </div>
-                <div>
-                  <h3 className="font-editorial text-lg text-neutral-900 font-normal leading-tight">
-                    Your Health &amp; Privacy First
-                  </h3>
-                  <div className="text-[11px] text-neutral-500 font-medium flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>NDPA 2023 Aligned</span>
-                  </div>
-                </div>
+      {/* Soft translucent backdrop to focus user attention */}
+      <div
+        className="fixed inset-0 z-[990] bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-300"
+        aria-hidden="true"
+      />
+
+      {/* Cookiebot / Delta Cafés Exact Styled Bottom Modal */}
+      <aside
+        role="dialog"
+        aria-label="Cookie consent banner"
+        aria-modal="true"
+        className="fixed bottom-0 left-0 right-0 z-[999] bg-white text-neutral-900 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-neutral-200 animate-in slide-in-from-bottom duration-300 font-sans"
+      >
+        <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-14 py-6 sm:py-8">
+
+          {/* MAIN 3-COLUMN ROW */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+
+            {/* 1. LEFT COLUMN: Brand Logo (Vertically Centered) */}
+            <div className="hidden sm:flex lg:col-span-2 items-center justify-start lg:justify-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl p-2 flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Red Apple"
+                  className="w-full h-full object-contain filter drop-shadow-xs"
+                />
+              </div>
+            </div>
+
+            {/* 2. CENTER COLUMN: Title & Description */}
+            <div className="lg:col-span-7 space-y-2.5 text-left">
+              <div className="flex items-center gap-3 sm:hidden mb-2">
+                <img
+                  src="/logo.png"
+                  alt="Red Apple"
+                  className="w-9 h-9 object-contain"
+                />
+                <h2 className="font-sans font-bold text-base text-neutral-950">
+                  Cookies on our site
+                </h2>
               </div>
 
+              <h2 className="hidden sm:block font-sans font-bold text-lg sm:text-xl text-neutral-950 tracking-tight">
+                Cookies on our site
+              </h2>
+
+              <p className="text-xs sm:text-[13px] text-neutral-600 leading-relaxed font-normal">
+                By default, we only use cookies necessary for navigating our site. If you consent, cookies may also be used to analyze traffic, personalize your navigation experience, or optimize our African maternal health intelligence platform. Through the buttons on the right, you can accept or reject all cookies, or customize your preferences below.
+              </p>
+            </div>
+
+            {/* 3. RIGHT COLUMN: 3 Stacked Buttons Matching Delta Cafés */}
+            <div className="lg:col-span-3 flex flex-col gap-2.5 w-full">
+              {/* Primary: Solid Crimson Red */}
               <button
-                onClick={handleRejectNonEssential}
-                className="text-neutral-400 hover:text-neutral-600 p-1 rounded-full transition-colors cursor-pointer"
-                aria-label="Dismiss and use essential only"
+                type="button"
+                onClick={handleAllowAll}
+                className="w-full py-3 px-4 bg-[#C81E3A] hover:bg-[#A5142E] text-white font-bold text-xs sm:text-sm tracking-wide transition-colors cursor-pointer rounded-xs text-center shadow-xs"
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Description */}
-            <p className="font-sans text-xs text-neutral-600 leading-relaxed font-normal">
-              We use strictly necessary cookies to keep our clinical platform safe and optional cookies to understand how mothers and healthcare providers navigate our guides. Your medical telemetry is never shared.
-            </p>
-
-            {/* Action Buttons */}
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleAcceptAll}
-                  className="flex-1 py-2.5 px-4 rounded-full bg-crimson hover:bg-crimson-dark text-white text-xs font-semibold transition-all shadow-md shadow-crimson/20 cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Accept All Cookies</span>
-                </button>
-
-                <button
-                  onClick={handleRejectNonEssential}
-                  className="flex-1 py-2.5 px-4 rounded-full bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-medium border border-neutral-200 transition-colors cursor-pointer"
-                >
-                  <span>Essential Only</span>
-                </button>
-              </div>
-
-              <button
-                onClick={() => setIsPreferencesOpen(true)}
-                className="w-full text-center py-1 text-[11px] text-neutral-500 hover:text-crimson font-medium transition-colors cursor-pointer flex items-center justify-center gap-1"
-              >
-                <Sliders className="w-3 h-3" />
-                <span>Customize Preferences</span>
-              </button>
-            </div>
-
-          </div>
-        </aside>
-      )}
-
-      {/* 2. Detailed Cookie Preferences Modal */}
-      {isPreferencesOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          
-          {/* Backdrop */}
-          <div
-            onClick={() => setIsPreferencesOpen(false)}
-            className="fixed inset-0 bg-neutral-900/50 backdrop-blur-xs transition-opacity animate-in fade-in"
-            aria-hidden="true"
-          />
-
-          {/* Modal Card */}
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cookie-modal-title"
-            className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-neutral-200 p-6 sm:p-8 z-10 space-y-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200"
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-neutral-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-red-50 text-crimson flex items-center justify-center border border-red-100">
-                  <Cookie className="w-5 h-5 text-crimson" />
-                </div>
-                <div>
-                  <h3 id="cookie-modal-title" className="font-editorial text-xl sm:text-2xl text-neutral-900 font-normal">
-                    Cookie &amp; Privacy Preferences
-                  </h3>
-                  <p className="text-xs text-neutral-500 font-normal">
-                    Manage how Red Apple uses cookies to protect and serve you.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setIsPreferencesOpen(false)}
-                className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 flex items-center justify-center transition-colors cursor-pointer"
-                aria-label="Close modal"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Categories List */}
-            <div className="space-y-3">
-              
-              {/* Category 1: Strictly Necessary */}
-              <div className="p-4 rounded-2xl bg-white border border-neutral-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-emerald-600" />
-                    <span className="font-editorial text-base text-neutral-900 font-normal">
-                      Strictly Essential Cookies
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                    Always Active
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-600 leading-relaxed font-normal">
-                  Required for core security, session authentication, and NDPA compliance. Without these cookies, the medical platform cannot function securely.
-                </p>
-              </div>
-
-              {/* Category 2: Analytics & Insights */}
-              <div className="p-4 rounded-2xl bg-white border border-neutral-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-editorial text-base text-neutral-900 font-normal">
-                      Usage &amp; Health Insights
-                    </span>
-                  </div>
-                  
-                  {/* Toggle Switch */}
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={analyticsEnabled}
-                      onChange={(e) => setAnalyticsEnabled(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-crimson"></div>
-                  </label>
-                </div>
-                <p className="text-xs text-neutral-600 leading-relaxed font-normal">
-                  Helps us understand which clinical articles and maternal tracking tools are most helpful. All metrics are aggregated and 100% de-identified.
-                </p>
-              </div>
-
-              {/* Category 3: Preferences & Personalization */}
-              <div className="p-4 rounded-2xl bg-white border border-neutral-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-editorial text-base text-neutral-900 font-normal">
-                      Preferences &amp; Regional Filters
-                    </span>
-                  </div>
-                  
-                  {/* Toggle Switch */}
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={functionalEnabled}
-                      onChange={(e) => setFunctionalEnabled(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-crimson"></div>
-                  </label>
-                </div>
-                <p className="text-xs text-neutral-600 leading-relaxed font-normal">
-                  Remembers your preferred regional healthcare hub (e.g. Lagos or Accra), reading preferences, and notification status across sessions.
-                </p>
-              </div>
-
-            </div>
-
-            {/* Privacy Assurance */}
-            <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 flex items-center gap-2.5 text-xs text-neutral-600">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Zero-knowledge client encryption: Your medical history is never tracked by advertising pixels.</span>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-              <button
-                onClick={handleSaveCustom}
-                className="w-full sm:flex-1 py-3 px-5 rounded-full bg-crimson hover:bg-crimson-dark text-white text-xs font-semibold transition-all shadow-md shadow-crimson/20 cursor-pointer"
-              >
-                Save My Preferences
+                Allow all cookies
               </button>
 
+              {/* Secondary 1: White with Crimson Border */}
               <button
-                onClick={handleAcceptAll}
-                className="w-full sm:w-auto py-3 px-5 rounded-full bg-white border border-neutral-200 text-neutral-800 text-xs font-medium hover:bg-neutral-50 transition-colors cursor-pointer"
+                type="button"
+                onClick={handleAllowSelection}
+                className="w-full py-2.5 px-4 bg-white hover:bg-neutral-50 text-neutral-900 font-bold text-xs sm:text-sm border border-[#C81E3A] tracking-wide transition-colors cursor-pointer rounded-xs text-center"
               >
-                Accept All
+                Allow selection
+              </button>
+
+              {/* Secondary 2: White with Crimson Border */}
+              <button
+                type="button"
+                onClick={handleRejectAll}
+                className="w-full py-2.5 px-4 bg-white hover:bg-neutral-50 text-neutral-900 font-bold text-xs sm:text-sm border border-[#C81E3A] tracking-wide transition-colors cursor-pointer rounded-xs text-center"
+              >
+                Reject all
               </button>
             </div>
 
           </div>
+
+          {/* BOTTOM BAR: Compliance Badge + 4 Toggles + Show Details link */}
+          <div className="mt-6 pt-4 border-t border-neutral-200/90 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+
+            {/* Category Toggles & Details Link */}
+            <div className="flex items-center flex-wrap gap-x-6 gap-y-3">
+
+              {/* 1. Necessary (Locked Red Switch) */}
+              <div className="flex items-center gap-2.5 select-none">
+                <span className="text-xs font-semibold text-neutral-900">Necessary</span>
+                <div
+                  className="w-11 h-6 rounded-full bg-[#C81E3A] p-0.5 flex items-center justify-end cursor-not-allowed opacity-95 shadow-inner"
+                  title="Necessary cookies are mandatory for core website security & operation"
+                >
+                  <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
+                </div>
+              </div>
+
+              {/* 2. Preferences Toggle */}
+              <button
+                type="button"
+                onClick={() => setPreferencesEnabled(!preferencesEnabled)}
+                className="flex items-center gap-2.5 cursor-pointer select-none group"
+                aria-pressed={preferencesEnabled}
+              >
+                <span className="text-xs font-medium text-neutral-800 group-hover:text-black">
+                  Preferences
+                </span>
+                <div
+                  className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
+                    preferencesEnabled ? 'bg-neutral-900 justify-end' : 'bg-neutral-200 justify-start'
+                  }`}
+                >
+                  <div className="w-5 h-5 rounded-full bg-white shadow-xs transition-transform" />
+                </div>
+              </button>
+
+              {/* 3. Statistics Toggle */}
+              <button
+                type="button"
+                onClick={() => setStatisticsEnabled(!statisticsEnabled)}
+                className="flex items-center gap-2.5 cursor-pointer select-none group"
+                aria-pressed={statisticsEnabled}
+              >
+                <span className="text-xs font-medium text-neutral-800 group-hover:text-black">
+                  Statistics
+                </span>
+                <div
+                  className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
+                    statisticsEnabled ? 'bg-neutral-900 justify-end' : 'bg-neutral-200 justify-start'
+                  }`}
+                >
+                  <div className="w-5 h-5 rounded-full bg-white shadow-xs transition-transform" />
+                </div>
+              </button>
+
+              {/* 4. Marketing Toggle */}
+              <button
+                type="button"
+                onClick={() => setMarketingEnabled(!marketingEnabled)}
+                className="flex items-center gap-2.5 cursor-pointer select-none group"
+                aria-pressed={marketingEnabled}
+              >
+                <span className="text-xs font-medium text-neutral-800 group-hover:text-black">
+                  Marketing
+                </span>
+                <div
+                  className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
+                    marketingEnabled ? 'bg-neutral-900 justify-end' : 'bg-neutral-200 justify-start'
+                  }`}
+                >
+                  <div className="w-5 h-5 rounded-full bg-white shadow-xs transition-transform" />
+                </div>
+              </button>
+
+              {/* Show Details Link in Crimson Red with Chevron */}
+              <button
+                type="button"
+                onClick={() => setShowDetails(!showDetails)}
+                className="inline-flex items-center gap-1 text-xs font-bold text-[#C81E3A] hover:text-[#A5142E] transition-colors cursor-pointer ml-auto md:ml-2"
+              >
+                <span>{showDetails ? 'Hide details' : 'Show details'}</span>
+                {showDetails ? (
+                  <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                )}
+              </button>
+
+            </div>
+
+          </div>
+
+          {/* COLLAPSIBLE DETAILS ACCORDION */}
+          {showDetails && (
+            <div className="mt-5 pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-left animate-in slide-in-from-top-2 duration-200">
+              <div className="p-3.5 rounded-xs bg-neutral-50 border border-neutral-200/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-900">Necessary</span>
+                  <span className="text-[10px] font-mono text-[#C81E3A] font-semibold">ALWAYS ACTIVE</span>
+                </div>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Required for page navigation, session tokens, security safeguards, and NDPA compliance checks.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xs bg-neutral-50 border border-neutral-200/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-900">Preferences</span>
+                  <span className="text-[10px] font-mono text-neutral-500">OPTIONAL</span>
+                </div>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Stores language settings, font sizing, and customized viewing states across your visits.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xs bg-neutral-50 border border-neutral-200/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-900">Statistics</span>
+                  <span className="text-[10px] font-mono text-neutral-500">OPTIONAL</span>
+                </div>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Aggregates anonymous interaction metrics to optimize site performance and clinical information layout.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xs bg-neutral-50 border border-neutral-200/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-neutral-900">Marketing</span>
+                  <span className="text-[10px] font-mono text-neutral-500">OPTIONAL</span>
+                </div>
+                <p className="text-[11px] text-neutral-600 leading-relaxed">
+                  Measures outreach campaigns so our maternal health intelligence reaches more communities across Africa.
+                </p>
+              </div>
+            </div>
+          )}
 
         </div>
-      )}
+      </aside>
     </>
   );
 };

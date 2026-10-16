@@ -1,307 +1,394 @@
 import React, { useRef, useEffect } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ArrowRight, Globe } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
 export const ImpactSection: React.FC = () => {
-  const sectionRef = useRef<HTMLElement>(null);
-  const pinRef = useRef<HTMLDivElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const card0Ref = useRef<HTMLDivElement>(null);
-  const card1Ref = useRef<HTMLDivElement>(null);
-  const card2Ref = useRef<HTMLDivElement>(null);
-  const badgeRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const maskRef = useRef<HTMLDivElement>(null);
+  const stage1Ref = useRef<HTMLDivElement>(null);
+  const stage2Ref = useRef<HTMLDivElement>(null);
+
+  // Video refs for Stage 1 (rural mother/daughter portrait footage)
+  const video1Ref = useRef<HTMLVideoElement>(null);
+  const video2Ref = useRef<HTMLVideoElement>(null);
+  const videoSpotlightRef = useRef<HTMLVideoElement>(null);
+
+  // Video refs for Stage 2 (aerial city infrastructure footage)
+  const aerialVideoRef = useRef<HTMLVideoElement>(null);
+  const aerialSpotlightRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    const section = sectionRef.current;
-    const pin = pinRef.current;
-    const root = rootRef.current;
-    const c0 = card0Ref.current;
-    const c1 = card1Ref.current;
-    const c2 = card2Ref.current;
+    let animId: number;
+    let target1X = 50, target1Y = 50, cur1X = 50, cur1Y = 50;
+    let target2X = 50, target2Y = 50, cur2X = 50, cur2Y = 50;
 
-    if (!section || !pin || !root || !c0 || !c1 || !c2) return;
+    const updateMouse = () => {
+      cur1X += (target1X - cur1X) * 0.08;
+      cur1Y += (target1Y - cur1Y) * 0.08;
+      cur2X += (target2X - cur2X) * 0.08;
+      cur2Y += (target2Y - cur2Y) * 0.08;
 
-    const cards = [c0, c1, c2];
-    const depth = 60; // z-axis distance between cards
-    const yOffset = 16; // vertical peek offset
+      if (stage1Ref.current) {
+        stage1Ref.current.style.setProperty('--mouse-x', `${cur1X.toFixed(2)}%`);
+        stage1Ref.current.style.setProperty('--mouse-y', `${cur1Y.toFixed(2)}%`);
+      }
+      if (stage2Ref.current) {
+        stage2Ref.current.style.setProperty('--mouse-x', `${cur2X.toFixed(2)}%`);
+        stage2Ref.current.style.setProperty('--mouse-y', `${cur2Y.toFixed(2)}%`);
+      }
 
-    // Set initial 3D positions
-    cards.forEach((card, idx) => {
-      gsap.set(card, {
-        z: -idx * depth,
-        y: -idx * yOffset,
-        zIndex: cards.length - idx,
-        autoAlpha: 1,
-        transformOrigin: 'center center',
+      animId = requestAnimationFrame(updateMouse);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (stage1Ref.current) {
+        const r1 = stage1Ref.current.getBoundingClientRect();
+        target1X = Math.max(10, Math.min(90, ((e.clientX - r1.left) / r1.width) * 100));
+        // Keep spotlight safely away from the bottom joint (max 72%)
+        target1Y = Math.max(12, Math.min(72, ((e.clientY - r1.top) / r1.height) * 100));
+      }
+      if (stage2Ref.current) {
+        const r2 = stage2Ref.current.getBoundingClientRect();
+        target2X = Math.max(10, Math.min(90, ((e.clientX - r2.left) / r2.width) * 100));
+        // Keep spotlight safely away from the top joint (min 28%)
+        target2Y = Math.max(28, Math.min(85, ((e.clientY - r2.top) / r2.height) * 100));
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    animId = requestAnimationFrame(updateMouse);
+
+    // Synchronize and autoplay all background video layers
+    const allVideos = [
+      video1Ref.current,
+      video2Ref.current,
+      videoSpotlightRef.current,
+      aerialVideoRef.current,
+      aerialSpotlightRef.current,
+    ];
+    allVideos.forEach((v) => {
+      if (v) {
+        v.play().catch(() => { });
+      }
+    });
+
+    // Scroll-driven masking effect: Masks out the sides to reveal a central 50% window, then expands to 100% before fully entering
+    const wrapper = wrapperRef.current;
+    const mask = maskRef.current;
+    let mm: gsap.MatchMedia | null = null;
+
+    if (wrapper && mask) {
+      mm = gsap.matchMedia();
+
+      mm.add('(min-width: 768px)', () => {
+        // Desktop / Tablet: Hides 25% left and 25% right (central 50% visible) with 32px rounded corners
+        const tween = gsap.fromTo(
+          mask,
+          {
+            clipPath: 'inset(0% 25% 0% 25% round 32px)',
+          },
+          {
+            clipPath: 'inset(0% 0% 0% 0% round 0px)',
+            ease: 'none',
+            scrollTrigger: {
+              trigger: wrapper,
+              start: 'top bottom',
+              end: 'top 12%',
+              scrub: 0.5,
+              invalidateOnRefresh: true,
+            },
+          }
+        );
+
+        return () => {
+          if (tween.scrollTrigger) tween.scrollTrigger.kill();
+          tween.kill();
+        };
       });
-    });
 
-    const tl = gsap.timeline({ paused: true });
+      mm.add('(max-width: 767px)', () => {
+        // Mobile: Hides 10% on each side (80% visible) with 20px rounded corners
+        const tween = gsap.fromTo(
+          mask,
+          {
+            clipPath: 'inset(0% 10% 0% 10% round 20px)',
+          },
+          {
+            clipPath: 'inset(0% 0% 0% 0% round 0px)',
+            ease: 'none',
+            scrollTrigger: {
+              trigger: wrapper,
+              start: 'top bottom',
+              end: 'top 10%',
+              scrub: 0.5,
+              invalidateOnRefresh: true,
+            },
+          }
+        );
 
-    // 1. As user scrolls down: Card 0 leaves the screen DOWNWARDS
-    tl.to(c0, {
-      y: () => `+=${window.innerHeight * 0.85}`,
-      ease: 'power2.in',
-      duration: 1,
-    }, 0);
-    tl.to(c0, {
-      autoAlpha: 0,
-      duration: 0.25,
-      ease: 'none',
-    }, 0.7);
-
-    // Remaining cards step forward in 3D stack
-    tl.to(c1, { z: 0, y: 0, duration: 1, ease: 'none' }, 0);
-    tl.to(c2, { z: -depth, y: -yOffset, duration: 1, ease: 'none' }, 0);
-
-    // 2. Next scroll step: Card 1 leaves the screen DOWNWARDS
-    tl.to(c1, {
-      y: () => `+=${window.innerHeight * 0.85}`,
-      ease: 'power2.in',
-      duration: 1,
-    }, 1);
-    tl.to(c1, {
-      autoAlpha: 0,
-      duration: 0.25,
-      ease: 'none',
-    }, 1.7);
-
-    // Card 2 moves to the very front
-    tl.to(c2, { z: 0, y: 0, duration: 1, ease: 'none' }, 1);
-
-    // Continuous rotation of the circular scroll stamp badge
-    if (badgeRef.current) {
-      tl.fromTo(badgeRef.current, { rotation: 0 }, { rotation: 360, ease: 'none', duration: 2 }, 0);
-    }
-
-    // ScrollTrigger to pin the section and scrub the timeline
-    const st = ScrollTrigger.create({
-      trigger: section,
-      start: 'top top',
-      end: () => `+=${window.innerHeight * 2.2}`,
-      pin: pin,
-      pinSpacing: true,
-      scrub: 0.3,
-      invalidateOnRefresh: true,
-      onUpdate: (self) => {
-        tl.progress(self.progress);
-      },
-    });
-
-    // 3D Mouse Parallax Tilt on desktop
-    let cleanupMouse: (() => void) | undefined;
-    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-      const tiltX = gsap.quickTo(root, 'rotationX', { duration: 0.6, ease: 'power3.out' });
-      const tiltY = gsap.quickTo(root, 'rotationY', { duration: 0.6, ease: 'power3.out' });
-
-      const onMouseMove = (e: MouseEvent) => {
-        const rect = pin.getBoundingClientRect();
-        const qX = (e.clientX - rect.left) / rect.width - 0.5;
-        const qY = (e.clientY - rect.top) / rect.height - 0.5;
-        tiltX(-qY * 6);
-        tiltY(qX * 8);
-      };
-
-      const onMouseLeave = () => {
-        tiltX(0);
-        tiltY(0);
-      };
-
-      pin.addEventListener('mousemove', onMouseMove, { passive: true });
-      pin.addEventListener('mouseleave', onMouseLeave, { passive: true });
-
-      cleanupMouse = () => {
-        pin.removeEventListener('mousemove', onMouseMove);
-        pin.removeEventListener('mouseleave', onMouseLeave);
-      };
+        return () => {
+          if (tween.scrollTrigger) tween.scrollTrigger.kill();
+          tween.kill();
+        };
+      });
     }
 
     return () => {
-      st.kill();
-      tl.kill();
-      cleanupMouse?.();
-      gsap.killTweensOf([c0, c1, c2, root]);
+      cancelAnimationFrame(animId);
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (mm) mm.revert();
     };
   }, []);
 
   return (
     <section
-      ref={sectionRef}
       id="impact"
-      data-nav-theme="dark"
-      className="relative w-full bg-[#0E0E10] text-white overflow-hidden"
+      ref={wrapperRef}
+      className="relative w-full bg-white select-none overflow-hidden"
     >
-      {/* Pinned Viewport Container with calibrated padding to clear floating nav and fit any screen */}
       <div
-        ref={pinRef}
-        className="w-full h-screen max-h-screen flex flex-col justify-between items-center pt-16 sm:pt-20 pb-4 sm:pb-6 px-4 sm:px-8 relative overflow-hidden select-none"
+        ref={maskRef}
+        data-nav-theme="dark"
+        className="relative w-full bg-black text-white overflow-hidden will-change-[clip-path]"
+        style={{
+          clipPath: 'inset(0% 25% 0% 25% round 32px)',
+          WebkitClipPath: 'inset(0% 25% 0% 25% round 32px)',
+        }}
       >
-        {/* Section Header */}
-        <div className="text-center max-w-2xl mx-auto space-y-1 sm:space-y-1.5 relative z-20 shrink-0">
+        {/* ========================================================================= */}
+        {/* BEAT 1: The Crisis & Generational Mission (Mother & Daughter Portrait)   */}
+        {/* ========================================================================= */}
+        <div
+          ref={stage1Ref}
+          className="relative w-full min-h-screen bg-black text-white flex flex-col justify-between items-start px-6 sm:px-12 lg:px-20 py-16 sm:py-24 overflow-hidden"
+          style={{
+            '--mouse-x': '50%',
+            '--mouse-y': '50%',
+          } as React.CSSProperties}
+        >
+        {/* Full-bleed masked background video */}
+        <div className="absolute inset-0 w-full h-full bg-black pointer-events-none overflow-hidden z-0">
+          {/* Patch 1: Upper-left aperture */}
+          <div
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{
+              maskImage:
+                'radial-gradient(ellipse 38% 46% at 26% 32%, black 18%, rgba(0,0,0,0.6) 44%, transparent 72%)',
+              WebkitMaskImage:
+                'radial-gradient(ellipse 38% 46% at 26% 32%, black 18%, rgba(0,0,0,0.6) 44%, transparent 72%)',
+            }}
+          >
+            <img
+              src="/images/video1_frame0.jpg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-90 pointer-events-none"
+            />
+            <video
+              ref={video1Ref}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-90 pointer-events-none"
+            >
+              <source src="/Cinematic_documentary_slow_mot.mp4" type="video/mp4" />
+            </video>
+          </div>
+
+          {/* Patch 2: Right aperture */}
+          <div
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{
+              maskImage:
+                'radial-gradient(ellipse 36% 48% at 78% 38%, black 20%, rgba(0,0,0,0.6) 46%, transparent 72%)',
+              WebkitMaskImage:
+                'radial-gradient(ellipse 36% 48% at 78% 38%, black 20%, rgba(0,0,0,0.6) 46%, transparent 72%)',
+            }}
+          >
+            <img
+              src="/images/video1_frame0.jpg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-90 pointer-events-none"
+            />
+            <video
+              ref={video2Ref}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-90 pointer-events-none"
+            >
+              <source src="/Cinematic_documentary_slow_mot.mp4" type="video/mp4" />
+            </video>
+          </div>
+
+          {/* Patch 3: Mouse spotlight */}
+          <div
+            className="hidden md:block absolute inset-0 w-full h-full pointer-events-none"
+            style={{
+              maskImage:
+                'radial-gradient(circle 220px at var(--mouse-x, 50%) var(--mouse-y, 50%), black 15%, transparent 68%)',
+              WebkitMaskImage:
+                'radial-gradient(circle 220px at var(--mouse-x, 50%) var(--mouse-y, 50%), black 15%, transparent 68%)',
+            }}
+          >
+            <img
+              src="/images/video1_frame0.jpg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-90 pointer-events-none"
+            />
+            <video
+              ref={videoSpotlightRef}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-90 pointer-events-none"
+            >
+              <source src="/Cinematic_documentary_slow_mot.mp4" type="video/mp4" />
+            </video>
+          </div>
+
+          {/* Edge Vignette */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black via-transparent to-black pointer-events-none opacity-60" />
+
+          {/* Guaranteed Solid Black Joint Buffer at bottom of Stage 1 */}
+          <div className="absolute bottom-0 inset-x-0 h-48 sm:h-64 bg-gradient-to-t from-black via-black/95 to-transparent pointer-events-none z-10" />
+        </div>
+
+        {/* Top-Left: Problem Statement */}
+        <div className="w-full max-w-2xl text-left space-y-1 sm:space-y-1.5 relative z-20 shrink-0 pt-4 sm:pt-8">
           <p className="font-editorial italic text-xs sm:text-sm md:text-base text-neutral-400 tracking-tight">
-            Our Maternal Health Conviction
+            The Reality We Refuse to Accept
           </p>
 
           <h2 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tight text-white leading-tight">
             <span className="block font-sans font-extrabold text-white">
-              DIGNIFIED MATERNAL CARE
+              AFRICA'S REPRODUCTIVE CRISIS
             </span>
             <span className="block font-editorial font-normal italic text-neutral-300 mt-0.5">
-              IS FOUNDATIONAL HEALTH
+              DEMANDS PREVENTIVE ACTION
             </span>
           </h2>
         </div>
 
-        {/* 3D Stack Stage Container - Scaled to fit comfortably on any viewport height */}
-        <div
-          className="w-full max-w-xl mx-auto flex-1 min-h-0 flex items-center justify-center relative my-1 sm:my-2"
-          style={{
-            perspective: '1200px',
-            transformStyle: 'preserve-3d',
-          }}
-        >
+        {/* Bottom-Right: Resolution & Outcome */}
+        <div className="w-full max-w-xl self-end text-left md:text-right space-y-1 sm:space-y-1.5 relative z-20 shrink-0 pb-4 sm:pb-8 mt-auto">
+          <p className="font-editorial italic text-xs sm:text-sm md:text-base text-neutral-400 tracking-tight">
+            The Future We Are Creating
+          </p>
+
+          <h3 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tight text-white leading-tight">
+            <span className="block font-sans font-extrabold text-white">
+              WHERE MOTHERS &amp; DAUGHTERS
+            </span>
+            <span className="block font-editorial font-normal italic text-neutral-300 mt-0.5">
+              THRIVE ACROSS GENERATIONS
+            </span>
+          </h3>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* BEAT 2: The Healthcare Access Deficit (Aerial City Footage & Perimeter Patches) */}
+      {/* ========================================================================= */}
+      <div
+        ref={stage2Ref}
+        className="relative w-full min-h-screen bg-black text-white flex flex-col justify-center items-center px-4 sm:px-8 lg:px-12 pt-28 sm:pt-36 lg:pt-40 pb-16 sm:pb-24 overflow-hidden"
+        style={{
+          '--mouse-x': '50%',
+          '--mouse-y': '50%',
+        } as React.CSSProperties}
+      >
+        {/* Full-bleed masked aerial background with peripheral apertures */}
+        <div className="absolute inset-0 w-full h-full bg-black pointer-events-none overflow-hidden z-0">
+          {/* Peripheral circular patches revealing the aerial city lights */}
           <div
-            ref={rootRef}
-            className="relative w-full max-w-[400px] sm:max-w-[450px] md:max-w-[480px] aspect-[16/10] max-h-[44vh]"
+            className="absolute inset-0 w-full h-full pointer-events-none"
             style={{
-              transformStyle: 'preserve-3d',
+              maskImage:
+                'radial-gradient(circle 160px at 15% 26%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 180px at 10% 54%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 160px at 24% 78%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 160px at 85% 25%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 190px at 90% 52%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 170px at 74% 78%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%)',
+              WebkitMaskImage:
+                'radial-gradient(circle 160px at 15% 26%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 180px at 10% 54%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 160px at 24% 78%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 160px at 85% 25%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 190px at 90% 52%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%), radial-gradient(circle 170px at 74% 78%, black 20%, rgba(0,0,0,0.6) 45%, transparent 72%)',
+              WebkitMaskComposite: 'source-over',
+              maskComposite: 'add',
             }}
           >
-            {/* Card 0 (Front): Warm Gold / Sand Border - Empowering Every Mother */}
-            <div
-              ref={card0Ref}
-              className="absolute inset-0 w-full h-full rounded-xs overflow-hidden shadow-2xl border-[5px] sm:border-[6px] border-[#C81E3A] bg-neutral-900 group cursor-pointer"
-              style={{
-                transformStyle: 'preserve-3d',
-                willChange: 'transform, opacity',
-              }}
-            >
-              {/* Blank Placeholder */}
-              <div className="w-full h-full bg-neutral-900" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3.5 sm:p-4.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#C81E3A] font-semibold">
-                      CYCLE &amp; HORMONAL INTELLIGENCE
-                    </span>
-                    <h3 className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-tight text-white mt-0.5">
-                      EMPOWERING EVERY MOTHER
-                    </h3>
-                  </div>
-                  <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-xs text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
-                    <span>EXPLORE</span>
-                    <ArrowRight className="w-2.5 h-2.5" />
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 1 (Middle): Royal Blue Border - Specialist Telehealth */}
-            <div
-              ref={card1Ref}
-              className="absolute inset-0 w-full h-full rounded-xs overflow-hidden shadow-2xl border-[5px] sm:border-[6px] border-[#C81E3A] bg-neutral-900 group cursor-pointer"
-              style={{
-                transformStyle: 'preserve-3d',
-                willChange: 'transform, opacity',
-              }}
-            >
-              {/* Blank Placeholder */}
-              <div className="w-full h-full bg-neutral-900" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3.5 sm:p-4.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#93C5FD] font-semibold">
-                      MDCN TELEHEALTH NETWORK
-                    </span>
-                    <h3 className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-tight text-white mt-0.5">
-                      CLOSING GEOGRAPHIC DISTANCE
-                    </h3>
-                  </div>
-                  <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-xs text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
-                    <span>EXPLORE</span>
-                    <ArrowRight className="w-2.5 h-2.5" />
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2 (Back): Signature Crimson Border - Community & Clinic Digitization */}
-            <div
-              ref={card2Ref}
-              className="absolute inset-0 w-full h-full rounded-xs overflow-hidden shadow-2xl border-[5px] sm:border-[6px] border-[#C81E3A] bg-neutral-900 group cursor-pointer"
-              style={{
-                transformStyle: 'preserve-3d',
-                willChange: 'transform, opacity',
-              }}
-            >
-              {/* Blank Placeholder */}
-              <div className="w-full h-full bg-neutral-900" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-3.5 sm:p-4.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-widest text-[#FCA5A5] font-semibold">
-                      DIGITAL EMR &amp; CLINIC OS
-                    </span>
-                    <h3 className="text-sm sm:text-base md:text-lg font-extrabold uppercase tracking-tight text-white mt-0.5">
-                      INTERGENERATIONAL DIGNITY
-                    </h3>
-                  </div>
-                  <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-xs text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
-                    <span>EXPLORE</span>
-                    <ArrowRight className="w-2.5 h-2.5" />
-                  </span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Bottom Bar: Action Trigger */}
-        <div className="w-full max-w-4xl mx-auto flex items-center justify-center relative z-20 shrink-0 pt-1 sm:pt-2">
-          <a
-            href="/about"
-            className="group inline-flex items-center gap-2.5 px-5 py-2 sm:py-2.5 bg-[#FF66C4] hover:bg-[#ff4db8] text-neutral-950 font-extrabold text-xs uppercase tracking-wider rounded-xs shadow-md transition-all duration-200 hover:-translate-y-0.5"
-            aria-label="View our clinical impact outcomes"
-          >
-            <span className="w-4 h-4 rounded-xs bg-black/15 flex items-center justify-center transition-transform group-hover:translate-x-0.5">
-              <ArrowRight className="w-3 h-3 text-neutral-950" />
-            </span>
-            <span>VIEW OUR IMPACT</span>
-          </a>
-        </div>
-
-        {/* Rotating Circular Scroll Badge (Extrafazant "THIS IS HOW WE SCROLL" style) */}
-        <div
-          ref={badgeRef}
-          className="hidden md:flex absolute bottom-4 sm:bottom-6 right-4 sm:right-8 w-20 h-20 lg:w-24 lg:h-24 rounded-full bg-[#BFDBFE] text-neutral-950 items-center justify-center pointer-events-none select-none z-30 shadow-xl"
-        >
-          {/* Circular SVG Text */}
-          <svg
-            className="absolute inset-0 w-full h-full animate-[spin_20s_linear_infinite]"
-            viewBox="0 0 100 100"
-          >
-            <path
-              id="circlePath"
-              d="M 50, 50 m -37, 0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"
-              fill="none"
+            <img
+              src="/images/video2_frame0.jpg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-85 pointer-events-none"
             />
-            <text className="text-[10px] font-extrabold tracking-[0.16em] uppercase fill-neutral-950">
-              <textPath href="#circlePath" startOffset="0%">
-                • THIS IS HOW WE SCROLL • RED APPLE
-              </textPath>
-            </text>
-          </svg>
-          <div className="relative z-10 w-7 h-7 rounded-full bg-white/80 flex items-center justify-center shadow-2xs">
-            <Globe className="w-3.5 h-3.5 text-neutral-950" />
+            <video
+              ref={aerialVideoRef}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-85 pointer-events-none"
+            >
+              <source src="/Cinematic_documentary_aerial_d.mp4" type="video/mp4" />
+            </video>
           </div>
+
+          {/* Interactive Mouse Spotlight on aerial footage */}
+          <div
+            className="hidden md:block absolute inset-0 w-full h-full pointer-events-none"
+            style={{
+              maskImage:
+                'radial-gradient(circle 220px at var(--mouse-x, 50%) var(--mouse-y, 50%), black 15%, transparent 68%)',
+              WebkitMaskImage:
+                'radial-gradient(circle 220px at var(--mouse-x, 50%) var(--mouse-y, 50%), black 15%, transparent 68%)',
+            }}
+          >
+            <img
+              src="/images/video2_frame0.jpg"
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-85 pointer-events-none"
+            />
+            <video
+              ref={aerialSpotlightRef}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover scale-[1.3] origin-center grayscale contrast-125 brightness-85 pointer-events-none"
+            >
+              <source src="/Cinematic_documentary_aerial_d.mp4" type="video/mp4" />
+            </video>
+          </div>
+
+          {/* Vignette */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black via-transparent to-black pointer-events-none opacity-60" />
+
+          {/* Guaranteed Solid Black Joint Buffer at top of Stage 2 (completely covers the seam) */}
+          <div className="absolute top-0 inset-x-0 h-48 sm:h-64 bg-gradient-to-b from-black via-black/95 to-transparent pointer-events-none z-10" />
+
+          {/* Solid Black Buffer at bottom of Stage 2 */}
+          <div className="absolute bottom-0 inset-x-0 h-36 sm:h-48 bg-gradient-to-t from-black via-black/95 to-transparent pointer-events-none z-10" />
         </div>
 
+        {/* Section Header */}
+        <div className="text-center max-w-3xl mx-auto space-y-3 sm:space-y-4 relative z-20 shrink-0 my-auto">
+          <h2 className="text-xl sm:text-xl md:text-2xl lg:text-3xl font-black uppercase tracking-tight text-white leading-tight">
+            <span className="block font-sans font-extrabold text-white">
+              BY GUIDING & EMPOWERING WOMEN THROUGH
+            </span>
+            <span className="block font-editorial font-normal italic text-neutral-300 mt-0.5">
+              EVERY STEP OF THEIR HEALTH & WELLNESS JOURNEY
+            </span>
+          </h2>
+          <p className="text-xs sm:text-sm md:text-base text-neutral-300 font-sans font-normal leading-relaxed max-w-2xl mx-auto tracking-wide">
+            We bridge the gap between silent struggles and timely medical intervention. By uniting everyday reproductive tracking, AI-powered early triage, and 24/7 access to licensed specialists, we ensure every woman receives proactive care, confidential support, and lasting dignity—long before emergencies arise.
+          </p>
+        </div>
+      </div>
+      {/* End of expandRef */}
       </div>
     </section>
   );
 };
+
 

@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'DieGrotesk';
+  src: url('/fonts/diegrotesk.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'ABCDiatype';
+  src: url('/fonts/diatype.woff2') format('woff2');
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.font-diegrotesk {
+  font-family: 'DieGrotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+.font-diatype {
+  font-family: 'ABCDiatype', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
 @theme {
   --font-serif: "Fraunces", "Playfair Display", Georgia, serif;
   --font-display: "Fraunces", "Playfair Display", Georgia, serif;

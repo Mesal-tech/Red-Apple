@@ -1,8 +1,58 @@
-import React, { useRef } from 'react';
-import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
-import { ArrowDown } from 'lucide-react';
-import { KineticHeroText } from './KineticHeroText';
+import React, { useRef, useEffect } from 'react';
+
+interface CardItem {
+  id: string;
+  image: string;
+  title: string;
+}
+
+const HERO_CARDS: CardItem[] = [
+  {
+    id: '1',
+    image: '/images/maternal-wellness.jpg',
+    title: 'Maternal Wellbeing',
+  },
+  {
+    id: '2',
+    image: '/images/clinical-care.jpg',
+    title: 'Clinical Protocols',
+  },
+  {
+    id: '3',
+    image: '/images/merch-polaroid.jpg',
+    title: 'Care Artifacts',
+  },
+  {
+    id: '4',
+    image: '/images/pillar-connect.jpg',
+    title: 'Telemedicine',
+  },
+  {
+    id: '5',
+    image: '/images/community-outreach.jpg',
+    title: 'Grassroots Access',
+  },
+  {
+    id: '6',
+    image: '/images/card-community.jpg',
+    title: 'Maternal Outreach',
+  },
+  {
+    id: '7',
+    image: '/images/about-clinic-entrance.jpg',
+    title: 'Clinical Hub',
+  },
+  {
+    id: '8',
+    image: '/images/team-chisomebi.jpg',
+    title: 'Frontline Specialists',
+  },
+  {
+    id: '9',
+    image: '/images/team-polaroid.jpg',
+    title: 'Care Collective',
+  },
+];
 
 interface HeroSectionProps {
   brandName?: string;
@@ -11,161 +61,186 @@ interface HeroSectionProps {
 export const HeroSection: React.FC<HeroSectionProps> = ({
   brandName: _brandName = 'RED APPLE',
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const kickerRef = useRef<HTMLParagraphElement>(null);
-  const headlineRef = useRef<HTMLHeadingElement>(null);
-  const ctaRef = useRef<HTMLDivElement>(null);
-  const logosRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLElement>(null);
+  const cardElementsRef = useRef<(HTMLDivElement | null)[]>([]);
 
-  useGSAP(
-    () => {
-      if (!containerRef.current) return;
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-      const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    const numCards = HERO_CARDS.length;
+    let targetNormX = 0.5;
+    let targetNormY = 0.5;
+    let currentNormX = 0.5;
+    let currentNormY = 0.5;
+    let animationFrameId: number;
 
-      tl.from(kickerRef.current, {
-        y: 20,
-        opacity: 0,
-        duration: 0.7,
-      })
-        .from(
-          headlineRef.current,
-          {
-            y: 35,
-            opacity: 0,
-            duration: 0.9,
-          },
-          '-=0.4'
-        )
-        .from(
-          ctaRef.current,
-          {
-            y: 15,
-            opacity: 0,
-            duration: 0.6,
-          },
-          '-=0.4'
-        )
-        .from(
-          logosRef.current,
-          {
-            opacity: 0,
-            y: 15,
-            duration: 0.8,
-          },
-          '-=0.3'
-        );
-    },
-    { scope: containerRef }
-  );
+    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-  const scrollToContent = () => {
-    const target =
-      document.querySelector('#intro') ||
-      document.querySelector('#mission') ||
-      document.querySelector('#products');
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth' });
+    const updateCards = () => {
+      // Lerp for organic glide
+      currentNormX += (targetNormX - currentNormX) * 0.08;
+      currentNormY += (targetNormY - currentNormY) * 0.08;
+
+      const normX = currentNormX;
+      const normY = currentNormY;
+      const focalIndex = normX * (numCards - 1);
+      const centerIndex = (numCards - 1) / 2;
+
+      cardElementsRef.current.forEach((el, i) => {
+        if (!el) return;
+
+        const dist = Math.abs(i - focalIndex);
+        const centerOffset = i - centerIndex;
+
+        // Dynamic depth blur matching avecanni.studio:
+        // Focal card is 0px blur; outer cards progressively blur up to ~6px
+        const blurAmount = Math.min(6.0, Math.pow(dist * 1.35, 1.25) * 1.2);
+
+        // Subtle elevation scale (max 1.05 so it never expands into text)
+        const scale = 1 + Math.max(0, (1 - dist / 2.0) * 0.05);
+
+        // Z-Index: cards near cursor are brought to the front
+        const zIndex = Math.round(50 - dist * 8);
+
+        // Atmospheric depth opacity
+        const opacity = Math.max(0.72, 1 - dist * 0.035);
+
+        // Horizontal parallax shift & gentle perspective fan
+        const parallaxX = (normX - 0.5) * -55 + centerOffset * (normX - 0.5) * 4;
+        // Strictly flat baseline with only gentle mouse Y reaction (no upward arc into headline)
+        const translateY = (normY - 0.5) * 6;
+        const rot = centerOffset * 1.4 + (normX - 0.5) * 3.5;
+
+        el.style.transform = `translate3d(${parallaxX.toFixed(1)}px, ${translateY.toFixed(1)}px, 0px) scale(${scale.toFixed(3)}) rotate(${rot.toFixed(1)}deg)`;
+        el.style.filter = `blur(${blurAmount.toFixed(1)}px)`;
+        el.style.opacity = `${opacity.toFixed(2)}`;
+        el.style.zIndex = `${zIndex}`;
+      });
+
+      animationFrameId = requestAnimationFrame(updateCards);
+    };
+
+    // Run first frame immediately
+    updateCards();
+
+    if (canHover) {
+      const handleMouseMove = (e: MouseEvent) => {
+        const rect = container.getBoundingClientRect();
+        targetNormX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        targetNormY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      };
+
+      const handleMouseLeave = () => {
+        targetNormX = 0.5;
+        targetNormY = 0.5;
+      };
+
+      window.addEventListener('mousemove', handleMouseMove, { passive: true });
+      container.addEventListener('mouseleave', handleMouseLeave);
+
+      return () => {
+        cancelAnimationFrame(animationFrameId);
+        window.removeEventListener('mousemove', handleMouseMove);
+        container.removeEventListener('mouseleave', handleMouseLeave);
+      };
+    } else {
+      let time = 0;
+      let isTouching = false;
+
+      const handleTouchMove = (e: TouchEvent) => {
+        if (e.touches.length > 0) {
+          isTouching = true;
+          const touch = e.touches[0];
+          const rect = container.getBoundingClientRect();
+          targetNormX = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+          targetNormY = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
+        }
+      };
+
+      const handleTouchEnd = () => {
+        isTouching = false;
+      };
+
+      container.addEventListener('touchstart', handleTouchMove, { passive: true });
+      container.addEventListener('touchmove', handleTouchMove, { passive: true });
+      container.addEventListener('touchend', handleTouchEnd, { passive: true });
+      container.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+      const ambientLoop = () => {
+        if (!isTouching) {
+          time += 0.02;
+          targetNormX = 0.5 + Math.sin(time) * 0.2;
+          targetNormY = 0.5 + Math.cos(time * 0.8) * 0.08;
+        }
+        updateCards();
+      };
+      animationFrameId = requestAnimationFrame(ambientLoop);
+
+      return () => {
+        cancelAnimationFrame(animationFrameId);
+        container.removeEventListener('touchstart', handleTouchMove);
+        container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('touchend', handleTouchEnd);
+        container.removeEventListener('touchcancel', handleTouchEnd);
+      };
     }
-  };
+  }, []);
 
   return (
     <section
       ref={containerRef}
-      className="relative w-full min-h-[calc(100vh-20px)] bg-white text-neutral-950 flex flex-col justify-between items-center px-6 sm:px-10 lg:px-14 pt-32 sm:pt-36 pb-10 overflow-hidden"
+      className="relative w-full h-[100dvh] min-h-[580px] max-h-[880px] lg:max-h-none lg:h-screen bg-white text-neutral-950 flex flex-col justify-between px-6 sm:px-10 lg:px-14 pt-24 sm:pt-26 md:pt-20 lg:pt-22 pb-6 sm:pb-6 md:pb-7 overflow-hidden select-none"
     >
-      {/* 1. Center Hero Block: Kicker + Perfectly Sized Headline + Squiggle CTA */}
-      <div className="flex-1 flex flex-col items-center justify-center text-center max-w-5xl mx-auto my-auto w-full py-5 sm:py-10">
-        
-        {/* Kicker (Direct from Page 1 of Pre-Seed Pitch Deck) */}
-        <p
-          ref={kickerRef}
-          className="font-serif italic sm:not-italic font-normal text-base sm:text-lg text-neutral-600 tracking-tight leading-snug mb-3 sm:mb-4 max-w-md mx-auto"
-        >
-          Reproductive &amp; preventive healthcare,
-          <br className="hidden sm:inline" /> built for African women
-        </p>
-
-        {/* Main Headline with Extrafazant-Style GSAP Kinetic Hover Effect */}
-        <KineticHeroText
-          line1="TRANSFORMING REPRODUCTIVE"
-          line2Sans="HEALTH"
-          line2Serif="IN AFRICA"
-          headingRef={headlineRef}
-        />
-
-        {/* CTA with Downward Arrow Button & Wavy Squiggle Underline */}
-        <div ref={ctaRef} className="mt-7 sm:mt-10 flex flex-col items-center">
-          <button
-            onClick={scrollToContent}
-            className="group flex flex-col items-center cursor-pointer transition-transform duration-200 hover:-translate-y-0.5"
-            aria-label="Discover more about Red Apple"
-          >
-            <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-neutral-900 tracking-tight">
-              <span>Discover more</span>
-              <span className="w-5 h-5 rounded-xs bg-crimson text-white flex items-center justify-center transition-transform group-hover:translate-y-0.5 shadow-2xs">
-                <ArrowDown className="w-3.5 h-3.5" />
-              </span>
-            </div>
-
-            {/* Playful Wavy Squiggle SVG Underline in Red Apple Crimson */}
-            <svg
-              className="w-28 sm:w-32 h-3 mt-1 text-crimson overflow-visible"
-              viewBox="0 0 120 12"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M2 6C12 2 18 10 28 6C38 2 44 10 54 6C64 2 70 10 80 6C90 2 96 10 106 6C112 3.6 116 5 118 6"
-                stroke="currentColor"
-                strokeWidth="2.3"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        </div>
-
+      {/* 1. TOP ZONE: Editorial 3-Line Asymmetric Headline with guaranteed margin below */}
+      <div className="w-full max-w-6xl mx-auto z-10 shrink-0 mb-3 md:mb-6">
+        <h1 className="font-sans text-[20px] sm:text-2xl md:text-[34px] lg:text-[38px] xl:text-[42px] font-normal tracking-[-0.03em] text-neutral-950 leading-[1.22] md:leading-[1.14]">
+          {/* Line 1: Indented to align with center-right */}
+          <span className="block pl-[8%] sm:pl-[16%] md:pl-[30%] lg:pl-[36%] xl:pl-[40%] md:whitespace-nowrap">
+            A clinician-led maternal
+          </span>
+          {/* Line 2: Across from left margin */}
+          <span className="block mt-1 sm:mt-1.5 md:whitespace-nowrap">
+            healthcare collective working with women
+          </span>
+          {/* Line 3: Anchored left conclusion */}
+          <span className="block mt-1 sm:mt-1.5 md:whitespace-nowrap">
+            who are building something generational.
+          </span>
+        </h1>
       </div>
 
-      {/* 2. Partner / Clinical Network Logo Strip across the bottom of the hero */}
-      <div
-        ref={logosRef}
-        className="w-full max-w-7xl mx-auto pt-8 pb-2 border-t border-neutral-100"
-      >
-        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-6 sm:gap-8 md:gap-10 opacity-85 hover:opacity-100 transition-opacity">
-          
-          {/* Badge 1: MDCN Verified */}
-          <div className="flex items-center gap-2 text-neutral-900 font-bold tracking-tight">
-            <span className="w-6 h-6 rounded-full border-2 border-neutral-900 flex items-center justify-center text-[10px] font-black text-crimson">✚</span>
-            <span className="text-xs sm:text-sm font-sans tracking-wide">MDCN VERIFIED DOCTORS</span>
-          </div>
+      {/* 2. CENTER ZONE: Interactive Mouse & Touch Fanned Card Cascade */}
+      <div className="w-full my-auto py-2 md:py-6 flex items-center justify-center relative z-20 shrink-0">
+        <div className="flex items-center justify-center -space-x-26 sm:-space-x-28 md:-space-x-11 lg:-space-x-13 xl:-space-x-15">
+          {HERO_CARDS.map((card, idx) => (
+            <div
+              key={card.id}
+              ref={(el) => { cardElementsRef.current[idx] = el; }}
+              className="relative w-48 sm:w-52 md:w-28 lg:w-32 xl:w-34 aspect-[3/4.2] rounded-3xl md:rounded-2xl overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.16)] md:shadow-[0_10px_24px_rgba(0,0,0,0.12)] border border-black/[0.04] bg-neutral-100 cursor-pointer transition-shadow duration-300 hover:shadow-[0_18px_36px_rgba(0,0,0,0.18)] shrink-0 will-change-transform"
+            >
+              {/* Pure, clean image without dark gradients or text banners */}
+              <img
+                src={card.image}
+                alt={card.title}
+                className="w-full h-full object-cover select-none pointer-events-none"
+                loading="eager"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
 
-          {/* Badge 2: NDPC Compliant */}
-          <div className="flex items-center gap-2 text-neutral-900 font-bold">
-            <svg className="w-5 h-5 text-crimson" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
-            </svg>
-            <span className="text-xs sm:text-sm font-sans">NDPC DATA COMPLIANT</span>
-          </div>
-
-          {/* Badge 3: AI-Assisted Triage */}
-          <div className="flex items-center gap-1.5 text-neutral-900 font-bold text-xs sm:text-sm tracking-tight font-sans">
-            <span className="text-[10px] font-mono font-bold bg-neutral-950 text-white px-1.5 py-0.5 rounded">AI</span>
-            <span>CLINICAL SYMPTOM ANALYSIS</span>
-          </div>
-
-          {/* Badge 4: Localized Affordability */}
-          <div className="flex items-center gap-2 text-neutral-900 font-bold text-xs sm:text-sm">
-            <span className="font-extrabold text-crimson text-sm">₦1,999/mo</span>
-            <span className="text-neutral-600 font-medium font-sans">Accessible Tier</span>
-          </div>
-
-          {/* Badge 5: African Addressable Market */}
-          <div className="flex items-center gap-1.5 text-neutral-900 font-bold text-xs sm:text-sm tracking-tight">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span>325M AFRICAN TAM</span>
-          </div>
-
+      {/* 3. BOTTOM ZONE: Lowercase Wordmark (Right) with guaranteed margin above */}
+      <div className="w-full flex justify-end mt-4 sm:mt-6 z-10 shrink-0">
+        {/* Bottom Right: Iconic massive wordmark matching avec anni™ */}
+        <div className="text-right leading-none select-none">
+          <span className="font-sans font-black text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-[80px] text-neutral-950 tracking-tighter leading-[0.85] inline-flex items-start">
+            Red Apple
+            <span className="text-[9px] sm:text-[11px] md:text-xs font-bold text-neutral-400 mt-1 sm:mt-1.5 ml-0.5 sm:ml-1">
+              ™
+            </span>
+          </span>
         </div>
       </div>
     </section>

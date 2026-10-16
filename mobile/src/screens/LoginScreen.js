@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  useWindowDimensions,
   Image,
   ActivityIndicator,
 } from 'react-native';
@@ -22,12 +23,12 @@ import { useGoogleAuth } from '../services/googleAuth';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HEADER_HEIGHT = SCREEN_WIDTH * (830 / 1200);
-
 export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess }) {
   const { login, loginApple, loginGoogle } = useAuth();
   const { showError, showSuccess } = useToast();
+  const { width: windowWidth } = useWindowDimensions();
+  const screenWidth = Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
+  const headerHeight = Math.min(Math.round(screenWidth * (830 / 1200)), 280);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -140,10 +141,10 @@ export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess }
           showsVerticalScrollIndicator={false}
         >
           {/* HEADER CONTAINER WITH EXACT SWIRL WAVE BACKGROUND */}
-          <View style={styles.headerContainer}>
+          <View style={[styles.headerContainer, { height: headerHeight }]}>
             <Image
               source={require('../../assets/top_wave_bg.png')}
-              style={styles.headerWaveBg}
+              style={[styles.headerWaveBg, { height: headerHeight }]}
               resizeMode="stretch"
             />
 
@@ -314,6 +315,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: 'transparent',
     paddingBottom: 40,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   glassmorphismOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -321,15 +325,14 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     width: '100%',
-    height: HEADER_HEIGHT,
     position: 'relative',
   },
   headerWaveBg: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: SCREEN_WIDTH,
-    height: HEADER_HEIGHT,
+    right: 0,
+    width: '100%',
   },
   headerSafeArea: {
     flex: 1,

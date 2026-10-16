@@ -152,17 +152,6 @@ export function clearSentHistory(): void {
   }
 }
 
-/**
- * Replace placeholders like {{name}}, {{clinic}}, etc. in text
- */
-export function replaceVariables(content: string, variables: Record<string, string>): string {
-  let result = content;
-  for (const [key, value] of Object.entries(variables)) {
-    const pattern = new RegExp(`{{\\s*${key}\\s*}}`, 'gi');
-    result = result.replace(pattern, value);
-  }
-  return result;
-}
 
 /**
  * Sends an email using the configured delivery strategy:

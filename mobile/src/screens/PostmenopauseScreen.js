@@ -1997,7 +1997,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   quickCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
+    width: '48%',
+    minWidth: 140,
+    flexGrow: 1,
     borderRadius: 18,
     padding: 16,
   },
