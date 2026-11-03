@@ -211,3 +211,10 @@ export async function logoutUser() {
     await clearStoredSession();
   }
 }
+
+/** Permanently delete the authenticated account and clear its local credentials. */
+export async function deleteAccountUser() {
+  const result = await apiRequest('/auth/account', { method: 'DELETE' });
+  await clearStoredSession();
+  return result;
+}

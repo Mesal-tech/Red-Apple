@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
@@ -49,182 +49,69 @@ export default function AdditionalAnalyticsMetrics({
   // Dynamically generate flow pills matching user's period duration
   const flowDays = [];
   for (let i = 1; i <= Math.min(avgPeriod, 7); i++) {
-    let pillStyle = styles.flowDayPillActive;
-    if (i === 3) pillStyle = styles.flowDayPillMedium;
-    if (i > 3) pillStyle = styles.flowDayPillLight;
+    let pillClass = 'flex-1 bg-primary py-1.5 rounded-lg items-center';
+    if (i === 3) pillClass = 'flex-1 bg-red-400 py-1.5 rounded-lg items-center';
+    if (i > 3) pillClass = 'flex-1 bg-red-200 py-1.5 rounded-lg items-center';
     flowDays.push(
-      <View key={i} style={pillStyle}>
-        <Text style={styles.flowDayText}>D{i}</Text>
+      <View key={i} className={pillClass}>
+        <Text className="text-[11px] font-extrabold text-white">D{i}</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ gap: 16, marginHorizontal: 16, marginBottom: 20 }}>
+    <View className="gap-4 mx-4 mb-5">
       {/* 1. Period Duration & Flow */}
-      <View style={styles.metricCard}>
-        <View style={styles.metricHeaderRow}>
-          <View style={styles.metricTitleIconRow}>
+      <View className="bg-white rounded-3xl p-[18px] border border-red-50 shadow-sm">
+        <View className="flex-row items-center justify-between flex-wrap gap-2 mb-2.5">
+          <View className="flex-row items-center space-x-2">
             <Ionicons name="water" size={20} color={colors.primary} />
-            <Text style={styles.metricCardTitle}>Period Duration & Flow</Text>
+            <Text className="text-base font-black text-gray-900 ml-1">Period Duration & Flow</Text>
           </View>
         </View>
 
-        <Text style={styles.metricDescriptionText}>
-          Your period typically lasts <Text style={styles.boldText}>{avgPeriod} days</Text>. Flow starts heavy on Days 1–2 and naturally lightens through Day {avgPeriod}.
+        <Text className="text-[13px] text-gray-600 leading-[19px] mb-3.5">
+          Your period typically lasts <Text className="font-extrabold text-gray-900">{avgPeriod} days</Text>. Flow starts heavy on Days 1–2 and naturally lightens through Day {avgPeriod}.
         </Text>
 
-        <View style={styles.metricStatGrid}>
-          <View style={styles.metricStatBox}>
-            <Text style={styles.metricStatVal}>{avgPeriod} Days</Text>
-            <Text style={styles.metricStatLbl}>Avg. Duration</Text>
+        <View className="flex-row justify-between mb-3.5">
+          <View className="items-start">
+            <Text className="text-[17px] font-black text-gray-900">{avgPeriod} Days</Text>
+            <Text className="text-xs font-semibold text-gray-400 mt-0.5">Avg. Duration</Text>
           </View>
-          <View style={styles.metricStatBox}>
-            <Text style={styles.metricStatVal}>Days 1-2</Text>
-            <Text style={styles.metricStatLbl}>Heavy Flow</Text>
+          <View className="items-start">
+            <Text className="text-[17px] font-black text-gray-900">Days 1-2</Text>
+            <Text className="text-xs font-semibold text-gray-400 mt-0.5">Heavy Flow</Text>
           </View>
-          <View style={styles.metricStatBox}>
-            <Text style={styles.metricStatVal}>{avgPeriod > 2 ? `Days 3-${avgPeriod}` : 'Day 2'}</Text>
-            <Text style={styles.metricStatLbl}>Light Flow</Text>
+          <View className="items-start">
+            <Text className="text-[17px] font-black text-gray-900">{avgPeriod > 2 ? `Days 3-${avgPeriod}` : 'Day 2'}</Text>
+            <Text className="text-xs font-semibold text-gray-400 mt-0.5">Light Flow</Text>
           </View>
         </View>
 
-        <View style={styles.flowTimelineContainer}>{flowDays}</View>
+        <View className="flex-row gap-1.5 mt-1">{flowDays}</View>
       </View>
 
       {/* 2. Fertility & Ovulation */}
-      <View style={styles.metricCard}>
-        <View style={styles.metricHeaderRow}>
-          <View style={styles.metricTitleIconRow}>
+      <View className="bg-white rounded-3xl p-[18px] border border-red-50 shadow-sm">
+        <View className="flex-row items-center justify-between flex-wrap gap-2 mb-2.5">
+          <View className="flex-row items-center space-x-2">
             <Ionicons name="leaf" size={20} color="#00A88F" />
-            <Text style={styles.metricCardTitle}>Fertility & Ovulation</Text>
+            <Text className="text-base font-black text-gray-900 ml-1">Fertility & Ovulation</Text>
           </View>
         </View>
 
-        <View style={styles.fertilityRow}>
-          <View style={styles.fertilityItem}>
-            <Text style={styles.fertilitySubLabel}>LUTEAL PHASE</Text>
-            <Text style={styles.fertilityBigText}>{lutealPhaseDays} Days</Text>
+        <View className="flex-row justify-between gap-3">
+          <View className="flex-1">
+            <Text className="text-[10px] font-extrabold text-gray-400 tracking-wider mb-1">LUTEAL PHASE</Text>
+            <Text className="text-[17px] font-black text-gray-900">{lutealPhaseDays} Days</Text>
           </View>
-          <View style={styles.fertilityItem}>
-            <Text style={styles.fertilitySubLabel}>NEXT FERTILE WINDOW</Text>
-            <Text style={styles.fertilityBigText}>{fertileWindowDisplay}</Text>
+          <View className="flex-1">
+            <Text className="text-[10px] font-extrabold text-gray-400 tracking-wider mb-1">NEXT FERTILE WINDOW</Text>
+            <Text className="text-[17px] font-black text-gray-900">{fertileWindowDisplay}</Text>
           </View>
         </View>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  metricCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#FAF0F2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  metricHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  metricTitleIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metricCardTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  metricDescriptionText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  boldText: {
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  metricStatGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  metricStatBox: {
-    alignItems: 'flex-start',
-  },
-  metricStatVal: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  metricStatLbl: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  flowTimelineContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 4,
-  },
-  flowDayPillActive: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  flowDayPillMedium: {
-    flex: 1,
-    backgroundColor: '#EF5350',
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  flowDayPillLight: {
-    flex: 1,
-    backgroundColor: '#FFCDD2',
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  flowDayText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  fertilityRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  fertilityItem: {
-    flex: 1,
-  },
-  fertilitySubLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  fertilityBigText: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-});

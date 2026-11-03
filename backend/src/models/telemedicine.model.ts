@@ -91,22 +91,22 @@ export interface ConsultationBooking {
 export interface PartnerClinic {
   clinic_id: string;
   name: string;
-  category: 'fertility' | 'gynaecology' | 'birthing_center' | 'hospital' | 'sexual_health';
-  category_label: string;
-  is_partner: boolean;
-  rating: number;
-  reviews_count: number;
-  address: string;
-  city: string;
-  state: string;
-  phone: string;
+  category?: 'fertility' | 'gynaecology' | 'birthing_center' | 'hospital' | 'sexual_health';
+  category_label?: string;
+  is_partner?: boolean;
+  rating?: number;
+  reviews_count?: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  phone?: string;
   email?: string;
-  opening_hours: string;
-  photo_url: string;
-  services: string[];
+  opening_hours?: string;
+  photo_url?: string;
+  services?: string[];
   lead_doctor?: string;
   affiliated_doctor_ids?: string[];
-  lat: number;
-  lng: number;
-  description: string;
+  lat?: number;
+  lng?: number;
+  description?: string;
 }

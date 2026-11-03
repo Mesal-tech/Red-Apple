@@ -10,7 +10,7 @@ The project is structured as a **unified single-repository** workspace containin
 
 ```
 red_apple/
-├── mobile/       # React Native (Expo SDK 54) mobile application
+├── mobile/       # React Native (Expo SDK 57) mobile application
 ├── admin-web/    # React web admin dashboard
 ├── backend/      # Express.js API backend service (routes/, controllers/, middleware/)
 ├── infra/        # Infrastructure as Code (Terraform)
@@ -44,7 +44,15 @@ npm run dev
 
 ---
 
-## 3. System Documentation
+## 3. Mobile Onboarding and Authentication
+
+The mobile app opens with a three-slide introduction to cycle tracking, care across life stages, and personalized guidance. The final slide offers separate **Sign Up** and **Sign In** actions. New users continue through a guided health setup that collects the information needed to personalize their experience.
+
+Sign-in and registration use the same Red Apple visual system: rounded form fields, clear primary actions, and Google and Apple sign-in options. These screens follow the app's saved light or dark theme. Dark mode uses deep neutral surfaces, readable field borders, crimson primary actions, and matching progress indicators.
+
+Onboarding screen implementations live in `mobile/src/screens/OnboardingScreen.js` and `mobile/src/screens/OnboardingSetupScreen.js`; authentication screens live in `mobile/src/screens/LoginScreen.js` and `mobile/src/screens/SignUpScreen.js`. Shared theme colors and persistence are defined in `mobile/src/context/ThemeContext.js`.
+
+## 4. System Documentation
 
 Full specifications, architectural designs, and configuration guides are available in the [docs/](docs/) folder:
 

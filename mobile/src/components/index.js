@@ -10,3 +10,6 @@ export { default as DoctorAppointmentCalendar } from './DoctorAppointmentCalenda
 export { default as LeafletClinicsMap } from './LeafletClinicsMap';
 export { default as PaystackCheckoutModal } from './PaystackCheckoutModal';
 export { default as WebSidebar } from './WebSidebar';
+export { default as StreakModal } from './StreakModal';
+export { default as PartnerSyncModal } from './PartnerSyncModal';
+export { default as ConfirmationModal } from './ConfirmationModal';

@@ -8,13 +8,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "androidStatusBar": {
-      "backgroundColor": "#FFFFFF",
+      "backgroundColor": "#00000000",
+      "translucent": true,
       "barStyle": "dark-content"
-    },
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,7 +18,7 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Red Apple needs access to your camera for HD telemedicine video consultations with certified specialists.",
-        "NSMicrophoneUsageDescription": "Red Apple needs access to your microphone for clear audio communication during telemedicine consultations.",
+        "NSMicrophoneUsageDescription": "Red Apple uses your microphone for telemedicine calls and live voice conversations with Dr. Red.",
         "NSLocationWhenInUseUsageDescription": "Red Apple uses your location to show nearby women's reproductive health, fertility, and wellness clinics.",
         "NSBluetoothAlwaysUsageDescription": "Red Apple needs access to Bluetooth to connect to wireless audio headsets during telemedicine video consultations."
       },
@@ -51,6 +47,8 @@
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH",
         "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.VIBRATE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM"
@@ -64,6 +62,15 @@
       "expo-web-browser",
       "expo-status-bar",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
@@ -71,6 +78,24 @@
         }
       ],
       "@config-plugins/react-native-webrtc",
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": true,
+          "iosMicrophonePermission": "Red Apple needs microphone access for live voice conversations with Dr. Red.",
+          "androidPermissions": [
+            "android.permission.RECORD_AUDIO",
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MICROPHONE"
+          ],
+          "androidForegroundService": true,
+          "androidFSTypes": [
+            "microphone"
+          ],
+          "androidFSStopWithTask": false
+        }
+      ],
       "expo-apple-authentication",
       [
         "expo-build-properties",

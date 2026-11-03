@@ -5,6 +5,7 @@ import {
   getDoctorSlots,
   bookConsultation,
   getUserBookings,
+  getDoctorBookings,
   getBookingById,
   cancelBooking,
   completeConsultation,
@@ -15,7 +16,7 @@ import {
   getPartnerClinics,
   getPartnerClinicById,
 } from '../controllers/telemedicine.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticateToken, requireRole } from '../middleware/auth.middleware';
 import { verifyAccessToken } from '../utils/token';
 
 const router = Router();
@@ -55,6 +56,7 @@ router.get('/clinics/:id', getPartnerClinicById);
 // Protected consultation booking & appointments lifecycle
 router.post('/book', authenticateToken, bookConsultation);
 router.get('/bookings', authenticateToken, getUserBookings);
+router.get('/doctor/bookings', authenticateToken, requireRole('doctor'), getDoctorBookings);
 router.get('/bookings/:id', authenticateToken, getBookingById);
 router.patch('/bookings/:id/cancel', authenticateToken, cancelBooking);
 router.patch('/bookings/:id/complete', authenticateToken, completeConsultation);

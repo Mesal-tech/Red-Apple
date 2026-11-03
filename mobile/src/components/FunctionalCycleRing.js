@@ -1,6 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { Text, View } from 'react-native';
 
 export default function FunctionalCycleRing({ currentDay, totalDays }) {
   const percentage = Math.min(Math.max(currentDay / totalDays, 0), 1);
@@ -10,111 +9,35 @@ export default function FunctionalCycleRing({ currentDay, totalDays }) {
   const leftDeg = Math.max(totalDegrees - 180, 0);
 
   return (
-    <View style={ringStyles.ringContainer}>
-      <View style={ringStyles.trackCircle} />
+    <View className="w-[104px] h-[104px] rounded-full items-center justify-center relative">
+      <View className="w-[104px] h-[104px] rounded-full border-[7px] border-red-100 absolute" />
 
-      <View style={ringStyles.halfCircleContainerRight}>
+      <View className="w-[52px] h-[104px] absolute right-0 top-0 overflow-hidden">
         <View
-          style={[
-            ringStyles.halfCircleRight,
-            { transform: [{ rotate: `${rightDeg}deg` }] },
-          ]}
+          className="w-[52px] h-[104px] rounded-r-full border-[7px] border-primary border-l-0"
+          style={{
+            transform: [{ rotate: `${rightDeg}deg` }],
+            transformOrigin: 'left center',
+          }}
         />
       </View>
 
       {totalDegrees > 180 && (
-        <View style={ringStyles.halfCircleContainerLeft}>
+        <View className="w-[52px] h-[104px] absolute left-0 top-0 overflow-hidden">
           <View
-            style={[
-              ringStyles.halfCircleLeft,
-              { transform: [{ rotate: `${leftDeg}deg` }] },
-            ]}
+            className="w-[52px] h-[104px] rounded-l-full border-[7px] border-primary border-r-0"
+            style={{
+              transform: [{ rotate: `${leftDeg}deg` }],
+              transformOrigin: 'right center',
+            }}
           />
         </View>
       )}
 
-      <View style={ringStyles.innerMaskCircle}>
-        <Text style={ringStyles.ringDayNumber}>{currentDay}</Text>
-        <Text style={ringStyles.ringDayTotal}>of {totalDays}</Text>
+      <View className="w-[86px] h-[86px] rounded-full bg-white items-center justify-center shadow-xs">
+        <Text className="text-3xl font-black text-primary">{currentDay}</Text>
+        <Text className="text-[11px] font-bold text-gray-400">of {totalDays}</Text>
       </View>
     </View>
   );
 }
-
-const ringStyles = StyleSheet.create({
-  ringContainer: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  trackCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 7,
-    borderColor: '#FFEBEE',
-    position: 'absolute',
-  },
-  halfCircleContainerRight: {
-    width: 52,
-    height: 104,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    overflow: 'hidden',
-  },
-  halfCircleRight: {
-    width: 52,
-    height: 104,
-    borderTopRightRadius: 52,
-    borderBottomRightRadius: 52,
-    borderWidth: 7,
-    borderColor: colors.primary,
-    borderLeftWidth: 0,
-    transformOrigin: 'left center',
-  },
-  halfCircleContainerLeft: {
-    width: 52,
-    height: 104,
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    overflow: 'hidden',
-  },
-  halfCircleLeft: {
-    width: 52,
-    height: 104,
-    borderTopLeftRadius: 52,
-    borderBottomLeftRadius: 52,
-    borderWidth: 7,
-    borderColor: colors.primary,
-    borderRightWidth: 0,
-    transformOrigin: 'right center',
-  },
-  innerMaskCircle: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  ringDayNumber: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.primary,
-  },
-  ringDayTotal: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-});

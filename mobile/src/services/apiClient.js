@@ -47,7 +47,7 @@ export function getBaseApiUrl() {
  * Uses AbortController to prevent long network hangs when server is unreachable.
  * Includes automatic fast-fallback across host candidates on Android emulator.
  */
-export async function apiRequest(endpoint, options = {}, timeoutMs = 6000) {
+export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
   const primaryBase = getBaseApiUrl();
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
@@ -108,7 +108,9 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 6000) {
 
       if (!response.ok) {
         const errorMessage =
-          data.error || data.message || `Request failed with status ${response.status}`;
+          (typeof data.error === 'string' ? data.error : data.error?.message) ||
+          data.message ||
+          `Request failed with status ${response.status}`;
         const error = new Error(errorMessage);
         error.status = response.status;
         error.data = data;

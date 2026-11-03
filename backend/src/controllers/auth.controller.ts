@@ -295,6 +295,24 @@ export async function logoutUser(req: AuthenticatedRequest, res: Response, next:
   }
 }
 
+/** Permanently remove the authenticated user's account and associated records. */
+export async function deleteAccount(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required.' });
+    }
+
+    await userStore.deleteUser(userId);
+    return res.json({ success: true, message: 'Account deleted successfully.' });
+  } catch (error: any) {
+    if (error?.message === 'User not found.') {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+    next(error);
+  }
+}
+
 /**
  * Fetch authenticated user profile.
  */
@@ -338,13 +356,23 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response, ne
     if (typeof date_of_birth === 'string') updates.date_of_birth = date_of_birth;
     if (health_profile && typeof health_profile === 'object') updates.health_profile = health_profile;
 
-    const updatedUser = await userStore.updateUser(userId, updates);
+    try {
+      const updatedUser = await userStore.updateUser(userId, updates);
 
-    return res.json({
-      success: true,
-      message: 'Profile updated successfully.',
-      user: toSafeUser(updatedUser),
-    });
+      return res.json({
+        success: true,
+        message: 'Profile updated successfully.',
+        user: toSafeUser(updatedUser),
+      });
+    } catch (err: any) {
+      if (err.message === 'User not found.') {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found. Please log in again.',
+        });
+      }
+      throw err;
+    }
   } catch (error: any) {
     next(error);
   }

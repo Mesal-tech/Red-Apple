@@ -104,7 +104,13 @@ export async function bookConsultation(
       booking,
     });
   } catch (error: any) {
-    if (error.message?.includes('already been booked') || error.message?.includes('not found')) {
+    if (
+      error.message?.includes('already been booked') ||
+      error.message?.includes('already passed') ||
+      error.message?.includes('in the past') ||
+      error.message?.includes('no longer available') ||
+      error.message?.includes('not found')
+    ) {
       return res.status(400).json({ success: false, message: error.message });
     }
     next(error);
@@ -128,6 +134,39 @@ export async function getUserBookings(
       count: bookings.length,
       bookings,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getDoctorBookings(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (req.user?.role !== 'doctor') {
+      return res.status(403).json({ success: false, message: 'Doctor access required.' });
+    }
+
+    const doctorAccount = await userStore.findById(req.user.userId);
+    if (!doctorAccount) {
+      return res.status(404).json({ success: false, message: 'Doctor account was not found.' });
+    }
+
+    const doctorProfileId = await telemedicineStore.getDoctorProfileIdForAccount(
+      doctorAccount.name,
+      config.doctor.profileId
+    );
+    if (!doctorProfileId) {
+      return res.status(404).json({
+        success: false,
+        message: 'No unique doctor profile is linked to this account. Set DOCTOR_PROFILE_ID to the matching profile ID.',
+      });
+    }
+
+    const bookings = await telemedicineStore.getDoctorBookings(doctorProfileId);
+    return res.json({ success: true, count: bookings.length, doctorProfileId, bookings });
   } catch (error) {
     next(error);
   }

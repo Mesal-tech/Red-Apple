@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { Text, View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const MONTH_NAMES = [
@@ -74,45 +74,49 @@ export default function DoctorAppointmentCalendar({
   }
 
   return (
-    <View style={styles.calendarContainer}>
+    <View className="bg-white rounded-3xl p-4 border border-gray-100 shadow-xs mb-4">
       {/* HEADER: MONTH & YEAR NAVIGATOR */}
-      <View style={styles.calendarHeaderRow}>
-        <View style={styles.monthTitleWrapper}>
-          <Text style={styles.calendarMonthText}>
+      <View className="flex-row items-center justify-between mb-3.5">
+        <View className="flex-row items-center">
+          <Text className="text-lg font-black text-gray-900">
             {MONTH_NAMES[month]} {year}
           </Text>
         </View>
 
-        <View style={styles.navButtonsRow}>
+        <View className="flex-row items-center gap-1.5">
           <TouchableOpacity
             activeOpacity={0.7}
-            style={[styles.calendarNavBtn, !canGoPrev && styles.calendarNavBtnDisabled]}
+            className={`w-9 h-9 rounded-full bg-gray-50 items-center justify-center border border-gray-200 ${
+              !canGoPrev ? 'opacity-40 bg-gray-100' : ''
+            }`}
             onPress={prevMonth}
             disabled={!canGoPrev}
           >
             <Ionicons
               name="chevron-back"
-              size={18}
+              size={20}
               color={canGoPrev ? '#111827' : '#D1D5DB'}
             />
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.7}
-            style={styles.calendarNavBtn}
+            className="w-9 h-9 rounded-full bg-gray-50 items-center justify-center border border-gray-200"
             onPress={nextMonth}
           >
-            <Ionicons name="chevron-forward" size={18} color="#111827" />
+            <Ionicons name="chevron-forward" size={20} color="#111827" />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* WEEKDAY NAMES ROW */}
-      <View style={styles.weekdayRow}>
+      <View className="flex-row justify-around pb-2.5 border-b border-gray-100 mb-2.5">
         {WEEKDAY_NAMES.map((name, idx) => (
           <Text
             key={name}
-            style={[styles.weekdayLabel, idx >= 5 && styles.weekendLabel]}
+            className={`w-9 text-center text-xs font-bold ${
+              idx >= 5 ? 'text-gray-400' : 'text-gray-600'
+            }`}
           >
             {name}
           </Text>
@@ -120,21 +124,23 @@ export default function DoctorAppointmentCalendar({
       </View>
 
       {/* DAYS GRID */}
-      <View style={styles.daysGrid}>
+      <View className="flex-row flex-wrap">
         {cells.map((cell) => {
           if (cell.empty) {
-            return <View key={cell.key} style={styles.emptyDayCell} />;
+            return <View key={cell.key} className="w-[14.28%] h-11" />;
           }
 
           return (
             <TouchableOpacity
               key={cell.key}
               activeOpacity={0.8}
-              style={[
-                styles.dayCell,
-                cell.isSelected && styles.dayCellSelected,
-                cell.isToday && !cell.isSelected && styles.dayCellToday,
-              ]}
+              className={`w-[14.28%] h-11 items-center justify-center rounded-full relative ${
+                cell.isSelected
+                  ? 'bg-primary shadow-xs'
+                  : cell.isToday
+                  ? 'border-2 border-primary'
+                  : ''
+              }`}
               onPress={() => {
                 if (!cell.disabled && onSelectDate) {
                   onSelectDate(cell.dateObj);
@@ -143,20 +149,24 @@ export default function DoctorAppointmentCalendar({
               disabled={cell.disabled}
             >
               <Text
-                style={[
-                  styles.dayNumText,
-                  cell.isSunday && styles.sundayText,
-                  cell.isToday && styles.todayText,
-                  cell.isSelected && styles.dayNumTextSelected,
-                  cell.disabled && styles.disabledText,
-                ]}
+                className={`text-sm font-bold ${
+                  cell.isSelected
+                    ? 'text-white font-black'
+                    : cell.disabled
+                    ? 'text-gray-300'
+                    : cell.isToday
+                    ? 'text-primary font-black'
+                    : cell.isSunday
+                    ? 'text-gray-400'
+                    : 'text-gray-800'
+                }`}
               >
                 {cell.dayNum}
               </Text>
 
-              {/* Indicator dot: green for active days, none for past */}
+              {/* Indicator dot: primary for active days, none for past */}
               {!cell.disabled && !cell.isSelected && !cell.isSunday && (
-                <View style={styles.availableDot} />
+                <View className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />
               )}
             </TouchableOpacity>
           );
@@ -165,126 +175,3 @@ export default function DoctorAppointmentCalendar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  calendarContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 16,
-  },
-  calendarHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  monthTitleWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  calendarMonthText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  navButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  calendarNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F9FAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  calendarNavBtnDisabled: {
-    opacity: 0.4,
-    backgroundColor: '#F3F4F6',
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    marginBottom: 8,
-  },
-  weekdayLabel: {
-    width: 36,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  weekendLabel: {
-    color: '#9CA3AF',
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  emptyDayCell: {
-    width: '14.28%',
-    height: 40,
-  },
-  dayCell: {
-    width: '14.28%',
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    position: 'relative',
-  },
-  dayCellSelected: {
-    backgroundColor: '#DC2626',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dayCellToday: {
-    borderWidth: 1.5,
-    borderColor: '#DC2626',
-  },
-  dayNumText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  dayNumTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  todayText: {
-    color: '#DC2626',
-    fontWeight: '700',
-  },
-  sundayText: {
-    color: '#9CA3AF',
-  },
-  disabledText: {
-    color: '#D1D5DB',
-  },
-  availableDot: {
-    position: 'absolute',
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#C81E3A',
-  },
-});

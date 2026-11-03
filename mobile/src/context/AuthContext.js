@@ -8,6 +8,7 @@ import {
   fetchCurrentUser,
   updateUserProfile,
   logoutUser,
+  deleteAccountUser,
   requestPasswordReset,
   confirmPasswordReset,
   getStoredSession,
@@ -100,7 +101,12 @@ export function AuthProvider({ children }) {
     let name = '';
     let phone = '';
 
-    if (args.length >= 2 && typeof args[0] === 'string' && args[0].includes('@')) {
+    if (args.length === 1 && args[0] && typeof args[0] === 'object') {
+      email = args[0].email || '';
+      password = args[0].password || '';
+      name = args[0].name || '';
+      phone = args[0].phone || '';
+    } else if (args.length >= 2 && typeof args[0] === 'string' && args[0].includes('@')) {
       email = args[0];
       password = args[1];
       name = args[2] || '';
@@ -173,6 +179,10 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const deleteAccount = async () => {
+    return deleteAccountUser();
+  };
+
   /**
    * Request password reset OTP.
    */
@@ -229,6 +239,7 @@ export function AuthProvider({ children }) {
     loginGoogle,
     loginApple,
     logout,
+    deleteAccount,
     forgotPassword,
     resetPassword,
     updateProfile,

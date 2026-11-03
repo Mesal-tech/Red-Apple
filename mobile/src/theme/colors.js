@@ -4,7 +4,7 @@ export const colors = {
   primaryDark: '#B91C1C', // Dark Apple Red
 
   // Pure White Theme
-  backgroundLight: '#FFFFFF', // Pure White
+  backgroundLight: '#F4F6F0',
   backgroundSurface: '#FFFFFF', // Clean Card Surface
   
   textPrimary: '#2D2327',

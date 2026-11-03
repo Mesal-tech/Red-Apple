@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View, Dimensions } from 'react-native';
 import { colors } from '../theme/colors';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function CycleLengthChart({ historyData = null, averageLength = 28 }) {
   const months = React.useMemo(() => {
@@ -39,18 +41,18 @@ export default function CycleLengthChart({ historyData = null, averageLength = 2
   };
 
   return (
-    <View style={styles.chartCard}>
-      <Text style={styles.chartTitle}>Cycle Length History</Text>
+    <View className="bg-white rounded-3xl p-5 border border-gray-100 mx-4 mb-4 shadow-2xs">
+      <Text className="text-base font-bold text-textPrimary mb-4">Cycle Length History</Text>
 
-      <View style={styles.chartMainContainer}>
-        <View style={styles.yAxisCol}>
-          <Text style={styles.yAxisText}>{maxY}</Text>
-          <Text style={styles.yAxisText}>{midY}</Text>
-          <Text style={styles.yAxisText}>{minY}</Text>
+      <View className="flex-row h-24">
+        <View className="w-8 justify-between py-0.5">
+          <Text className="text-xs font-semibold text-gray-400">{maxY}</Text>
+          <Text className="text-xs font-semibold text-gray-400">{midY}</Text>
+          <Text className="text-xs font-semibold text-gray-400">{minY}</Text>
         </View>
 
         <View
-          style={styles.graphPlotArea}
+          className="flex-1 relative h-[90px]"
           onLayout={(e) => {
             const w = e.nativeEvent.layout.width;
             if (w > 0) setPlotWidth(w);
@@ -100,12 +102,10 @@ export default function CycleLengthChart({ historyData = null, averageLength = 2
               <React.Fragment key={idx}>
                 {lineSegment}
                 <View
-                  style={[
-                    styles.dataPointDotContainer,
-                    { left: `${currentXPercent}%`, top: currentY },
-                  ]}
+                  className="absolute w-3.5 h-3.5 -ml-[7px] -mt-[2px] items-center justify-center z-10"
+                  style={{ left: `${currentXPercent}%`, top: currentY }}
                 >
-                  <View style={styles.dataPointDot} />
+                  <View className="w-2.5 h-2.5 rounded-full bg-primary" />
                 </View>
               </React.Fragment>
             );
@@ -113,11 +113,11 @@ export default function CycleLengthChart({ historyData = null, averageLength = 2
         </View>
       </View>
 
-      <View style={styles.xAxisRow}>
-        <View style={{ width: 32 }} />
-        <View style={styles.xAxisLabelsContainer}>
+      <View className="flex-row mt-2.5">
+        <View className="w-8" />
+        <View className="flex-1 flex-row justify-between">
           {months.map((item, idx) => (
-            <Text key={idx} style={styles.xAxisText}>
+            <Text key={idx} className="text-xs font-medium text-gray-400 w-8 text-center">
               {item.month}
             </Text>
           ))}
@@ -126,77 +126,3 @@ export default function CycleLengthChart({ historyData = null, averageLength = 2
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  chartCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 18,
-  },
-  chartMainContainer: {
-    flexDirection: 'row',
-    height: 100,
-  },
-  yAxisCol: {
-    width: 32,
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  yAxisText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  graphPlotArea: {
-    flex: 1,
-    position: 'relative',
-    height: 90,
-  },
-  dataPointDotContainer: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    marginLeft: -7,
-    marginTop: -2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  dataPointDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-  },
-  xAxisRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  xAxisLabelsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  xAxisText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textMuted,
-    width: 30,
-    textAlign: 'center',
-  },
-});

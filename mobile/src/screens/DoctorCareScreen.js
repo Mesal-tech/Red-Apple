@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   ScrollView,
@@ -20,38 +19,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import AppBottomSheet from '../components/AppBottomSheet';
+import ConfirmationModal from '../components/ConfirmationModal';
 import AppointmentsListModal from './AppointmentsListModal';
 import StreamVideoCallModal from './StreamVideoCallModal';
 import PaystackCheckoutModal from '../components/PaystackCheckoutModal';
 import { initializeConsultationPayment } from '../services/paymentService';
 import * as telemedService from '../services/telemedicineService';
-import { fetchNearbyReproductiveClinics } from '../services/clinicLocatorService';
-import LeafletClinicsMap from '../components/LeafletClinicsMap';
-import DoctorAppointmentCalendar from '../components/DoctorAppointmentCalendar';
-import { LinearGradient } from 'expo-linear-gradient';
 import notificationService from '../services/notificationService';
 import {
   UpcomingCardSkeleton,
   SpecialistsListSkeleton,
-  SlotsGridSkeleton,
   DoctorSeeAllSkeleton,
 } from '../components/DoctorCareSkeleton';
-
-const getClinicPhoto = (clinic) => {
-  if (clinic?.photo_url) return clinic.photo_url;
-  if (clinic?.photoUrl) return clinic.photoUrl;
-  if (clinic?.category === 'fertility') {
-    return 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=800&auto=format&fit=crop&q=80';
-  }
-  if (clinic?.category === 'birthing_center') {
-    return 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=800&auto=format&fit=crop&q=80';
-  }
-  if (clinic?.category === 'gynaecology') {
-    return 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=800&auto=format&fit=crop&q=80';
-};
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUSBAR_HEIGHT =
@@ -61,26 +42,88 @@ const STATUSBAR_HEIGHT =
       ? 44
       : 0;
 
-// THEME PALETTE: WARM CREAM, PASTEL LAVENDER & SKY BLUE TELEMEDICINE DESIGN
-const THEME = {
-  bg: '#F4F6F0',             // Warm sage/cream canvas from design mockup
-  cardBg: '#FFFFFF',         // White card surface
-  photoCardBg: '#F8F9FA',    // Crisp light surface for doctor photo card
-  cardBorder: '#EFEFEF',     // Subtle border for clean definition
-  textPrimary: '#111827',    // Deep slate / charcoal
-  textSecondary: '#6B7280',  // Muted gray
-  accentOrange: '#DC2626',   // App Signature Apple Red
-  subtlePill: '#F3F4F6',     // Light pill background
-  pillBorder: '#E5E7EB',     // Pill border
-  lavenderCard: '#E8D7F9',   // Upcoming consultation pastel lavender card
-  lavenderBadge: '#CBB7E2',  // Lavender circle for warning exclamation mark
-  blueCard: '#D2EDF6',       // Check-up promo pastel sky blue card
-  darkBtn: '#000000',        // Black pill button
+const formatSlotDisplayTime = (slot) => {
+  if (!slot) return 'Select Time';
+  let raw = slot.start_time || slot.formatted_time || '';
+  if (typeof raw !== 'string') return 'Select Time';
+  if (raw.includes(',')) {
+    raw = raw.split(',').pop().trim();
+  }
+  if (raw.includes('T')) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+  }
+  const match24 = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (match24) {
+    let hour = parseInt(match24[1], 10);
+    const minute = match24[2];
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${hour.toString().padStart(2, '0')}:${minute} ${ampm}`;
+  }
+  return raw || 'Select Time';
 };
 
-const AVAILABLE_HOURS = ['8:00', '9:00', '10:00', '11:00', '12:00'];
+const isSlotInPast = (slot, date) => {
+  if (!slot || !date) return false;
+  const now = new Date();
+
+  const slotDate = new Date(date);
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth();
+  const nowDay = now.getDate();
+
+  const slotYear = slotDate.getFullYear();
+  const slotMonth = slotDate.getMonth();
+  const slotDay = slotDate.getDate();
+
+  const targetDateOnly = new Date(slotYear, slotMonth, slotDay);
+  const todayDateOnly = new Date(nowYear, nowMonth, nowDay);
+
+  if (targetDateOnly < todayDateOnly) return true;
+  if (targetDateOnly > todayDateOnly) return false;
+
+  let raw = slot.start_time || slot.formatted_time || '';
+  if (typeof raw !== 'string') return false;
+  if (raw.includes(',')) {
+    raw = raw.split(',').pop().trim();
+  }
+  if (raw.includes('T')) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return d <= now;
+    }
+  }
+
+  let hours = 0;
+  let minutes = 0;
+
+  const match24 = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (match24) {
+    hours = parseInt(match24[1], 10);
+    minutes = parseInt(match24[2], 10);
+  } else {
+    const match12 = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+    if (match12) {
+      hours = parseInt(match12[1], 10);
+      minutes = parseInt(match12[2], 10);
+      const ampm = (match12[3] || '').toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+    } else {
+      return false;
+    }
+  }
+
+  const slotDateTime = new Date(nowYear, nowMonth, nowDay, hours, minutes, 0);
+  return slotDateTime <= now;
+};
 
 export default function DoctorCareScreen({
+  route,
+  navigation,
   onBookDoctor,
   initialDoctor,
   onOpenProfile,
@@ -88,19 +131,15 @@ export default function DoctorCareScreen({
   onOpenNotifications,
   unreadNotificationsCount = 0,
   onNavigateHome,
+  onOpenAIAssistant,
 }) {
   const { user } = useAuth();
-  const isDoctorAccount =
-    user?.role === 'doctor' ||
-    user?.email?.toLowerCase() === 'mesalokubor63@gmail.com';
+  const { isDarkMode, theme } = useTheme();
+  const isDoctorAccount = user?.role === 'doctor';
 
   const userName = isDoctorAccount
     ? (user?.name || 'Consulting Doctor')
     : (user?.name || 'Patient');
-
-  const userSubtitle = isDoctorAccount
-    ? 'Doctor / Telemedicine Specialist'
-    : 'Patient';
 
   // Specialists state (Real doctors from backend)
   const [specialists, setSpecialists] = useState([]);
@@ -108,8 +147,11 @@ export default function DoctorCareScreen({
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fullscreen Booking Modal State
+  // Fullscreen Booking Modal State (2-Step Flow: Step 1 Profile -> Step 2 Book Appointment)
   const [showProfile, setShowProfile] = useState(false);
+  const [profileStep, setProfileStep] = useState('profile'); // 'profile' (Step 1) | 'booking' (Step 2)
+  const [isFavoriteDoctor, setIsFavoriteDoctor] = useState(false);
+  const [consultationType, setConsultationType] = useState('video'); // 'video' | 'in_person' | 'chat'
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [doctorSlots, setDoctorSlots] = useState([]);
@@ -119,6 +161,19 @@ export default function DoctorCareScreen({
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [showBookingSuccessModal, setShowBookingSuccessModal] = useState(false);
   const [confirmedBookingData, setConfirmedBookingData] = useState(null);
+
+  // Reusable Confirmation Modal state for booking & payment feedback
+  const [confirmationModalConfig, setConfirmationModalConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    icon: 'alert-circle-outline',
+    iconColor: '#DC2626',
+    iconBg: '#FEF2F2',
+    onConfirm: () => { },
+  });
 
   // See all doctors modal state
   const [showSeeAll, setShowSeeAll] = useState(false);
@@ -151,60 +206,32 @@ export default function DoctorCareScreen({
   const [activeVideoCallBooking, setActiveVideoCallBooking] = useState(null);
   const [showVideoCallModal, setShowVideoCallModal] = useState(false);
 
-  // Partner Clinics State (Accredited physical facilities)
-  const [partnerClinics, setPartnerClinics] = useState([]);
-  const [selectedClinic, setSelectedClinic] = useState(null);
-  const [showClinicModal, setShowClinicModal] = useState(false);
-  const [showSeeAllClinics, setShowSeeAllClinics] = useState(false);
-  const [clinicCategoryFilter, setClinicCategoryFilter] = useState('all');
-  const [clinicSearchQuery, setClinicSearchQuery] = useState('');
+  // Dynamic 7-day horizontal date strip
+  const upcomingDateStrip = useMemo(() => {
+    const days = [];
+    const baseDate = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(baseDate);
+      d.setDate(baseDate.getDate() + i);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const isSelected =
+        selectedDate &&
+        d.getFullYear() === selectedDate.getFullYear() &&
+        d.getMonth() === selectedDate.getMonth() &&
+        d.getDate() === selectedDate.getDate();
 
-  // Top Nav & Map Options State
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-  const [showMapModal, setShowMapModal] = useState(false);
+      days.push({
+        date: d,
+        dayName,
+        monthDay,
+        isSelected,
+      });
+    }
+    return days;
+  }, [selectedDate]);
 
-  // Filtered partner clinics for carousel and modal
-  const filteredPartnerClinics = useMemo(() => {
-    if (!partnerClinics) return [];
-    return partnerClinics.filter((clinic) => {
-      let matchesCategory = true;
-      if (clinicCategoryFilter === 'partner') {
-        matchesCategory = clinic.isPartner !== false && clinic.is_partner !== false;
-      } else if (clinicCategoryFilter !== 'all') {
-        matchesCategory = clinic.category === clinicCategoryFilter;
-      }
-
-      const q = clinicSearchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        clinic.name?.toLowerCase().includes(q) ||
-        clinic.address?.toLowerCase().includes(q) ||
-        clinic.city?.toLowerCase().includes(q) ||
-        clinic.category_label?.toLowerCase().includes(q) ||
-        clinic.categoryLabel?.toLowerCase().includes(q) ||
-        clinic.services?.some((s) => s.toLowerCase().includes(q));
-
-      return matchesCategory && matchesSearch;
-    });
-  }, [partnerClinics, clinicCategoryFilter, clinicSearchQuery]);
-
-  // Doctors affiliated with the currently selected clinic
-  const clinicAffiliatedDoctors = useMemo(() => {
-    if (!selectedClinic || !specialists) return [];
-    const clinicName = (selectedClinic.name || '').toLowerCase();
-    const leadDoc = (selectedClinic.leadDoctor || selectedClinic.lead_doctor || '').toLowerCase();
-    const affIds = selectedClinic.affiliated_doctor_ids || [];
-
-    return specialists.filter((doc) => {
-      if (affIds.includes(doc.doctor_id)) return true;
-      if (leadDoc && doc.name?.toLowerCase().includes(leadDoc)) return true;
-      if (doc.hospital_affiliation && clinicName.includes(doc.hospital_affiliation.toLowerCase())) return true;
-      if (doc.hospital_affiliation && doc.hospital_affiliation.toLowerCase().includes(clinicName)) return true;
-      return false;
-    });
-  }, [selectedClinic, specialists]);
-
-  // Fetch verified doctors, bookings & partner clinics directly from backend database API
+  // Fetch verified doctors & user bookings directly from backend database API
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -220,21 +247,6 @@ export default function DoctorCareScreen({
     } catch (e) {
       console.warn('Error fetching bookings from backend:', e);
       setUserBookings([]);
-    }
-    try {
-      const clinics = await telemedService.fetchPartnerClinics();
-      if (clinics && clinics.length > 0) {
-        setPartnerClinics(clinics);
-      } else {
-        const mapClinics = await fetchNearbyReproductiveClinics(6.5244, 3.3792, 10000);
-        setPartnerClinics(mapClinics || []);
-      }
-    } catch (e) {
-      console.warn('Error fetching partner clinics from backend:', e);
-      try {
-        const mapClinics = await fetchNearbyReproductiveClinics(6.5244, 3.3792, 10000);
-        setPartnerClinics(mapClinics || []);
-      } catch (_) { }
     } finally {
       setIsLoading(false);
     }
@@ -250,21 +262,34 @@ export default function DoctorCareScreen({
     setIsRefreshing(false);
   };
 
-  // Handle external book doctor trigger
+  // Handle external book doctor trigger (via initialDoctor prop or navigation route params)
   useEffect(() => {
     if (initialDoctor) {
       handleOpenBooking(initialDoctor);
+      return;
     }
-  }, [initialDoctor]);
+    const targetDocId = route?.params?.selectedDoctorId;
+    if (targetDocId && specialists && specialists.length > 0) {
+      const found = specialists.find((d) => d.doctor_id === targetDocId);
+      if (found) {
+        handleOpenBooking(found);
+      }
+    }
+  }, [initialDoctor, route?.params?.selectedDoctorId, specialists]);
 
   const loadSlotsForDate = async (doctor, date) => {
     if (!doctor) return;
     setIsLoadingSlots(true);
     try {
-      const dateStr = date.toISOString().split('T')[0];
+      const dateYear = date.getFullYear();
+      const dateMonth = String(date.getMonth() + 1).padStart(2, '0');
+      const dateDay = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${dateYear}-${dateMonth}-${dateDay}`;
+
       const slots = await telemedService.getDoctorSlots(doctor.doctor_id, dateStr);
-      setDoctorSlots(slots || []);
-      const firstAvailable = (slots || []).find((s) => !s.is_booked);
+      const availableSlots = Array.isArray(slots) ? slots : [];
+      setDoctorSlots(availableSlots);
+      const firstAvailable = availableSlots.find((s) => !s.is_booked && !isSlotInPast(s, date));
       setSelectedSlot(firstAvailable || null);
     } catch (err) {
       console.warn('Error loading doctor slots:', err);
@@ -279,6 +304,8 @@ export default function DoctorCareScreen({
     const doc = doctor || (specialists && specialists[0]) || null;
     if (!doc) return;
     setSelectedDoctor(doc);
+    setProfileStep('profile');
+    setConsultationType('video');
     const initialDate = new Date();
     setSelectedDate(initialDate);
     setShowProfile(true);
@@ -299,9 +326,35 @@ export default function DoctorCareScreen({
   const handleConfirmBooking = async () => {
     if (!selectedDoctor) return;
     if (!selectedSlot || selectedSlot.is_booked) {
-      Alert.alert('Select a Time Slot', 'Please choose an available appointment time slot on the calendar.');
+      setConfirmationModalConfig({
+        visible: true,
+        title: 'Select a Time Slot',
+        message: 'Please choose an available appointment time slot on the calendar.',
+        confirmText: 'OK',
+        cancelText: null,
+        icon: 'calendar-outline',
+        iconColor: '#DC2626',
+        iconBg: '#FEF2F2',
+        onConfirm: () => setConfirmationModalConfig((prev) => ({ ...prev, visible: false })),
+      });
       return;
     }
+
+    if (isSlotInPast(selectedSlot, selectedDate)) {
+      setConfirmationModalConfig({
+        visible: true,
+        title: 'Time Slot Unavailable',
+        message: 'This time slot has already passed. Please select an upcoming time slot.',
+        confirmText: 'OK',
+        cancelText: null,
+        icon: 'time-outline',
+        iconColor: '#DC2626',
+        iconBg: '#FEF2F2',
+        onConfirm: () => setConfirmationModalConfig((prev) => ({ ...prev, visible: false })),
+      });
+      return;
+    }
+
     setIsSubmittingBooking(true);
     try {
       const dateFormatted = selectedDate.toLocaleDateString('en-US', {
@@ -309,14 +362,15 @@ export default function DoctorCareScreen({
         month: 'short',
         day: 'numeric',
       });
-      const scheduledTime = `${dateFormatted}, ${selectedSlot.formatted_time || selectedSlot.start_time}`;
+      const rawSlotTime = formatSlotDisplayTime(selectedSlot);
+      const scheduledTime = `${dateFormatted}, ${rawSlotTime}`;
 
       const booking = await telemedService.bookConsultation({
         doctorId: selectedDoctor.doctor_id,
         slotId: selectedSlot.slot_id,
         scheduledTime,
         reason: consultationReason || 'Reproductive Health Consultation',
-        consultationType: 'video',
+        consultationType: consultationType || 'video',
       });
 
       // Launch Paystack Secure Checkout
@@ -338,19 +392,36 @@ export default function DoctorCareScreen({
       }
 
       setShowProfile(false);
-      Alert.alert(
-        'Payment Incomplete',
-        'Your consultation booking has been requested, but payment was not completed. Please pay the consultation fee in "My Appointments" to confirm your session.',
-        [
-          { text: 'View Appointments', onPress: () => setShowAppointmentsModal(true) },
-          { text: 'OK' },
-        ]
-      );
+      setConfirmationModalConfig({
+        visible: true,
+        title: 'Payment Incomplete',
+        message:
+          'Your consultation booking has been requested, but payment was not completed. Please pay the consultation fee in "My Appointments" to confirm your session.',
+        confirmText: 'View Appointments',
+        cancelText: 'OK',
+        icon: 'card-outline',
+        iconColor: '#DC2626',
+        iconBg: '#FEF2F2',
+        onConfirm: () => {
+          setConfirmationModalConfig((prev) => ({ ...prev, visible: false }));
+          setShowAppointmentsModal(true);
+        },
+      });
 
       const updatedBookings = await telemedService.getUserBookings();
       setUserBookings(updatedBookings || []);
     } catch (e) {
-      Alert.alert('Booking Error', e.message || 'Could not schedule appointment.');
+      setConfirmationModalConfig({
+        visible: true,
+        title: 'Booking Notice',
+        message: e.message || 'Could not schedule appointment.',
+        confirmText: 'OK',
+        cancelText: null,
+        icon: 'alert-circle-outline',
+        iconColor: '#DC2626',
+        iconBg: '#FEF2F2',
+        onConfirm: () => setConfirmationModalConfig((prev) => ({ ...prev, visible: false })),
+      });
     } finally {
       setIsSubmittingBooking(false);
     }
@@ -414,9 +485,29 @@ export default function DoctorCareScreen({
           return;
         }
       }
-      Alert.alert('Payment Notice', 'Payment authorization could not be started. Please try again.');
+      setConfirmationModalConfig({
+        visible: true,
+        title: 'Payment Notice',
+        message: 'Payment authorization could not be started. Please try again.',
+        confirmText: 'OK',
+        cancelText: null,
+        icon: 'card-outline',
+        iconColor: '#DC2626',
+        iconBg: '#FEF2F2',
+        onConfirm: () => setConfirmationModalConfig((prev) => ({ ...prev, visible: false })),
+      });
     } catch (err) {
-      Alert.alert('Payment Error', err.message || 'Could not initiate payment.');
+      setConfirmationModalConfig({
+        visible: true,
+        title: 'Payment Error',
+        message: err.message || 'Could not initiate payment.',
+        confirmText: 'OK',
+        cancelText: null,
+        icon: 'alert-circle-outline',
+        iconColor: '#DC2626',
+        iconBg: '#FEF2F2',
+        onConfirm: () => setConfirmationModalConfig((prev) => ({ ...prev, visible: false })),
+      });
     }
   };
 
@@ -426,256 +517,294 @@ export default function DoctorCareScreen({
   };
 
   // Helper to format date & time strings
-  const formatBookingDateTime = (scheduledTimeStr) => {
-    if (!scheduledTimeStr) {
-      return { date: 'Scheduled Visit', time: 'Consultation' };
-    }
+  const formatBookingDateTime = (str) => {
+    if (!str) return { date: 'Scheduled Visit', time: 'Consultation', full: 'Scheduled Consultation' };
+
     try {
-      if (scheduledTimeStr.includes(',')) {
-        const parts = scheduledTimeStr.split(',').map((s) => s.trim());
-        if (parts.length >= 3) {
-          return {
-            date: `${parts[0]}, ${parts[1]}`,
-            time: parts.slice(2).join(', '),
-          };
-        } else if (parts.length === 2) {
-          return {
-            date: parts[0],
-            time: parts[1],
-          };
+      // 1. Try ISO string parse first (e.g. '2026-10-25T14:00:00Z')
+      if (typeof str === 'string' && (str.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(str))) {
+        if (!str.includes(',')) {
+          const d = new Date(str.includes(' ') && !str.includes('T') ? str.replace(' ', 'T') : str);
+          if (!isNaN(d.getTime())) {
+            const date = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            return { date, time, full: `${date} • ${time}` };
+          }
         }
       }
-      const d = new Date(scheduledTimeStr);
-      if (!isNaN(d.getTime())) {
-        return {
-          date: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-          time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-        };
+
+      // 2. Handle comma-separated strings like 'Mon, Oct 19, 2026-10-19, 09:00' or 'Mon, Oct 19, 09:00 AM'
+      if (typeof str === 'string' && str.includes(',')) {
+        const parts = str.split(',').map((s) => s.trim());
+        let timePart = parts[parts.length - 1]; // e.g. '09:00' or '9:00 AM'
+
+        // Format 24hr time '09:00' or '14:30' into 12hr format '9:00 AM'
+        const match24 = timePart.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+        if (match24) {
+          let h = parseInt(match24[1], 10);
+          const m = match24[2];
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          h = h % 12 || 12;
+          timePart = `${h}:${m} ${ampm}`;
+        }
+
+        // Date part: prefer 'Mon, Oct 19' if available
+        let datePart = parts[0];
+        if (
+          parts.length >= 2 &&
+          !/^\d{4}-\d{2}-\d{2}$/.test(parts[1]) &&
+          !/^(\d{1,2}):(\d{2})/.test(parts[1])
+        ) {
+          datePart = `${parts[0]}, ${parts[1]}`;
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) {
+          const d = new Date(parts[0]);
+          if (!isNaN(d.getTime())) {
+            datePart = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          }
+        }
+
+        return { date: datePart, time: timePart, full: `${datePart} • ${timePart}` };
       }
     } catch (_) { }
-    return { date: scheduledTimeStr, time: 'Consultation' };
+
+    return { date: str, time: 'Consultation', full: str };
   };
 
-  // Active upcoming booking from database
-  const activeUpcomingBooking = useMemo(() => {
-    return (userBookings || []).find(
-      (b) => b.status === 'confirmed' || b.status === 'requested' || b.status === 'in_progress'
-    );
-  }, [userBookings]);
-
-  const displayedUpcoming = useMemo(() => {
-    if (!activeUpcomingBooking) {
-      return null;
-    }
-    const { date, time } = formatBookingDateTime(activeUpcomingBooking.scheduled_time);
-    const isPaid =
-      activeUpcomingBooking.payment_status === 'paid' ||
-      activeUpcomingBooking.status === 'confirmed';
-    return {
-      booking_id: activeUpcomingBooking.booking_id,
-      doctor_name: activeUpcomingBooking.doctor_name || 'Verified Specialist',
-      doctor_specialty: activeUpcomingBooking.doctor_specialty || 'Obstetrics & Gynecologist',
-      doctor_photo: activeUpcomingBooking.doctor_photo_url || activeUpcomingBooking.doctor_photo || null,
-      date,
-      time,
-      is_paid: isPaid,
-      raw: activeUpcomingBooking,
-    };
-  }, [activeUpcomingBooking]);
-
-  // Dynamic recent consultations or verified specialists directly from backend database
-  const displayedRecentList = useMemo(() => {
-    const completed = (userBookings || []).filter(
-      (b) => b.status === 'completed' || b.status === 'cancelled'
-    );
-    if (completed && completed.length > 0) {
-      return completed.slice(0, 3).map((b, idx) => {
-        const { date, time } = formatBookingDateTime(b.scheduled_time);
+  // Upcoming consultation cards use real bookings, ordered by their scheduled time.
+  const displayedUpcomingBookings = useMemo(() => (
+    (userBookings || [])
+      .filter((booking) => ['confirmed', 'requested', 'in_progress'].includes(booking.status))
+      .sort((a, b) => new Date(a.scheduled_time || 0).getTime() - new Date(b.scheduled_time || 0).getTime())
+      .map((booking) => {
+        const { date, time } = formatBookingDateTime(booking.scheduled_time);
         return {
-          id: b.booking_id || `booking_hist_${idx}`,
-          name: b.doctor_name || 'Doctor',
-          specialty: b.doctor_specialty || 'Specialist',
+          booking_id: booking.booking_id,
+          doctor_name: booking.doctor_name || 'Verified Specialist',
+          doctor_specialty: booking.doctor_specialty || 'Obstetrics & Gynecologist',
+          doctor_photo: booking.doctor_photo_url || booking.doctor_photo || null,
           date,
           time,
-          photo:
-            b.doctor_photo_url ||
-            b.doctor_photo,
-          raw: b,
+          is_paid: booking.payment_status === 'paid' || booking.status === 'confirmed',
+          raw: booking,
         };
-      });
-    }
-    // If no past consultations yet, display verified specialists directly from backend
-    if (specialists && specialists.length > 0) {
-      return specialists.slice(0, 3).map((doc) => ({
-        id: doc.doctor_id,
-        name: doc.name,
-        specialty: doc.specialty,
-        date: `₦${Number(doc.fee_ngn || 0).toLocaleString()}`,
-        time: `★ ${Number(doc.rating || 5.0).toFixed(1)}`,
-        photo:
-          doc.photo_url,
-        rawDoc: doc,
-      }));
-    }
-    return [];
-  }, [userBookings, specialists]);
+      })
+  ), [userBookings]);
 
-  const handleRecentDoctorPress = (item) => {
-    if (item.rawDoc) {
-      handleOpenBooking(item.rawDoc);
-      return;
+  // Unique verified specialists directly from backend database (strictly de-duplicated)
+  const displayedSpecialistsList = useMemo(() => {
+    if (!specialists || specialists.length === 0) return [];
+    const seen = new Set();
+    const unique = [];
+    for (const doc of specialists) {
+      const key = doc.doctor_id || doc.name;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        unique.push({
+          id: doc.doctor_id,
+          name: doc.name,
+          specialty: doc.specialty,
+          date: `₦${Number(doc.fee_ngn || 15000).toLocaleString()}`,
+          time: `★ ${Number(doc.rating || 5.0).toFixed(1)}`,
+          photo: doc.photo_url || doc.avatar_url,
+          rawDoc: doc,
+        });
+      }
     }
-    const matched = (specialists || []).find(
-      (d) =>
-        d.doctor_id === item.id ||
-        d.name?.toLowerCase().includes(item.name?.toLowerCase() || '') ||
-        d.specialty?.toLowerCase().includes(item.specialty?.toLowerCase() || '')
-    );
-    if (matched) {
-      handleOpenBooking(matched);
+    return unique.slice(0, 4);
+  }, [specialists]);
+
+  const handleDoctorPress = (item) => {
+    if (item?.rawDoc) {
+      handleOpenBooking(item.rawDoc);
     } else {
-      setShowAppointmentsModal(true);
+      setShowSeeAll(true);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F6F0" translucent={true} />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
 
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentContainerStyle={{
+          paddingTop: STATUSBAR_HEIGHT + 10,
+          paddingBottom: 110,
+          alignItems: 'center',
+        }}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled={true}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor="#111827"
-            colors={['#111827', '#DC2626']}
-            progressBackgroundColor="#FFFFFF"
+            tintColor={theme.textPrimary}
+            colors={[isDarkMode ? '#FFFFFF' : '#111827', '#DC2626']}
+            progressBackgroundColor={theme.card}
           />
         }
       >
-        <View style={styles.contentWrapper}>
+        <View className="w-full max-w-[520px] px-5">
           {/* TOP NAV BAR */}
-          <View style={styles.navBarRow}>
+          <View className="flex-row items-center justify-between w-full mb-6">
             <TouchableOpacity
               activeOpacity={0.75}
-              style={styles.navCircleBtn}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: isDarkMode ? '#2B2B2B' : '#FFFFFF',
+                borderColor: theme.cardBorder,
+                borderWidth: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              className="shadow-sm"
               onPress={() => {
                 if (onNavigateHome) onNavigateHome();
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="chevron-back" size={22} color="#111827" />
+              <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
 
-            <Text style={styles.navBarTitle}>Appointments</Text>
+            <Text className="text-xl font-black tracking-tight" style={{ color: theme.textPrimary }}>Appointments</Text>
 
             <TouchableOpacity
               activeOpacity={0.75}
-              style={styles.navCircleBtn}
-              onPress={() => setShowOptionsMenu(true)}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: isDarkMode ? '#2B2B2B' : '#FFFFFF',
+                borderColor: theme.cardBorder,
+                borderWidth: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              className="shadow-sm"
+              onPress={() => setShowAppointmentsModal(true)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Consultation History"
             >
-              <Ionicons name="ellipsis-vertical" size={18} color="#111827" />
+              <Ionicons name="time-outline" size={22} color={theme.textPrimary} />
             </TouchableOpacity>
           </View>
 
           {/* UPCOMING SECTION */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>Upcoming</Text>
+          <View className="flex-row items-center justify-between w-full mb-3.5 px-1">
+            <Text className="text-lg font-extrabold" style={{ color: theme.textPrimary }}>Upcoming</Text>
             {userBookings.length > 0 && (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => setShowAppointmentsModal(true)}
               >
-                <Text style={styles.viewAllBtnText}>View all</Text>
+                <Text className="text-sm font-bold" style={{ color: theme.textSecondary }}>View all</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* UPCOMING CARD (ACTIVE BOOKING OR EMPTY STATE) */}
+          {/* UPCOMING CONSULTATION CARDS */}
           {isLoading ? (
             <UpcomingCardSkeleton />
-          ) : displayedUpcoming ? (
-            <View style={styles.upcomingCard}>
-              {/* Top Doctor Profile Row */}
-              <View style={styles.upcomingTopRow}>
-                {displayedUpcoming.doctor_photo ? (
-                  <Image
-                    source={{ uri: displayedUpcoming.doctor_photo }}
-                    style={styles.doctorAvatarImg}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.doctorAvatarImg, { backgroundColor: '#CBB7E2', justifyContent: 'center', alignItems: 'center' }]}>
-                    <Ionicons name="medical" size={24} color="#7C3AED" />
-                  </View>
-                )}
-
-                <View style={styles.doctorInfoCol}>
-                  <Text style={styles.doctorNameText} numberOfLines={1}>
-                    {displayedUpcoming.doctor_name}
-                  </Text>
-                  <Text style={styles.doctorSpecText} numberOfLines={1}>
-                    {displayedUpcoming.doctor_specialty}
-                  </Text>
-                </View>
-
-                {/* Status Badge */}
-                <View style={styles.statusBadgeWrap}>
-                  <Text style={styles.statusBadgeLabel}>
-                    {displayedUpcoming.is_paid ? 'Paid' : 'Not paid'}
-                  </Text>
+          ) : displayedUpcomingBookings.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20, paddingRight: 8 }}>
+              {displayedUpcomingBookings.map((meeting, index) => {
+                const cardColors = isDarkMode
+                  ? ['#30243A', '#21333A', '#3A3021']
+                  : ['#F8E7EC', '#E6EEF9', '#EAF2E4'];
+                const cardTextColor = isDarkMode ? '#FFFFFF' : '#17212B';
+                return (
                   <View
-                    style={[
-                      styles.statusBadgeIconCircle,
-                      displayedUpcoming.is_paid && styles.statusBadgeIconCirclePaid,
-                    ]}
+                    key={meeting.booking_id || `${meeting.doctor_name}-${index}`}
+                    style={{
+                      width: 208,
+                      minHeight: 180,
+                      marginRight: 12,
+                      borderRadius: 20,
+                      padding: 14,
+                      backgroundColor: cardColors[index % cardColors.length],
+                      borderWidth: isDarkMode ? 1 : 0,
+                      borderColor: theme.cardBorder,
+                      justifyContent: 'space-between',
+                    }}
                   >
-                    {displayedUpcoming.is_paid ? (
-                      <Ionicons name="checkmark" size={11} color="#059669" />
-                    ) : (
-                      <Text style={styles.statusBadgeExclamationText}>!</Text>
-                    )}
+                    <View>
+                      <View className="flex-row items-center justify-between mb-3">
+                        <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)' }}>
+                          <Ionicons name="medical-outline" size={17} color={cardTextColor} />
+                        </View>
+                        <View className="flex-row items-center">
+                          <View className="w-2.5 h-2.5 rounded-full mr-1.5" style={{ backgroundColor: meeting.is_paid ? '#55CF79' : '#F5A623' }} />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary }} numberOfLines={1}>
+                            {meeting.is_paid ? 'Confirmed' : 'Payment due'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: cardTextColor, fontSize: 15, lineHeight: 19, fontWeight: '800' }} numberOfLines={1}>
+                        {meeting.doctor_name}
+                      </Text>
+                      <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600', marginTop: 3 }} numberOfLines={1}>
+                        {meeting.doctor_specialty}
+                      </Text>
+                      <View className="flex-row items-center mt-3">
+                        {meeting.doctor_photo ? (
+                          <Image source={{ uri: meeting.doctor_photo }} style={{ width: 28, height: 28, borderRadius: 14 }} />
+                        ) : (
+                          <View className="w-7 h-7 rounded-full items-center justify-center" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.75)' }}>
+                            <Ionicons name="person" size={14} color={theme.textSecondary} />
+                          </View>
+                        )}
+                        <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600', marginLeft: 7 }} numberOfLines={1}>
+                          {meeting.date} · {meeting.time}
+                        </Text>
+                      </View>
+                    </View>
+                    <View className="flex-row items-center justify-between mt-3">
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${meeting.is_paid ? 'Join' : 'Pay for'} consultation with ${meeting.doctor_name}`}
+                        onPress={() => meeting.is_paid ? handleJoinVideoCall(meeting.raw) : handlePayForBooking(meeting.raw)}
+                      >
+                        <Text style={{ color: cardTextColor, fontSize: 12, fontWeight: '800' }}>
+                          {meeting.is_paid ? 'Join meeting' : 'Pay now'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="View all appointments"
+                        onPress={() => setShowAppointmentsModal(true)}
+                        className="w-7 h-7 rounded-full items-center justify-center"
+                        style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)' }}
+                      >
+                        <Ionicons name="add" size={17} color={cardTextColor} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              </View>
-
-              {/* Date & Time Row */}
-              <View style={styles.dateTimeRow}>
-                <Text style={styles.dateTimeText}>{displayedUpcoming.date}</Text>
-                <Text style={styles.dateTimeText}>{displayedUpcoming.time}</Text>
-              </View>
-
-              {/* Action Button */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.payNowPillBtn}
-                onPress={() => {
-                  if (displayedUpcoming.is_paid && displayedUpcoming.raw) {
-                    handleJoinVideoCall(displayedUpcoming.raw);
-                  } else if (displayedUpcoming.raw) {
-                    handlePayForBooking(displayedUpcoming.raw);
-                  }
-                }}
-              >
-                <Text style={styles.payNowPillBtnText}>
-                  {displayedUpcoming.is_paid ? 'Join consultation' : 'Pay now'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+                );
+              })}
+            </ScrollView>
           ) : (
-            <View style={styles.emptyUpcomingCard}>
-              <View style={styles.emptyUpcomingTop}>
-                <View style={styles.emptyUpcomingIconCircle}>
-                  <Ionicons name="calendar-outline" size={22} color="#7C3AED" />
+            <View
+              className="w-full rounded-3xl p-5 mb-6 shadow-sm"
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+                borderWidth: 1,
+              }}
+            >
+              <View className="flex-row items-center mb-4">
+                <View
+                  className="w-14 h-14 rounded-2xl items-center justify-center"
+                  style={{ backgroundColor: isDarkMode ? '#241B2E' : '#FAF5FF' }}
+                >
+                  <Ionicons name="calendar-outline" size={26} color="#A78BFA" />
                 </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.emptyUpcomingTitle}>No Consultations Scheduled</Text>
-                  <Text style={styles.emptyUpcomingSub}>
+                <View className="flex-1 ml-3.5">
+                  <Text className="text-base font-black mb-1" style={{ color: theme.textPrimary }}>No Consultations Scheduled</Text>
+                  <Text className="text-sm leading-relaxed" style={{ color: theme.textSecondary }}>
                     Schedule a 1-on-1 virtual HD video visit with an accredited specialist.
                   </Text>
                 </View>
@@ -683,7 +812,7 @@ export default function DoctorCareScreen({
 
               <TouchableOpacity
                 activeOpacity={0.88}
-                style={styles.emptyUpcomingBookBtn}
+                className="w-full h-12 bg-red-600 rounded-full items-center justify-center flex-row shadow-xs"
                 onPress={() => {
                   if (specialists && specialists.length > 0) {
                     handleOpenBooking(specialists[0]);
@@ -692,76 +821,139 @@ export default function DoctorCareScreen({
                   }
                 }}
               >
-                <Ionicons name="videocam" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.emptyUpcomingBookBtnText}>Book a Specialist</Text>
+                <Ionicons name="videocam" size={18} color="#FFFFFF" className="mr-1.5" />
+                <Text className="text-sm font-bold text-white ml-1.5">Book a Specialist</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* RECENT / VERIFIED SPECIALISTS SECTION */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
-            <Text style={styles.sectionHeaderTitle}>
-              {userBookings.some((b) => b.status === 'completed')
-                ? 'Recent Consultations'
-                : 'Verified Specialists'}
-            </Text>
+          {/* TALK WITH DR. RED — keeps the single featured-card treatment. */}
+          <View
+            className="w-full rounded-3xl p-5 mb-6 shadow-sm"
+            style={{
+              backgroundColor: isDarkMode ? '#241B2E' : '#E8D7F9',
+              borderColor: isDarkMode ? '#3E294B' : 'transparent',
+              borderWidth: isDarkMode ? 1 : 0,
+            }}
+          >
+            <View className="flex-row items-center mb-4">
+              <View
+                className="w-14 h-14 rounded-full items-center justify-center"
+                style={{ backgroundColor: isDarkMode ? '#49325D' : '#D8C4F0' }}
+              >
+                <Ionicons name="sparkles" size={25} color={isDarkMode ? '#E8D5FF' : '#6D45A0'} />
+              </View>
+              <View className="flex-1 ml-3.5">
+                <Text className="text-lg font-black" style={{ color: isDarkMode ? '#FFFFFF' : '#111827' }} numberOfLines={1}>
+                  Talk with Dr. Red
+                </Text>
+                <Text className="text-sm font-semibold mt-0.5" style={{ color: isDarkMode ? '#C7B9D2' : '#4B3C5C' }} numberOfLines={2}>
+                  Your AI health companion is here to help.
+                </Text>
+              </View>
+              <View
+                className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
+                style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.8)' }}
+              >
+                <View className="w-2 h-2 rounded-full bg-emerald-500" />
+                <Text className="text-xs font-bold" style={{ color: isDarkMode ? '#FFFFFF' : '#1F2937' }}>Ready</Text>
+              </View>
+            </View>
             <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                if (userBookings.some((b) => b.status === 'completed')) {
-                  setShowAppointmentsModal(true);
-                } else {
-                  setShowSeeAll(true);
-                }
-              }}
+              activeOpacity={0.88}
+              className="w-full h-12 rounded-full items-center justify-center flex-row"
+              style={{ backgroundColor: '#584988' }}
+              onPress={onOpenAIAssistant}
+              accessibilityRole="button"
+              accessibilityLabel="Talk with Dr. Red"
             >
-              <Text style={styles.viewAllBtnText}>View all</Text>
+              <Ionicons name="chatbubble-ellipses" size={17} color="#FFFFFF" />
+              <Text className="text-sm font-extrabold text-white ml-2">Start a conversation</Text>
             </TouchableOpacity>
           </View>
 
-          {/* RECENT WHITE CARD */}
+          {/* VERIFIED SPECIALISTS SECTION */}
+          <View className="flex-row items-center justify-between w-full mb-3.5 px-1 mt-6">
+            <Text className="text-lg font-extrabold" style={{ color: theme.textPrimary }}>
+              Verified Specialists
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowSeeAll(true)}
+            >
+              <Text className="text-sm font-bold" style={{ color: theme.textSecondary }}>View all</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* VERIFIED SPECIALISTS CARD */}
           {isLoading ? (
             <SpecialistsListSkeleton count={3} />
-          ) : displayedRecentList.length === 0 ? (
-            <View style={styles.recentWhiteCard}>
-              <View style={styles.emptyRecentWrap}>
-                <Text style={styles.emptyRecentText}>
+          ) : displayedSpecialistsList.length === 0 ? (
+            <View
+              className="w-full rounded-3xl p-5 shadow-sm mb-6"
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+                borderWidth: 1,
+              }}
+            >
+              <View className="items-center justify-center py-6 px-4">
+                <Text className="text-sm text-center leading-relaxed" style={{ color: theme.textSecondary }}>
                   No specialists available at the moment. Pull down to refresh.
                 </Text>
               </View>
             </View>
           ) : (
-            <View style={styles.recentWhiteCard}>
-              {displayedRecentList.map((item, idx) => (
+            <View
+              className="w-full rounded-3xl p-4 shadow-sm mb-6"
+              style={{
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+                borderWidth: 1,
+              }}
+            >
+              {displayedSpecialistsList.map((item, idx) => (
                 <View key={item.id || idx}>
                   <TouchableOpacity
                     activeOpacity={0.75}
-                    style={styles.recentDoctorItem}
-                    onPress={() => handleRecentDoctorPress(item)}
+                    className="flex-row items-center py-2.5"
+                    onPress={() => handleDoctorPress(item)}
                   >
                     <Image
-                      source={{ uri: item.photo }}
-                      style={styles.recentAvatarImg}
+                      source={{
+                        uri:
+                          item.photo ||
+                          'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
+                      }}
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: isDarkMode ? '#212121' : '#F3F4F6',
+                      }}
                       resizeMode="cover"
                     />
 
-                    <View style={styles.recentDoctorInfoCol}>
-                      <Text style={styles.recentDoctorName} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.recentDoctorSpec} numberOfLines={1}>
+                    <View className="flex-1 ml-3.5">
+                      <View className="flex-row items-center gap-1.5">
+                        <Text className="text-base font-black" style={{ color: theme.textPrimary }} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                      </View>
+                      <Text className="text-sm font-semibold mt-0.5" style={{ color: theme.textSecondary }} numberOfLines={1}>
                         {item.specialty}
                       </Text>
                     </View>
 
-                    <View style={styles.recentDateCol}>
-                      <Text style={styles.recentDateText}>{item.date}</Text>
-                      <Text style={styles.recentTimeText}>{item.time}</Text>
+                    <View className="items-end">
+                      <Text className="text-sm font-black" style={{ color: theme.textPrimary }}>{item.date}</Text>
+                      <Text className="text-xs font-bold text-amber-500 mt-0.5">{item.time}</Text>
                     </View>
                   </TouchableOpacity>
 
-                  {idx < displayedRecentList.length - 1 && (
-                    <View style={styles.recentDivider} />
+                  {idx < displayedSpecialistsList.length - 1 && (
+                    <View className="h-[1px] my-2" style={{ backgroundColor: theme.divider }} />
                   )}
                 </View>
               ))}
@@ -771,20 +963,25 @@ export default function DoctorCareScreen({
           {/* BOTTOM PROMO CARD */}
           <TouchableOpacity
             activeOpacity={0.88}
-            style={styles.promoSkyBlueCard}
+            className="w-full rounded-3xl p-5 flex-row items-center justify-between mb-8 shadow-sm"
+            style={{
+              backgroundColor: isDarkMode ? '#1B2A30' : '#D2EDF6',
+              borderColor: isDarkMode ? '#26424D' : 'transparent',
+              borderWidth: isDarkMode ? 1 : 0,
+            }}
             onPress={() => setShowSeeAll(true)}
           >
-            <View style={styles.promoTextCol}>
-              <Text style={styles.promoTitleText}>Get a Check-up Today</Text>
-              <Text style={styles.promoSubText}>
+            <View className="flex-1 mr-3">
+              <Text className="text-lg font-black mb-1" style={{ color: isDarkMode ? '#FFFFFF' : '#111827' }}>Get a Check-up Today</Text>
+              <Text className="text-sm font-medium leading-snug" style={{ color: isDarkMode ? '#ABABAB' : '#374151' }}>
                 Complete health screening at a special price
               </Text>
             </View>
 
-            <View style={styles.promoArrowCircle}>
+            <View className="w-12 h-12 rounded-full bg-red-600 items-center justify-center shadow-xs">
               <Ionicons
                 name="arrow-up"
-                size={20}
+                size={22}
                 color="#FFFFFF"
                 style={{ transform: [{ rotate: '45deg' }] }}
               />
@@ -793,13 +990,13 @@ export default function DoctorCareScreen({
         </View>
       </ScrollView>
 
-
       {/* ========================================================================= */}
       {/* BOTTOM SHEET: ALL SPECIALISTS (USING AppBottomSheet)                      */}
       {/* ========================================================================= */}
       <AppBottomSheet
         visible={showSeeAll}
         onClose={() => setShowSeeAll(false)}
+        height="92%"
         maxHeight="94%"
         showHandle={true}
         showCloseChevron={false}
@@ -808,22 +1005,21 @@ export default function DoctorCareScreen({
         headerLeft={
           <TouchableOpacity
             activeOpacity={0.7}
-            style={styles.profileModalBackBtn}
+            className="w-10 h-10 rounded-full items-center justify-center"
             onPress={() => setShowSeeAll(false)}
           >
-            <Ionicons name="arrow-back" size={22} color={THEME.textPrimary} />
+            <Ionicons name="arrow-back" size={22} color="#111827" />
           </TouchableOpacity>
         }
         title="All Specialists"
         subtitle={`${specialists?.length || 0} Specialists Available`}
       >
-        <View style={{ flex: 1 }}>
-
+        <View className="flex-1" style={{ flex: 1, width: '100%' }}>
           {/* SEARCH BAR */}
-          <View style={styles.seeAllSearchContainer}>
-            <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
+          <View className="flex-row items-center bg-gray-100 rounded-2xl px-4 py-3 mx-5 my-3">
+            <Ionicons name="search" size={20} color="#9CA3AF" className="mr-2" />
             <TextInput
-              style={styles.seeAllSearchInput}
+              className="flex-1 text-sm font-medium text-gray-900 ml-2"
               placeholder="Search by doctor name or specialty..."
               placeholderTextColor="#9CA3AF"
               value={seeAllSearchQuery}
@@ -838,16 +1034,16 @@ export default function DoctorCareScreen({
 
           {/* SPECIALIST LIST (FLUSH CARDS) */}
           <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.seeAllScrollContent}
+            className="flex-1"
+            contentContainerClassName="px-5 pb-10 gap-3"
             showsVerticalScrollIndicator={false}
           >
             {isLoading ? (
               <DoctorSeeAllSkeleton count={4} />
             ) : filteredAllDoctors.length === 0 ? (
-              <View style={styles.emptyRecentWrap}>
-                <Ionicons name="medical-outline" size={42} color="#9CA3AF" />
-                <Text style={[styles.emptyRecentText, { marginTop: 10 }]}>
+              <View className="items-center justify-center py-8 px-4">
+                <Ionicons name="medical-outline" size={44} color={isDarkMode ? '#6B7280' : '#9CA3AF'} />
+                <Text className="text-sm text-center leading-relaxed mt-3" style={{ color: theme.textSecondary }}>
                   {seeAllSearchQuery
                     ? `No specialists found matching "${seeAllSearchQuery}".`
                     : 'No specialists listed at the moment. Pull down to refresh.'}
@@ -858,65 +1054,77 @@ export default function DoctorCareScreen({
                 <TouchableOpacity
                   key={doc.doctor_id}
                   activeOpacity={0.85}
-                  style={styles.horizontalDoctorCard}
+                  className="flex-row rounded-2xl p-3.5 shadow-sm gap-3.5"
+                  style={{
+                    backgroundColor: isDarkMode ? '#212121' : '#FFFFFF',
+                    borderColor: theme.cardBorder,
+                    borderWidth: 1,
+                  }}
                   onPress={() => {
                     setShowSeeAll(false);
                     handleOpenBooking(doc);
                   }}
                 >
-                  <View style={styles.horizontalPhotoWrap}>
+                  <View className="relative">
                     <Image
                       source={{
                         uri:
                           doc.photo_url ||
                           'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
                       }}
-                      style={styles.horizontalPhoto}
+                      style={{ width: 84, height: 100, borderRadius: 16 }}
+                      className="rounded-2xl bg-gray-100"
                       resizeMode="cover"
                     />
-                    <View style={styles.horizontalRatingPill}>
-                      <Ionicons name="star" size={10} color="#DC2626" />
-                      <Text style={styles.horizontalRatingScore}>
+                    <View
+                      className="absolute bottom-1.5 right-1.5 flex-row items-center px-2 py-0.5 rounded-full gap-0.5 shadow-xs"
+                      style={{ backgroundColor: isDarkMode ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.95)' }}
+                    >
+                      <Ionicons name="star" size={11} color="#DC2626" />
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
                         {Number(doc.rating || 5.0).toFixed(1)}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={styles.horizontalContentCol}>
-                    <View style={styles.horizontalNameHeader}>
-                      <View style={{ flex: 1, marginRight: 6 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                          <Text style={styles.horizontalDoctorName} numberOfLines={1}>
+                  <View className="flex-1 justify-between py-0.5">
+                    <View className="flex-row items-start justify-between">
+                      <View className="flex-1 mr-1.5">
+                        <View className="flex-row items-center gap-1.5">
+                          <Text className="text-base font-black" style={{ color: theme.textPrimary }} numberOfLines={1}>
                             {doc.name}
                           </Text>
-                          <Ionicons name="checkmark-circle" size={15} color="#059669" />
+                          <Ionicons name="checkmark-circle" size={16} color="#059669" />
                         </View>
-                        <Text style={styles.horizontalDoctorSpec} numberOfLines={1}>
+                        <Text className="text-sm text-red-600 font-bold mt-0.5" numberOfLines={1}>
                           {doc.specialty}
                         </Text>
                       </View>
                     </View>
 
-                    <Text style={styles.horizontalHospitalText} numberOfLines={1}>
+                    <Text className="text-xs font-medium mt-1" style={{ color: theme.textSecondary }} numberOfLines={1}>
                       {doc.hospital_affiliation || 'Red Apple Telemedicine Clinic'}
                     </Text>
 
-                    <View style={styles.horizontalFooterRow}>
-                      <Text style={styles.horizontalFeeText}>
+                    <View
+                      className="flex-row items-center justify-between mt-2.5 pt-2"
+                      style={{ borderTopWidth: 1, borderTopColor: theme.divider }}
+                    >
+                      <Text className="text-sm font-black" style={{ color: theme.textPrimary }}>
                         ₦{Number(doc.fee_ngn || 0).toLocaleString()}
-                        <Text style={styles.horizontalFeeSubText}> / session</Text>
+                        <Text className="text-xs font-normal" style={{ color: theme.textSecondary }}> / session</Text>
                       </Text>
 
                       <TouchableOpacity
                         activeOpacity={0.85}
-                        style={styles.horizontalBookBtn}
+                        className="flex-row items-center bg-red-600 px-4 py-2 rounded-full gap-1 shadow-xs"
                         onPress={() => {
                           setShowSeeAll(false);
                           handleOpenBooking(doc);
                         }}
                       >
-                        <Text style={styles.horizontalBookBtnText}>View Profile</Text>
-                        <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 3 }} />
+                        <Text className="text-xs font-extrabold text-white">View Profile</Text>
+                        <Ionicons name="arrow-forward" size={13} color="#FFFFFF" className="ml-0.5" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -924,7 +1132,7 @@ export default function DoctorCareScreen({
               ))
             )}
 
-            <View style={{ height: 40 }} />
+            <View className="h-10" />
           </ScrollView>
         </View>
       </AppBottomSheet>
@@ -932,659 +1140,507 @@ export default function DoctorCareScreen({
       {/* ========================================================================= */}
       {/* MODAL: FULLSCREEN DOCTOR PROFILE WITH COMPLETE DETAILS                    */}
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* MODAL: 2-STEP DOCTOR PROFILE & BOOKING FLOW (MATCHING REFERENCE UI)       */}
+      {/* ========================================================================= */}
       <AppBottomSheet
         visible={showProfile}
         onClose={() => setShowProfile(false)}
-        maxHeight="95%"
-        showHandle={true}
+        height="88%"
+        maxHeight="92%"
+        showHandle={false}
         showCloseChevron={false}
         noPadding={true}
         scrollable={true}
-        headerLeft={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.profileModalBackBtn}
-            onPress={() => setShowProfile(false)}
-          >
-            <Ionicons name="arrow-back" size={22} color={THEME.textPrimary} />
-          </TouchableOpacity>
-        }
-        headerRight={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.profileModalIconBtn}
-            onPress={() => Alert.alert('Share Profile', `Share ${selectedDoctor?.name}'s profile on Red Apple.`)}
-          >
-            <Ionicons name="share-outline" size={20} color={THEME.textPrimary} />
-          </TouchableOpacity>
-        }
-        title={selectedDoctor?.name || 'Doctor Profile'}
-        subtitle={selectedDoctor?.specialty || 'Specialist Consultant'}
+        cardStyle={{ backgroundColor: theme.card }}
+        footerStyle={{ paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
         footer={
-          <View style={styles.profileModalFooterRow}>
-            <View style={styles.profileModalPriceCol}>
-              <Text style={styles.profileModalPriceLabel}>Consultation Fee</Text>
-              <Text style={styles.profileModalPriceAmount}>
-                ₦{Number(selectedDoctor?.fee_ngn || 15000).toLocaleString()}
-                <Text style={styles.profileModalPriceSub}> / 30 mins</Text>
-              </Text>
-            </View>
-
+          profileStep === 'profile' ? (
             <TouchableOpacity
               activeOpacity={0.88}
-              style={[
-                styles.profileModalBookBtn,
-                (!selectedSlot || isSubmittingBooking) && styles.profileModalBookBtnDisabled,
-              ]}
-              onPress={handleConfirmBooking}
-              disabled={isSubmittingBooking}
+              style={{
+                backgroundColor: '#DC2626',
+                height: 52,
+                borderRadius: 26,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                shadowColor: '#DC2626',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.28,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+              onPress={() => setProfileStep('booking')}
             >
-              {isSubmittingBooking ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="videocam" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.profileModalBookBtnText}>
-                    {selectedSlot ? 'Book Consultation' : 'Select a Time Slot'}
-                  </Text>
-                </>
-              )}
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+                Book Appointment
+              </Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </TouchableOpacity>
-          </View>
+          ) : (
+            <View style={{ width: '100%', paddingBottom: 6 }}>
+              {/* Doctor Summary Preview Card Pinned Right Above Continue */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 18,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  marginBottom: 10,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <Image
+                    source={{
+                      uri:
+                        selectedDoctor?.photo_url ||
+                        selectedDoctor?.avatar_url ||
+                        'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
+                    }}
+                    style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E2E8F0' }}
+                    resizeMode="cover"
+                  />
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                      {selectedDoctor?.name || 'Doctor'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                      {selectedDoctor?.specialty || 'General Consultation'} • Video Consultation
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>
+                    {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: '800',
+                      color: selectedSlot && !isSlotInPast(selectedSlot, selectedDate) ? '#DC2626' : '#94A3B8',
+                      marginTop: 1,
+                    }}
+                  >
+                    {selectedSlot ? formatSlotDisplayTime(selectedSlot) : 'No slot selected'}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={{
+                  backgroundColor:
+                    !selectedSlot || isSlotInPast(selectedSlot, selectedDate)
+                      ? '#CBD5E1'
+                      : isSubmittingBooking
+                        ? '#EF4444'
+                        : '#DC2626',
+                  height: 52,
+                  borderRadius: 26,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  shadowColor: '#DC2626',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: !selectedSlot || isSlotInPast(selectedSlot, selectedDate) ? 0 : 0.28,
+                  shadowRadius: 8,
+                  elevation: !selectedSlot || isSlotInPast(selectedSlot, selectedDate) ? 0 : 4,
+                }}
+                onPress={handleConfirmBooking}
+                disabled={isSubmittingBooking || !selectedSlot || isSlotInPast(selectedSlot, selectedDate)}
+              >
+                {isSubmittingBooking ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+                      {!selectedSlot || isSlotInPast(selectedSlot, selectedDate)
+                        ? 'Select an Available Time'
+                        : 'Continue'}
+                    </Text>
+                    {selectedSlot && !isSlotInPast(selectedSlot, selectedDate) && (
+                      <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                    )}
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )
         }
       >
-        <View style={styles.profileModalScrollContent}>
-          {/* HERO SECTION: LARGE DOCTOR PORTRAIT & ESSENTIAL DETAILS */}
-          <View style={styles.doctorHeroCard}>
-            <View style={styles.doctorHeroImageWrap}>
-              <Image
-                source={{
-                  uri:
-                    selectedDoctor?.photo_url ||
-                    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-                }}
-                style={styles.doctorHeroImage}
-                resizeMode="cover"
-              />
-              <View style={styles.doctorHeroVerifiedBadge}>
-                <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" />
-              </View>
-            </View>
+        {/* ========================================================================= */}
+        {/* STEP 1: DOCTOR PROFILE VIEW (SCREEN 1 IN REFERENCE DESIGN)                */}
+        {/* ========================================================================= */}
+        {profileStep === 'profile' && (
+          <View style={{ width: '100%', flex: 1, backgroundColor: '#FFFFFF' }}>
+            {/* Soft Rose Hero Section with Back, Heart & Doctor Portrait */}
+            <View
+              style={{
+                backgroundColor: '#FFF1F2',
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                paddingHorizontal: 20,
+                paddingTop: 16,
+                paddingBottom: 26,
+                alignItems: 'center',
+              }}
+            >
+              {/* Top Navigation Row: Back Button Left, Favorite Heart Right */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    backgroundColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                  onPress={() => setShowProfile(false)}
+                >
+                  <Ionicons name="arrow-back" size={20} color="#1E293B" />
+                </TouchableOpacity>
 
-            <View style={styles.doctorHeroTextCol}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={styles.doctorHeroName}>{selectedDoctor?.name}</Text>
-                <Ionicons name="checkmark-circle" size={18} color="#059669" />
-              </View>
-              <Text style={styles.doctorHeroCredentials}>{selectedDoctor?.credentials || 'MBBS, FWACS'}</Text>
-              <Text style={styles.doctorHeroSpecialty}>{selectedDoctor?.specialty}</Text>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 }}>
+                  Doctor Profile
+                </Text>
 
-              {selectedDoctor?.hospital_affiliation && (
-                <View style={styles.doctorHospitalPill}>
-                  <Ionicons name="business-outline" size={12} color="#4B5563" />
-                  <Text style={styles.doctorHospitalPillText} numberOfLines={1}>
-                    {selectedDoctor.hospital_affiliation}
-                  </Text>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    backgroundColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                  onPress={() => setIsFavoriteDoctor(!isFavoriteDoctor)}
+                >
+                  <Ionicons
+                    name={isFavoriteDoctor ? 'heart' : 'heart-outline'}
+                    size={22}
+                    color={isFavoriteDoctor ? '#DC2626' : '#1E293B'}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Centered Doctor Portrait with Floating "Top Rated" Badge */}
+              <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+                <Image
+                  source={{
+                    uri:
+                      selectedDoctor?.photo_url ||
+                      'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
+                  }}
+                  style={{
+                    width: 122,
+                    height: 122,
+                    borderRadius: 61,
+                    borderWidth: 4,
+                    borderColor: '#FFFFFF',
+                    backgroundColor: '#E2E8F0',
+                  }}
+                  resizeMode="cover"
+                />
+
+                {/* Floating Top Rated Pill Badge */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: -10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: '#FFFFFF',
+                    paddingHorizontal: 12,
+                    paddingVertical: 4.5,
+                    borderRadius: 20,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                    borderWidth: 1,
+                    borderColor: '#FEE2E2',
+                  }}
+                >
+                  <Ionicons name="star" size={13} color="#D97706" />
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#DC2626' }}>Top Rated</Text>
                 </View>
-              )}
-            </View>
-          </View>
-
-          {/* KEY METRICS / STATS HIGHLIGHTS ROW */}
-          <View style={styles.doctorStatsRow}>
-            <View style={styles.doctorStatCard}>
-              <View style={styles.doctorStatIconWrapYellow}>
-                <Ionicons name="star" size={16} color="#EAB308" />
               </View>
-              <Text style={styles.doctorStatValue}>{Number(selectedDoctor?.rating || 5.0).toFixed(1)}</Text>
-              <Text style={styles.doctorStatLabel}>{selectedDoctor?.reviews_count || 64} Reviews</Text>
             </View>
 
-            <View style={styles.doctorStatCard}>
-              <View style={styles.doctorStatIconWrapBlue}>
-                <Ionicons name="ribbon-outline" size={16} color="#2563EB" />
-              </View>
-              <Text style={styles.doctorStatValue}>{selectedDoctor?.years_experience || 12}+ Yrs</Text>
-              <Text style={styles.doctorStatLabel}>Experience</Text>
-            </View>
+            {/* Overlapping White Body Card */}
+            <View
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderTopLeftRadius: 32,
+                borderTopRightRadius: 32,
+                marginTop: -14,
+                paddingHorizontal: 20,
+                paddingTop: 20,
+                paddingBottom: 18,
+                flex: 1,
+              }}
+            >
+              {/* Doctor Name */}
+              <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 }}>
+                {selectedDoctor?.name || 'Doctor'}
+              </Text>
 
-            <View style={styles.doctorStatCard}>
-              <View style={styles.doctorStatIconWrapGreen}>
-                <Ionicons name="videocam-outline" size={16} color="#059669" />
-              </View>
-              <Text style={styles.doctorStatValue}>1,200+</Text>
-              <Text style={styles.doctorStatLabel}>Consultations</Text>
-            </View>
-
-            <View style={styles.doctorStatCard}>
-              <View style={styles.doctorStatIconWrapRed}>
-                <Ionicons name="heart" size={16} color="#DC2626" />
-              </View>
-              <Text style={styles.doctorStatValue}>99%</Text>
-              <Text style={styles.doctorStatLabel}>Positive</Text>
-            </View>
-          </View>
-
-          {/* ABOUT THE DOCTOR (FULL CLINICAL BIO) */}
-          <View style={styles.profileSectionBox}>
-            <Text style={styles.profileSectionTitle}>About Doctor</Text>
-            <Text style={styles.profileBioText}>
-              {selectedDoctor?.bio ||
-                'Consultant Obstetrician & Gynecologist specializing in reproductive health, virtual maternal care, fertility counseling, and patient-first telemedicine consultations.'}
-            </Text>
-          </View>
-
-          {/* AREAS OF CLINICAL EXPERTISE & SPECIALIZATION TAGS */}
-          <View style={styles.profileSectionBox}>
-            <Text style={styles.profileSectionTitle}>Areas of Expertise</Text>
-            <View style={styles.expertiseTagsWrap}>
-              {[
-                selectedDoctor?.sub_specialty,
-                'Reproductive Wellness',
-                'Virtual Maternal Care',
-                'Fertility & Ovulation Guidance',
-                'Hormonal Health',
-                'Confidential Telemedicine',
-              ]
-                .filter(Boolean)
-                .map((item, idx) => (
-                  <View key={idx} style={styles.expertiseTagPill}>
-                    <Ionicons name="checkmark" size={12} color="#DC2626" style={{ marginRight: 4 }} />
-                    <Text style={styles.expertiseTagText}>{item}</Text>
+              {/* Specialty, Rating & Experience Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 18 }}>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#475569' }}>
+                      {selectedDoctor?.specialty || 'General Consultation'}
+                    </Text>
                   </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                    <Ionicons name="star" size={14} color="#D97706" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#64748B' }}>
+                      {Number(selectedDoctor?.rating || 5.0).toFixed(1)} ({selectedDoctor?.reviews_count || 0} reviews)
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
+                    {selectedDoctor?.years_experience ? `${selectedDoctor.years_experience}+ Years` : '5+ Years'}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 1 }}>
+                    Experience
+                  </Text>
+                </View>
+              </View>
+
+              {/* About Doctor */}
+              <View style={{ marginBottom: 18 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 6 }}>
+                  About Doctor
+                </Text>
+                <Text style={{ fontSize: 13, color: '#475569', lineHeight: 20 }}>
+                  {selectedDoctor?.bio ||
+                    (selectedDoctor?.specialty
+                      ? `Specialist in ${selectedDoctor.specialty} providing verified clinical consultations and telemedicine care on Red Apple.`
+                      : 'Verified clinical specialist providing telemedicine consultations on Red Apple.')}
+                </Text>
+              </View>
+
+              {/* Specializations */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 8 }}>
+                  Specializations
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {(() => {
+                    const tags = [];
+                    if (selectedDoctor?.specialty) tags.push(selectedDoctor.specialty);
+                    if (selectedDoctor?.sub_specialty && selectedDoctor.sub_specialty !== selectedDoctor.specialty) {
+                      tags.push(selectedDoctor.sub_specialty);
+                    }
+                    if (selectedDoctor?.subspecialty && selectedDoctor.subspecialty !== selectedDoctor.specialty) {
+                      tags.push(selectedDoctor.subspecialty);
+                    }
+                    tags.push('Telemedicine', 'Virtual Care');
+                    return tags.map((tag) => (
+                      <View key={tag} style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>{tag}</Text>
+                      </View>
+                    ));
+                  })()}
+                </View>
+              </View>
+
+
+            </View>
+          </View>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 2: BOOK APPOINTMENT VIEW (SCREEN 2 IN REFERENCE DESIGN)               */}
+        {/* ========================================================================= */}
+        {profileStep === 'booking' && (
+          <View style={{ width: '100%', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 28, backgroundColor: '#FFFFFF' }}>
+            {/* Header with Circular Back Button */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#F8FAFC',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  marginRight: 12,
+                }}
+                onPress={() => setProfileStep('profile')}
+              >
+                <Ionicons name="arrow-back" size={20} color="#1E293B" />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 21, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 }}>
+                  Book Appointment
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  Choose your preferred date and time to continue.
+                </Text>
+              </View>
+            </View>
+
+            {/* Select Date Section */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 10 }}>
+                Select Date
+              </Text>
+              <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {upcomingDateStrip.map((item, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    activeOpacity={0.8}
+                    style={{
+                      width: 68,
+                      height: 72,
+                      borderRadius: 18,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: item.isSelected ? '#DC2626' : '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: item.isSelected ? '#DC2626' : '#E2E8F0',
+                    }}
+                    onPress={() => handleSelectDate(item.date)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: item.isSelected ? '#FFFFFF' : '#64748B' }}>
+                      {item.dayName}
+                    </Text>
+                    <Text style={{ fontSize: 13.5, fontWeight: '900', color: item.isSelected ? '#FFFFFF' : '#0F172A', marginTop: 4 }}>
+                      {item.monthDay}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
+              </ScrollView>
             </View>
-          </View>
 
-          {/* LANGUAGES & PROFESSIONAL DETAILS */}
-          <View style={styles.profileSectionBox}>
-            <Text style={styles.profileSectionTitle}>Professional Details</Text>
-            <View style={styles.detailsList}>
-              <View style={styles.detailRow}>
-                <Ionicons name="language-outline" size={18} color="#4B5563" style={styles.detailIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.detailRowLabel}>Languages Spoken</Text>
-                  <Text style={styles.detailRowValue}>
-                    {selectedDoctor?.spoken_languages?.join(', ') || 'English, Pidgin'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Ionicons name="medkit-outline" size={18} color="#4B5563" style={styles.detailIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.detailRowLabel}>Medical Affiliation</Text>
-                  <Text style={styles.detailRowValue}>
-                    {selectedDoctor?.hospital_affiliation || 'Red Apple Telemedicine Clinic'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Ionicons name="videocam-outline" size={18} color="#4B5563" style={styles.detailIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.detailRowLabel}>Consultation Format</Text>
-                  <Text style={styles.detailRowValue}>
-                    1-on-1 End-to-End Encrypted HD Video Consultation (30 mins)
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* DATE & TIME SLOT PICKER */}
-          <View style={styles.profileSectionBox}>
-            <Text style={styles.profileSectionTitle}>Select Appointment Date</Text>
-            <DoctorAppointmentCalendar
-              selectedDate={selectedDate}
-              onSelectDate={handleSelectDate}
-            />
-
-            <Text style={[styles.profileSectionTitle, { marginTop: 18 }]}>Available Time Slots</Text>
-            {isLoadingSlots ? (
-              <SlotsGridSkeleton count={6} />
-            ) : doctorSlots.length === 0 ? (
-              <View style={styles.noSlotsWrap}>
-                <Ionicons name="calendar-outline" size={24} color="#9CA3AF" />
-                <Text style={styles.noSlotsText}>No slots available for this date. Please pick another date.</Text>
-              </View>
-            ) : (
-              <View style={styles.slotsGridWrap}>
+            {/* Available Time Section */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 10 }}>
+                Available Time
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {doctorSlots.map((slot) => {
-                  const isSelected = selectedSlot?.slot_id === slot.slot_id;
-                  const isBooked = slot.is_booked;
+                  const isPast = isSlotInPast(slot, selectedDate);
+                  const isBooked = Boolean(slot.is_booked);
+                  const isDisabled = isPast || isBooked;
+                  const isSelected = !isDisabled && selectedSlot?.slot_id === slot.slot_id;
+                  const timeText = formatSlotDisplayTime(slot);
+
                   return (
                     <TouchableOpacity
                       key={slot.slot_id}
-                      activeOpacity={0.8}
-                      disabled={isBooked}
-                      style={[
-                        styles.slotPill,
-                        isSelected && styles.slotPillSelected,
-                        isBooked && styles.slotPillBooked,
-                      ]}
-                      onPress={() => setSelectedSlot(slot)}
+                      activeOpacity={isDisabled ? 1 : 0.8}
+                      disabled={isDisabled}
+                      style={{
+                        width: '30.5%',
+                        paddingVertical: 10,
+                        borderRadius: 14,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isSelected ? '#DC2626' : isDisabled ? '#F1F5F9' : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: isSelected ? '#DC2626' : '#E2E8F0',
+                        opacity: isDisabled ? 0.45 : 1,
+                      }}
+                      onPress={() => {
+                        if (!isDisabled) {
+                          setSelectedSlot(slot);
+                        }
+                      }}
                     >
-                      <Ionicons
-                        name={isSelected ? 'time' : 'time-outline'}
-                        size={13}
-                        color={isSelected ? '#FFFFFF' : isBooked ? '#9CA3AF' : '#111827'}
-                        style={{ marginRight: 4 }}
-                      />
                       <Text
-                        style={[
-                          styles.slotPillText,
-                          isSelected && styles.slotPillTextSelected,
-                          isBooked && styles.slotPillTextBooked,
-                        ]}
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '800',
+                          color: isSelected ? '#FFFFFF' : isDisabled ? '#94A3B8' : '#1E293B',
+                          textDecorationLine: isPast ? 'line-through' : 'none',
+                        }}
                       >
-                        {slot.formatted_time || slot.start_time}
+                        {timeText}
                       </Text>
+                      {isPast ? (
+                        <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#94A3B8', marginTop: 2 }}>
+                          Passed
+                        </Text>
+                      ) : isBooked ? (
+                        <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#94A3B8', marginTop: 2 }}>
+                          Booked
+                        </Text>
+                      ) : null}
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            )}
-          </View>
 
-          {/* CONSULTATION REASON */}
-          <View style={styles.profileSectionBox}>
-            <Text style={styles.profileSectionTitle}>Reason for Consultation</Text>
-            <View style={styles.reasonChipsWrap}>
-              {[
-                'Reproductive Health Consultation',
-                'Fertility & Conception Guidance',
-                'Pregnancy & Maternal Care',
-                'Menstrual Irregularities',
-                'Pelvic Pain & Discomfort',
-                'Postmenopause Review',
-              ].map((reason) => {
-                const isChosen = consultationReason === reason;
-                return (
-                  <TouchableOpacity
-                    key={reason}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.reasonChip,
-                      isChosen && styles.reasonChipChosen,
-                    ]}
-                    onPress={() => setConsultationReason(reason)}
-                  >
-                    <Text
-                      style={[
-                        styles.reasonChipText,
-                        isChosen && styles.reasonChipTextChosen,
-                      ]}
-                    >
-                      {reason}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={{ height: 24 }} />
-        </View>
-      </AppBottomSheet>
-
-      {/* ========================================================================= */}
-      {/* MODAL: FULLSCREEN PARTNER CLINIC DETAILS                                 */}
-      {/* ========================================================================= */}
-      {/* BOTTOM SHEET: PARTNER CLINIC DETAILS (USING AppBottomSheet)               */}
-      {/* ========================================================================= */}
-      <AppBottomSheet
-        visible={showClinicModal}
-        onClose={() => setShowClinicModal(false)}
-        maxHeight="95%"
-        showHandle={true}
-        showCloseChevron={false}
-        noPadding={true}
-        scrollable={true}
-        headerLeft={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.profileModalBackBtn}
-            onPress={() => setShowClinicModal(false)}
-          >
-            <Ionicons name="arrow-back" size={22} color={THEME.textPrimary} />
-          </TouchableOpacity>
-        }
-        headerRight={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.profileModalIconBtn}
-            onPress={() =>
-              Alert.alert(
-                'Share Clinic',
-                `Share ${selectedClinic?.name} with someone who needs care.`
-              )
-            }
-          >
-            <Ionicons name="share-outline" size={20} color={THEME.textPrimary} />
-          </TouchableOpacity>
-        }
-        title={selectedClinic?.name || 'Partner Clinic'}
-        subtitle={selectedClinic?.city || 'Accredited Facility'}
-      >
-        <View style={styles.profileModalScrollContent}>
-            {/* HERO IMAGE BANNER */}
-            <View style={styles.clinicModalHeroCard}>
-              <Image
-                source={{ uri: getClinicPhoto(selectedClinic) }}
-                style={styles.clinicModalHeroImage}
-                resizeMode="cover"
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.75)']}
-                style={styles.clinicModalHeroGradient}
-              >
-                <View style={styles.clinicModalHeroBadgeRow}>
-                  <View style={styles.clinicModalVerifiedBadge}>
-                    <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
-                    <Text style={styles.clinicModalVerifiedText}>Red Apple Partner</Text>
-                  </View>
-                  <View style={styles.clinicModalRatingBadge}>
-                    <Ionicons name="star" size={12} color="#DC2626" />
-                    <Text style={styles.clinicModalRatingText}>
-                      {Number(selectedClinic?.rating || 4.8).toFixed(1)} ({selectedClinic?.reviewsCount || selectedClinic?.reviews_count || 120})
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={styles.clinicModalHeroTitle}>{selectedClinic?.name}</Text>
-                <Text style={styles.clinicModalHeroSub}>
-                  {selectedClinic?.categoryLabel || selectedClinic?.category_label || 'Physical Healthcare Center'}
-                </Text>
-              </LinearGradient>
-            </View>
-
-            {/* LOCATION & DIRECTIONS BOX */}
-            <View style={styles.profileSectionBox}>
-              <Text style={styles.profileSectionTitle}>Location & Directions</Text>
-              <View style={styles.clinicLocationBox}>
-                <View style={styles.clinicLocationRow}>
-                  <Ionicons name="location-sharp" size={20} color="#DC2626" style={{ marginTop: 2 }} />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.clinicLocationAddress}>{selectedClinic?.address}</Text>
-                    {selectedClinic?.distanceKm ? (
-                      <Text style={styles.clinicLocationDistance}>
-                        📍 {selectedClinic?.distanceKm} km from your current location
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={styles.clinicDirectionsActionBtn}
-                  onPress={() => {
-                    if (selectedClinic) {
-                      const q = encodeURIComponent(`${selectedClinic.name} ${selectedClinic.address}`);
-                      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
-                    }
-                  }}
-                >
-                  <Ionicons name="navigate" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.clinicDirectionsActionText}>Open in Maps / Get Directions</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* CONTACT & WORKING HOURS */}
-            <View style={styles.profileSectionBox}>
-              <Text style={styles.profileSectionTitle}>Contact & Hours</Text>
-              <View style={styles.clinicContactBox}>
-                <View style={styles.clinicContactRow}>
-                  <Ionicons name="time-outline" size={18} color="#6B7280" />
-                  <Text style={styles.clinicContactText}>
-                    {selectedClinic?.openingHours || selectedClinic?.opening_hours || 'Mon - Sun: 24/7'}
+              {!isLoadingSlots && doctorSlots.length === 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, marginTop: 12 }}>
+                  <Ionicons name="calendar-outline" size={17} color="#64748B" />
+                  <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', flex: 1 }}>
+                    No appointment times are available for this date. Please choose another date.
                   </Text>
                 </View>
+              )}
 
-                {selectedClinic?.phone && (
-                  <View style={styles.clinicContactRow}>
-                    <Ionicons name="call-outline" size={18} color="#6B7280" />
-                    <Text style={styles.clinicContactText}>{selectedClinic?.phone}</Text>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.clinicQuickCallBtn}
-                      onPress={() =>
-                        Linking.openURL(`tel:${selectedClinic?.phone?.replace(/[^0-9+]/g, '')}`)
-                      }
-                    >
-                      <Text style={styles.clinicQuickCallBtnText}>Call Now</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            {/* ACCREDITED CLINICAL SERVICES */}
-            <View style={styles.profileSectionBox}>
-              <Text style={styles.profileSectionTitle}>Accredited Medical Services</Text>
-              <View style={styles.clinicServicesGrid}>
-                {(selectedClinic?.services || [
-                  'Virtual Video Consultation',
-                  'In-Person Gynaecological Exam',
-                  'Prenatal & Antenatal Care',
-                  'Fertility Ultrasound Profiling',
-                  'Well-Woman Health Checkup',
-                ]).map((srv, idx) => (
-                  <View key={idx} style={styles.clinicServiceFullPill}>
-                    <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 8 }} />
-                    <Text style={styles.clinicServiceFullText}>{srv}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* AFFILIATED TELEMEDICINE SPECIALISTS */}
-            {clinicAffiliatedDoctors.length > 0 && (
-              <View style={styles.profileSectionBox}>
-                <Text style={styles.profileSectionTitle}>Affiliated Specialists</Text>
-                <Text style={styles.clinicAffiliatedSub}>
-                  Consult virtually with verified doctors practicing at or affiliated with this clinic
-                </Text>
-
-                {clinicAffiliatedDoctors.map((doc) => (
-                  <View key={doc.doctor_id} style={styles.affiliatedDoctorCard}>
-                    <Image
-                      source={{
-                        uri:
-                          doc.photo_url ||
-                          'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-                      }}
-                      style={styles.affiliatedDocPhoto}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.affiliatedDocInfo}>
-                      <Text style={styles.affiliatedDocName}>{doc.name}</Text>
-                      <Text style={styles.affiliatedDocSpec}>{doc.specialty}</Text>
-                      <Text style={styles.affiliatedDocFee}>
-                        ₦{Number(doc.fee_ngn || 15000).toLocaleString()} / session
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={styles.affiliatedDocBookBtn}
-                      onPress={() => {
-                        setShowClinicModal(false);
-                        handleOpenBooking(doc);
-                      }}
-                    >
-                      <Text style={styles.affiliatedDocBookBtnText}>Book</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <View style={{ height: 24 }} />
-        </View>
-      </AppBottomSheet>
-
-      {/* ========================================================================= */}
-      {/* BOTTOM SHEET: ALL NEARBY PARTNER CLINICS (USING AppBottomSheet)           */}
-      {/* ========================================================================= */}
-      <AppBottomSheet
-        visible={showSeeAllClinics}
-        onClose={() => setShowSeeAllClinics(false)}
-        maxHeight="94%"
-        showHandle={true}
-        showCloseChevron={false}
-        noPadding={true}
-        scrollable={false}
-        headerLeft={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={styles.profileModalBackBtn}
-            onPress={() => setShowSeeAllClinics(false)}
-          >
-            <Ionicons name="arrow-back" size={22} color={THEME.textPrimary} />
-          </TouchableOpacity>
-        }
-        title="Nearby Partner Clinics"
-        subtitle={`${partnerClinics?.length || 0} Accredited Healthcare Facilities`}
-      >
-        <View style={{ flex: 1 }}>
-
-          {/* SEARCH BAR */}
-          <View style={styles.seeAllSearchContainer}>
-            <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.seeAllSearchInput}
-              placeholder="Search by clinic name, city, service..."
-              placeholderTextColor="#9CA3AF"
-              value={clinicSearchQuery}
-              onChangeText={setClinicSearchQuery}
-            />
-            {clinicSearchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setClinicSearchQuery('')}>
-                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* CATEGORY FILTER PILLS */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.clinicFilterChipsRow, { marginHorizontal: 20, marginBottom: 8 }]}
-          >
-            {[
-              { id: 'all', label: 'All Nearby' },
-              { id: 'partner', label: 'Verified Partners' },
-              { id: 'fertility', label: 'Fertility & IVF' },
-              { id: 'birthing_center', label: 'Maternity' },
-              { id: 'gynaecology', label: "Women's Clinics" },
-            ].map((cat) => {
-              const isSelected = clinicCategoryFilter === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.clinicFilterChip,
-                    isSelected && styles.clinicFilterChipActive,
-                  ]}
-                  onPress={() => setClinicCategoryFilter(cat.id)}
-                >
-                  <Text
-                    style={[
-                      styles.clinicFilterChipText,
-                      isSelected && styles.clinicFilterChipTextActive,
-                    ]}
-                  >
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* CLINICS VERTICAL LIST */}
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.seeAllScrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {filteredPartnerClinics.map((clinic) => {
-              const clinicPhoto = getClinicPhoto(clinic);
-              const isPartnerClinic = clinic.isPartner !== false && clinic.is_partner !== false;
-              const distText = clinic.distanceKm ? `${clinic.distanceKm} km away` : 'Nearby';
-
-              return (
-                <TouchableOpacity
-                  key={clinic.id || clinic.clinic_id}
-                  activeOpacity={0.85}
-                  style={styles.horizontalDoctorCard}
-                  onPress={() => {
-                    setSelectedClinic(clinic);
-                    setShowClinicModal(true);
+              {doctorSlots.length > 0 && doctorSlots.every((s) => isSlotInPast(s, selectedDate) || s.is_booked) && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: '#FEF2F2',
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    marginTop: 12,
+                    borderWidth: 1,
+                    borderColor: '#FECACA',
                   }}
                 >
-                  <View style={styles.horizontalPhotoWrap}>
-                    <Image
-                      source={{ uri: clinicPhoto }}
-                      style={styles.horizontalPhoto}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.horizontalRatingPill}>
-                      <Ionicons name="star" size={10} color="#DC2626" />
-                      <Text style={styles.horizontalRatingScore}>
-                        {Number(clinic.rating || 4.8).toFixed(1)}
-                      </Text>
-                    </View>
-                  </View>
+                  <Ionicons name="information-circle-outline" size={18} color="#DC2626" />
+                  <Text style={{ fontSize: 12, color: '#991B1B', fontWeight: '600', flex: 1 }}>
+                    All slots for this date have passed or are booked. Please select an upcoming date above.
+                  </Text>
+                </View>
+              )}
+            </View>
 
-                  <View style={styles.horizontalContentCol}>
-                    <View style={styles.horizontalNameHeader}>
-                      <View style={{ flex: 1, marginRight: 6 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                          <Text style={styles.horizontalDoctorName} numberOfLines={1}>
-                            {clinic.name}
-                          </Text>
-                          {isPartnerClinic && (
-                            <Ionicons name="shield-checkmark" size={14} color="#059669" />
-                          )}
-                        </View>
-                        <Text style={styles.horizontalDoctorSpec} numberOfLines={1}>
-                          {clinic.categoryLabel || clinic.category_label || "Women's Health"}
-                        </Text>
-                      </View>
-                    </View>
 
-                    <Text style={styles.horizontalHospitalText} numberOfLines={1}>
-                      {clinic.address}
-                    </Text>
-
-                    <View style={styles.horizontalFooterRow}>
-                      <Text style={styles.clinicDistanceTagText}>
-                        📍 {distText}
-                      </Text>
-
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        style={styles.horizontalBookBtn}
-                        onPress={() => {
-                          setSelectedClinic(clinic);
-                          setShowClinicModal(true);
-                        }}
-                      >
-                        <Text style={styles.horizontalBookBtnText}>View Details</Text>
-                        <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 3 }} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </View>
+          </View>
+        )}
       </AppBottomSheet>
+
 
       {/* ========================================================================= */}
       {/* BOTTOM SHEET: BOOKING CONFIRMED SUCCESS (USING AppBottomSheet)            */}
@@ -1595,34 +1651,34 @@ export default function DoctorCareScreen({
         showHandle={true}
         scrollable={false}
       >
-        <View style={{ alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8 }}>
-          <View style={styles.successCheckCircle}>
-            <Ionicons name="checkmark" size={32} color="#FFFFFF" />
+        <View className="items-center py-4 px-2">
+          <View className="w-18 h-18 rounded-full bg-emerald-500 items-center justify-center mb-4 shadow-sm" style={{ width: 68, height: 68, borderRadius: 34 }}>
+            <Ionicons name="checkmark" size={36} color="#FFFFFF" />
           </View>
-          <Text style={styles.successTitle}>Consultation Confirmed!</Text>
-          <Text style={styles.successSub}>
+          <Text className="text-xl font-black text-gray-900 mb-1.5 text-center">Consultation Confirmed!</Text>
+          <Text className="text-sm text-gray-600 text-center leading-relaxed px-4 mb-6">
             Your appointment with {confirmedBookingData?.doctor_name || selectedDoctor?.name} is booked for {confirmedBookingData?.scheduled_time || 'Wed 12, 12:00'}.
           </Text>
 
           <TouchableOpacity
             activeOpacity={0.85}
-            style={styles.successJoinBtn}
+            className="flex-row items-center justify-center bg-red-600 h-13 py-3.5 px-6 rounded-full w-full gap-2 mb-2.5 shadow-sm"
             onPress={() => {
               setShowBookingSuccessModal(false);
               setActiveVideoCallBooking(confirmedBookingData);
               setShowVideoCallModal(true);
             }}
           >
-            <Ionicons name="videocam" size={18} color="#FFFFFF" />
-            <Text style={styles.successJoinBtnText}>Enter Video Room</Text>
+            <Ionicons name="videocam" size={20} color="#FFFFFF" />
+            <Text className="text-base font-extrabold text-white">Enter Video Room</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.8}
-            style={styles.successDismissBtn}
+            className="h-11 px-6 rounded-full w-full items-center justify-center"
             onPress={() => setShowBookingSuccessModal(false)}
           >
-            <Text style={styles.successDismissBtnText}>Done</Text>
+            <Text className="text-sm font-bold text-gray-600">Done</Text>
           </TouchableOpacity>
         </View>
       </AppBottomSheet>
@@ -1681,2136 +1737,56 @@ export default function DoctorCareScreen({
         onClose={() => {
           setShowPaystackModal(false);
           loadData();
-          Alert.alert(
-            'Payment Pending',
-            'Your consultation booking is saved but not confirmed until payment is completed. You can pay anytime under "My Appointments".',
-            [
-              { text: 'View Appointments', onPress: () => setShowAppointmentsModal(true) },
-              { text: 'Got it' },
-            ]
-          );
+          setConfirmationModalConfig({
+            visible: true,
+            title: 'Payment Incomplete',
+            message:
+              'Your consultation booking has been requested, but payment was not completed. Please pay the consultation fee in "My Appointments" to confirm your session.',
+            confirmText: 'View Appointments',
+            cancelText: 'OK',
+            icon: 'card-outline',
+            iconColor: '#DC2626',
+            iconBg: '#FEF2F2',
+            onConfirm: () => {
+              setConfirmationModalConfig((prev) => ({ ...prev, visible: false }));
+              setShowAppointmentsModal(true);
+            },
+          });
         }}
       />
 
       {/* ========================================================================= */}
-      {/* BOTTOM SHEET: OPTIONS MENU (USING AppBottomSheet)                         */}
+      {/* CONFIRMATION / ALERT MODAL (BRANDED RED APPLE MODAL)                      */}
       {/* ========================================================================= */}
-      <AppBottomSheet
-        visible={showOptionsMenu}
-        onClose={() => setShowOptionsMenu(false)}
-        title="Appointments & Telemedicine"
-        showHandle={true}
-        scrollable={false}
-      >
-        <View style={{ paddingBottom: 12 }}>
-          <TouchableOpacity
-            style={styles.menuOptionBtn}
-            onPress={() => {
-              setShowOptionsMenu(false);
-              setShowSeeAll(true);
-            }}
-          >
-            <Ionicons name="medical" size={20} color="#DC2626" />
-            <Text style={styles.menuOptionBtnText}>Browse All Specialists</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuOptionBtn}
-            onPress={() => {
-              setShowOptionsMenu(false);
-              setShowMapModal(true);
-            }}
-          >
-            <Ionicons name="map" size={20} color="#059669" />
-            <Text style={styles.menuOptionBtnText}>Nearby Partner Clinics & Map</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuOptionBtn}
-            onPress={() => {
-              setShowOptionsMenu(false);
-              setShowAppointmentsModal(true);
-            }}
-          >
-            <Ionicons name="calendar" size={20} color="#3B82F6" />
-            <Text style={styles.menuOptionBtnText}>My Appointments History</Text>
-          </TouchableOpacity>
-
-          {isDoctorAccount && (
-            <TouchableOpacity
-              style={styles.menuOptionBtn}
-              onPress={() => {
-                setShowOptionsMenu(false);
-                setShowAppointmentsModal(true);
-              }}
-            >
-              <Ionicons name="shield-checkmark" size={20} color="#8B5CF6" />
-              <Text style={styles.menuOptionBtnText}>Doctor Clinical Management</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.menuOptionBtn}
-            onPress={() => {
-              setShowOptionsMenu(false);
-              handleRefresh();
-            }}
-          >
-            <Ionicons name="refresh" size={20} color="#6B7280" />
-            <Text style={styles.menuOptionBtnText}>Refresh Data</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.menuOptionBtn, styles.menuCancelBtn]}
-            onPress={() => setShowOptionsMenu(false)}
-          >
-            <Text style={styles.menuCancelBtnText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </AppBottomSheet>
-
-      {/* ========================================================================= */}
-      {/* BOTTOM SHEET: NEARBY CLINICS & LEAFLET MAP (USING AppBottomSheet)        */}
-      {/* ========================================================================= */}
-      <AppBottomSheet
-        visible={showMapModal}
-        onClose={() => setShowMapModal(false)}
-        maxHeight="95%"
-        showHandle={true}
-        showCloseChevron={false}
-        noPadding={true}
-        scrollable={false}
-        headerLeft={
-          <TouchableOpacity
-            style={styles.navCircleBtn}
-            onPress={() => setShowMapModal(false)}
-          >
-            <Ionicons name="arrow-back" size={22} color="#111827" />
-          </TouchableOpacity>
-        }
-        title="Nearby Partner Clinics"
-        subtitle="Accredited physical facilities & hospitals"
-      >
-        <View style={{ flex: 1, minHeight: 450 }}>
-          <LeafletClinicsMap
-            style={{ width: '100%', height: '100%' }}
-            onBookDoctor={handleOpenBooking}
-            onClinicsLoaded={(loadedClinics) => {
-              if (Array.isArray(loadedClinics) && loadedClinics.length > 0) {
-                setPartnerClinics(loadedClinics);
-              }
-            }}
-          />
-        </View>
-      </AppBottomSheet>
+      <ConfirmationModal
+        visible={confirmationModalConfig.visible}
+        title={confirmationModalConfig.title}
+        message={confirmationModalConfig.message}
+        confirmText={confirmationModalConfig.confirmText || 'Confirm'}
+        cancelText={confirmationModalConfig.cancelText}
+        icon={confirmationModalConfig.icon || 'alert-circle-outline'}
+        iconColor={confirmationModalConfig.iconColor || '#DC2626'}
+        iconBg={confirmationModalConfig.iconBg || '#FEF2F2'}
+        onConfirm={() => {
+          if (confirmationModalConfig.onConfirm) {
+            confirmationModalConfig.onConfirm();
+          } else {
+            setConfirmationModalConfig((prev) => ({ ...prev, visible: false }));
+          }
+        }}
+        onCancel={() => {
+          if (confirmationModalConfig.onCancel) {
+            confirmationModalConfig.onCancel();
+          }
+          setConfirmationModalConfig((prev) => ({ ...prev, visible: false }));
+        }}
+        onClose={() => {
+          if (confirmationModalConfig.onClose) {
+            confirmationModalConfig.onClose();
+          }
+          setConfirmationModalConfig((prev) => ({ ...prev, visible: false }));
+        }}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: THEME.bg,
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: THEME.bg,
-  },
-  scrollContent: {
-    paddingTop: STATUSBAR_HEIGHT + 10,
-    paddingBottom: 44,
-    alignItems: 'center',
-  },
-  contentWrapper: {
-    width: '100%',
-    maxWidth: 520,
-    paddingHorizontal: 20,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* TOP NAV BAR WITH CIRCULAR BUTTONS                                          */
-  /* -------------------------------------------------------------------------- */
-  navBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    height: 48,
-  },
-  navCircleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  navBarTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    letterSpacing: -0.2,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* SECTION HEADERS                                                            */
-  /* -------------------------------------------------------------------------- */
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  sectionHeaderTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    letterSpacing: -0.3,
-  },
-  viewAllBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* UPCOMING LAVENDER CARD                                                     */
-  /* -------------------------------------------------------------------------- */
-  upcomingCard: {
-    backgroundColor: '#E8D7F9',
-    borderRadius: 28,
-    padding: 20,
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  upcomingTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  doctorAvatarImg: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-  },
-  doctorInfoCol: {
-    flex: 1,
-    marginLeft: 14,
-    marginRight: 8,
-  },
-  doctorNameText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  doctorSpecText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#555160',
-    marginTop: 2,
-  },
-  statusBadgeWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusBadgeLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  statusBadgeIconCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#CBB7E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusBadgeIconCirclePaid: {
-    backgroundColor: '#D1FAE5',
-  },
-  statusBadgeExclamationText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#111827',
-    lineHeight: 14,
-  },
-  dateTimeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 18,
-    marginBottom: 18,
-  },
-  dateTimeText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  payNowPillBtn: {
-    height: 50,
-    borderRadius: 999,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  payNowPillBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* EMPTY UPCOMING CARD                                                        */
-  /* -------------------------------------------------------------------------- */
-  emptyUpcomingCard: {
-    backgroundColor: '#E8D7F9',
-    borderRadius: 28,
-    padding: 20,
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  emptyUpcomingTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  emptyUpcomingIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  emptyUpcomingTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  emptyUpcomingSub: {
-    fontSize: 13,
-    color: '#555160',
-    marginTop: 4,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  emptyUpcomingBookBtn: {
-    height: 48,
-    borderRadius: 999,
-    backgroundColor: '#000000',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  emptyUpcomingBookBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* RECENT WHITE CARD                                                          */
-  /* -------------------------------------------------------------------------- */
-  recentWhiteCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  emptyRecentWrap: {
-    paddingVertical: 20,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyRecentText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  recentDoctorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  recentAvatarImg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-  },
-  recentDoctorInfoCol: {
-    flex: 1,
-    marginLeft: 14,
-    marginRight: 8,
-  },
-  recentDoctorName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  recentDoctorSpec: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  recentDateCol: {
-    alignItems: 'flex-end',
-  },
-  recentDateText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  recentTimeText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  recentDivider: {
-    height: 1,
-    backgroundColor: '#F9FAFB',
-    marginHorizontal: 4,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* PROMO SKY BLUE CARD                                                        */
-  /* -------------------------------------------------------------------------- */
-  promoSkyBlueCard: {
-    backgroundColor: '#D2EDF6',
-    borderRadius: 28,
-    padding: 20,
-    marginTop: 18,
-    marginBottom: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  promoTextCol: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  promoTitleText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  promoSubText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  promoArrowCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* MORE OPTIONS MENU BOTTOM SHEET & MAP MODAL                                 */
-  /* -------------------------------------------------------------------------- */
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  menuSheetCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  menuHandleBar: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E5E7EB',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  menuSheetTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  menuOptionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    gap: 12,
-    backgroundColor: '#F9FAFB',
-    marginBottom: 8,
-  },
-  menuOptionBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  menuCancelBtn: {
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  menuCancelBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#6B7280',
-    textAlign: 'center',
-    width: '100%',
-  },
-  mapModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* LEAFLET MAP HERO AT TOP WITH OVERLAPPING STATUS BAR & HEADER               */
-  /* -------------------------------------------------------------------------- */
-  mapHeroContainer: {
-    width: '100%',
-    height: 350,
-    position: 'relative',
-    backgroundColor: '#F8F9FA',
-    zIndex: 2,
-  },
-  heroMap: {
-    width: '100%',
-    height: '100%',
-  },
-  overlappingHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingTop: STATUSBAR_HEIGHT + 6,
-    paddingBottom: 14,
-    zIndex: 10,
-    pointerEvents: 'box-none',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* NATIVE BOTTOM SHEET TUCKED UNDER MAP                                       */
-  /* -------------------------------------------------------------------------- */
-  sheetContentContainer: {
-    marginTop: -22,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    paddingVertical: 30,
-  },
-  sheetHandleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E5E7EB',
-    alignSelf: 'center',
-    marginBottom: 14,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* TOP BAR: USER PROFILE & ACTION BUTTONS                                     */
-  /* -------------------------------------------------------------------------- */
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 0,
-  },
-  userAvatarButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 5,
-    elevation: 4,
-    overflow: 'hidden',
-  },
-  userAvatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 22,
-  },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  calendarBtnDark: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 3,
-    position: 'relative',
-  },
-  calendarBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: THEME.accentOrange,
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  calendarBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  /* Standard Notification Button from HomeScreen */
-  bellBtnDark: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
-    elevation: 3,
-    position: 'relative',
-  },
-  bellBadgeGlow: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#DC2626',
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  bellBadgeGlowText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  /* Doctor Live Banner */
-  doctorStatusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginHorizontal: 20,
-    marginBottom: 16,
-  },
-  doctorStatusLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  doctorLiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#16A34A',
-  },
-  doctorStatusTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#166534',
-  },
-  doctorManageSlotsBtn: {
-    backgroundColor: '#16A34A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  doctorManageSlotsBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* SECTION: OUR BEST SPECIALISTS                                              */
-  /* -------------------------------------------------------------------------- */
-  specialistsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    letterSpacing: -0.3,
-  },
-  seeAllText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: THEME.textPrimary,
-    textDecorationLine: 'underline',
-  },
-  specialistsHorizontalList: {
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  specialistsLoadingBox: {
-    paddingVertical: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  specialistsLoadingText: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-  horizontalDoctorCard: {
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-    paddingVertical: 12,
-    paddingHorizontal: 0,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  horizontalPhotoWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 18,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#F3F4F6',
-  },
-  horizontalPhoto: {
-    width: '100%',
-    height: '100%',
-  },
-  horizontalRatingPill: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  horizontalRatingScore: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  horizontalContentCol: {
-    flex: 1,
-    marginLeft: 14,
-    justifyContent: 'center',
-  },
-  horizontalNameHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  horizontalDoctorName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    letterSpacing: -0.2,
-  },
-  horizontalDoctorSpec: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#DC2626',
-    marginTop: 2,
-  },
-  horizontalHospitalText: {
-    fontSize: 11,
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  horizontalFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  horizontalFeeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  horizontalFeeSubText: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: THEME.textSecondary,
-  },
-  horizontalBookBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.accentOrange,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    shadowColor: THEME.accentOrange,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  horizontalBookBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* FULLSCREEN MODAL SHARED STYLES                                             */
-  /* -------------------------------------------------------------------------- */
-  fullscreenModalContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-
-  /* SEE ALL SPECIALISTS MODAL */
-  seeAllNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 38) + 8 : 12,
-    paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  seeAllNavTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    letterSpacing: -0.3,
-  },
-  seeAllNavSub: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    marginTop: 1,
-  },
-  seeAllSearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    marginHorizontal: 20,
-    marginVertical: 10,
-    paddingHorizontal: 12,
-    height: 42,
-    borderRadius: 12,
-  },
-  seeAllSearchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: THEME.textPrimary,
-    paddingVertical: 0,
-  },
-  seeAllScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-  },
-
-  /* DOCTOR PROFILE FULLSCREEN MODAL */
-  profileModalTopNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 38) + 8 : 12,
-    paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  profileModalBackBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileModalTitleWrap: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  profileModalNavTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    letterSpacing: -0.2,
-  },
-  profileModalNavSub: {
-    fontSize: 12,
-    color: '#DC2626',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  profileModalTopNavRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  profileModalIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileModalScrollView: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  profileModalScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-  },
-
-  /* DOCTOR HERO SECTION */
-  doctorHeroCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  doctorHeroImageWrap: {
-    position: 'relative',
-    width: 84,
-    height: 84,
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
-  },
-  doctorHeroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  doctorHeroVerifiedBadge: {
-    position: 'absolute',
-    bottom: 3,
-    right: 3,
-    backgroundColor: '#059669',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  doctorHeroTextCol: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  doctorHeroName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    letterSpacing: -0.3,
-  },
-  doctorHeroCredentials: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  doctorHeroSpecialty: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#DC2626',
-    marginTop: 2,
-  },
-  doctorHospitalPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginTop: 6,
-    alignSelf: 'flex-start',
-  },
-  doctorHospitalPillText: {
-    fontSize: 11,
-    color: '#4B5563',
-    fontWeight: '500',
-  },
-
-  /* STATS ROW */
-  doctorStatsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 22,
-  },
-  doctorStatCard: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  doctorStatIconWrapYellow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FEF9C3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  doctorStatIconWrapBlue: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#DBEAFE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  doctorStatIconWrapGreen: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#D1FAE5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  doctorStatIconWrapRed: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  doctorStatValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  doctorStatLabel: {
-    fontSize: 9.5,
-    color: THEME.textSecondary,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-
-  /* SECTION BOXES */
-  profileSectionBox: {
-    marginBottom: 20,
-  },
-  profileSectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    marginBottom: 8,
-  },
-  profileBioText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#4B5563',
-  },
-  expertiseTagsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  expertiseTagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  expertiseTagText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#991B1B',
-  },
-  detailsList: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 12,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  detailIcon: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  detailRowLabel: {
-    fontSize: 11,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-  detailRowValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME.textPrimary,
-    marginTop: 1,
-  },
-
-  /* SLOTS */
-  slotsLoadingWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 14,
-  },
-  slotsLoadingText: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-  },
-  noSlotsWrap: {
-    alignItems: 'center',
-    paddingVertical: 18,
-    gap: 6,
-  },
-  noSlotsText: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    textAlign: 'center',
-  },
-  slotsGridWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  slotPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  slotPillSelected: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
-  },
-  slotPillBooked: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
-    opacity: 0.5,
-  },
-  slotPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  slotPillTextSelected: {
-    color: '#FFFFFF',
-  },
-  slotPillTextBooked: {
-    color: '#9CA3AF',
-  },
-
-  /* REASONS */
-  reasonChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  reasonChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  reasonChipChosen: {
-    backgroundColor: '#111827',
-    borderColor: '#111827',
-  },
-  reasonChipText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  reasonChipTextChosen: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  /* BOTTOM BAR */
-  profileModalFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 4,
-  },
-  profileModalBottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 8,
-  },
-  profileModalPriceCol: {
-    flex: 1,
-    marginRight: 14,
-  },
-  profileModalPriceLabel: {
-    fontSize: 11,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-  profileModalPriceAmount: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-  },
-  profileModalPriceSub: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: THEME.textSecondary,
-  },
-  profileModalBookBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  profileModalBookBtnDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  profileModalBookBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* MODAL: "SELECT A SPECIALIST"                         */
-  /* -------------------------------------------------------------------------- */
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalDismissArea: {
-    flex: 1,
-  },
-  selectSpecialistModalContainer: {
-    backgroundColor: '#F9FAFB',
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 38,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  selectTitleText: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    lineHeight: 30,
-    letterSpacing: -0.5,
-  },
-  modalHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  filterCircleButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  counterCircleButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  counterText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-
-  /* Stacked Cards Simulation */
-  stackedCardsWrapper: {
-    position: 'relative',
-    marginTop: 8,
-  },
-  cardStackBack: {
-    backgroundColor: '#E5E7EB',
-    borderRadius: 24,
-    height: 50,
-    marginHorizontal: 24,
-    marginBottom: -42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    opacity: 0.7,
-  },
-  cardStackMiddle: {
-    backgroundColor: '#ECEEF1',
-    borderRadius: 24,
-    height: 50,
-    marginHorizontal: 12,
-    marginBottom: -40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    opacity: 0.85,
-  },
-  stackAvatarSmall: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    marginRight: 8,
-  },
-  stackNameSmall: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4B5563',
-    flex: 1,
-  },
-  stackRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  stackRatingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: THEME.accentOrange,
-  },
-
-  /* Front Active Card */
-  frontDoctorHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    width: '80%',
-    alignSelf: 'center',
-  },
-  frontDoctorAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E5E7EB',
-  },
-  frontDoctorInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  frontDoctorName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  frontDoctorSpecialty: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  frontRatingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  frontRatingScore: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.accentOrange,
-  },
-
-  slotSubtitleText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    marginBottom: 12,
-  },
-  daysPillsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  dayPill: {
-    flex: 1,
-    minWidth: 46,
-    marginHorizontal: 2,
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayPillSelected: {
-    backgroundColor: THEME.accentOrange,
-  },
-  dayPillUnselected: {
-    backgroundColor: THEME.subtlePill,
-    borderWidth: 1,
-    borderColor: THEME.pillBorder,
-  },
-  dayPillName: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  dayPillNum: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  dayPillTextSelected: {
-    color: '#FFFFFF',
-  },
-  dayPillTextUnselected: {
-    color: THEME.textPrimary,
-  },
-
-  hoursPillsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  hourPill: {
-    flex: 1,
-    minWidth: 46,
-    marginHorizontal: 2,
-    paddingVertical: 9,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hourPillSelected: {
-    backgroundColor: THEME.accentOrange,
-  },
-  hourPillUnselected: {
-    backgroundColor: THEME.subtlePill,
-    borderWidth: 1,
-    borderColor: THEME.pillBorder,
-  },
-  hourPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  hourPillTextSelected: {
-    color: '#FFFFFF',
-  },
-  hourPillTextUnselected: {
-    color: THEME.textPrimary,
-  },
-
-  modalBookNowBtn: {
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: THEME.accentOrange,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBookNowBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* SUCCESS MODAL                                                              */
-  /* -------------------------------------------------------------------------- */
-  successModalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  successCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
-    elevation: 10,
-  },
-  successCheckCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#C81E3A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    marginBottom: 8,
-  },
-  successSub: {
-    fontSize: 14,
-    color: THEME.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  successJoinBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME.accentOrange,
-    height: 48,
-    borderRadius: 24,
-    width: '100%',
-    gap: 8,
-    marginBottom: 10,
-  },
-  successJoinBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  successDismissBtn: {
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  successDismissBtnText: {
-    color: THEME.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  upcomingConsultCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#F3E8E2',
-    shadowColor: '#C34119',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  upcomingConsultLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 12,
-  },
-  upcomingConsultAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: THEME.accentOrange,
-  },
-  upcomingConsultInfo: {
-    marginLeft: 11,
-    flex: 1,
-  },
-  upcomingConsultDoctor: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  upcomingLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 8,
-  },
-  upcomingLiveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#C81E3A',
-    marginRight: 4,
-  },
-  upcomingLiveText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#047857',
-  },
-  upcomingConsultTime: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  upcomingJoinBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#C34119',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: '#C34119',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  upcomingJoinBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* NEARBY PARTNER CLINICS SECTION STYLES                                      */
-  /* -------------------------------------------------------------------------- */
-  partnerClinicsSection: {
-    marginTop: 26,
-    paddingBottom: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 22,
-  },
-  partnerClinicsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  partnerBadgeCount: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  partnerBadgeCountText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  partnerClinicsSubtitle: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    marginTop: 3,
-    lineHeight: 16,
-  },
-  seeAllBtnWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 2,
-  },
-  clinicFilterChipsRow: {
-    paddingHorizontal: 20,
-    gap: 8,
-    paddingBottom: 14,
-  },
-  clinicFilterChip: {
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  clinicFilterChipActive: {
-    backgroundColor: '#111827',
-    borderColor: '#111827',
-  },
-  clinicFilterChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-  clinicFilterChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  partnerClinicsScrollList: {
-    paddingHorizontal: 20,
-    gap: 12,
-    paddingBottom: 8,
-  },
-  partnerClinicCard: {
-    width: 220,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  clinicCardImageWrap: {
-    width: '100%',
-    height: 105,
-    position: 'relative',
-    backgroundColor: '#F3F4F6',
-  },
-  clinicCardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  clinicVerifiedBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(5, 150, 105, 0.92)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  clinicVerifiedText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  clinicRatingPill: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  clinicRatingText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  clinicCardBody: {
-    padding: 10,
-  },
-  clinicCardName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    letterSpacing: -0.2,
-    lineHeight: 17,
-    marginBottom: 4,
-    height: 34,
-  },
-  clinicLocationRowCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  clinicCardAddress: {
-    flex: 1,
-    fontSize: 11,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-  emptyClinicsBox: {
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyClinicsText: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  emptyClinicsResetBtn: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  emptyClinicsResetText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  clinicDistanceTagText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#059669',
-  },
-
-  /* CLINIC DETAILS MODAL STYLES */
-  clinicModalHeroCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 14,
-    height: 220,
-    borderRadius: 22,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#1F2937',
-  },
-  clinicModalHeroImage: {
-    width: '100%',
-    height: '100%',
-  },
-  clinicModalHeroGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    justifyContent: 'flex-end',
-  },
-  clinicModalHeroBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  clinicModalVerifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(5, 150, 105, 0.95)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  clinicModalVerifiedText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  clinicModalRatingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  clinicModalRatingText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  clinicModalHeroTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  clinicModalHeroSub: {
-    fontSize: 13,
-    color: '#E5E7EB',
-    marginTop: 2,
-  },
-  clinicLocationBox: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 14,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  clinicLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  clinicLocationAddress: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME.textPrimary,
-    lineHeight: 18,
-  },
-  clinicLocationDistance: {
-    fontSize: 12,
-    color: '#DC2626',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  clinicDirectionsActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
-    paddingVertical: 10,
-    borderRadius: 12,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  clinicDirectionsActionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  clinicContactBox: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  clinicContactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  clinicContactText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: THEME.textPrimary,
-  },
-  clinicQuickCallBtn: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  clinicQuickCallBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  clinicServicesGrid: {
-    gap: 8,
-  },
-  clinicServiceFullPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  clinicServiceFullText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME.textPrimary,
-    flex: 1,
-  },
-  clinicAffiliatedSub: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    marginBottom: 10,
-  },
-  affiliatedDoctorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 8,
-  },
-  affiliatedDocPhoto: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E5E7EB',
-  },
-  affiliatedDocInfo: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  affiliatedDocName: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-  },
-  affiliatedDocSpec: {
-    fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '600',
-  },
-  affiliatedDocFee: {
-    fontSize: 11,
-    color: THEME.textSecondary,
-    marginTop: 1,
-  },
-  affiliatedDocBookBtn: {
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 12,
-  },
-  affiliatedDocBookBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});
-

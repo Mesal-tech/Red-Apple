@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   Image,
   Platform,
@@ -108,25 +107,36 @@ export default function WebSidebar({
   const userRole = isDoctor ? 'Doctor / OB-GYN' : 'Patient';
 
   return (
-    <View style={styles.sidebar}>
+    <View
+      className="w-[245px] h-full bg-white border-r border-slate-200 flex-col justify-between z-50"
+      style={Platform.select({
+        web: {
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          userSelect: 'none',
+        },
+        default: {},
+      })}
+    >
       {/* 1. BRAND HEADER */}
-      <View style={styles.brandSection}>
-        <View style={styles.brandRow}>
+      <View className="px-[18px] pt-5 pb-4 border-b border-slate-100">
+        <View className="flex-row items-center">
           <Image
             source={require('../../assets/icon.png')}
-            style={styles.brandLogo}
+            className="w-[34px] h-[34px] rounded-lg mr-2.5"
             resizeMode="contain"
           />
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.brandTitle}>Red Apple</Text>
+          <View className="flex-1">
+            <View className="flex-row items-center">
+              <Text className="text-base font-extrabold text-slate-900 tracking-tight">Red Apple</Text>
               {isDoctor && (
-                <View style={styles.clinicTag}>
-                  <Text style={styles.clinicTagText}>MD</Text>
+                <View className="bg-primary px-1.5 py-0.5 rounded ml-1.5">
+                  <Text className="text-[9px] font-extrabold text-white">MD</Text>
                 </View>
               )}
             </View>
-            <Text style={styles.brandSubtitle}>Intelligent Women's Health</Text>
+            <Text className="text-[11px] text-slate-400 font-medium mt-0.5">Intelligent Women's Health</Text>
           </View>
         </View>
 
@@ -135,10 +145,11 @@ export default function WebSidebar({
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => onSwitchMode && onSwitchMode('cycle')}
-            style={[styles.modePill, { backgroundColor: currentMode.bg }]}
+            className="flex-row items-center px-2.5 py-1.5 rounded-lg mt-3"
+            style={{ backgroundColor: currentMode.bg }}
           >
-            <Text style={styles.modeEmoji}>{currentMode.emoji}</Text>
-            <Text style={[styles.modeLabel, { color: currentMode.color }]}>
+            <Text className="text-xs mr-1.5">{currentMode.emoji}</Text>
+            <Text className="text-[11px] font-bold" style={{ color: currentMode.color }}>
               {currentMode.label}
             </Text>
             <Ionicons name="swap-horizontal" size={12} color={currentMode.color} style={{ marginLeft: 'auto' }} />
@@ -147,10 +158,10 @@ export default function WebSidebar({
       </View>
 
       {/* 2. NAVIGATION LIST */}
-      <ScrollView style={styles.navScroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.groupHeading}>MENU</Text>
+      <ScrollView className="flex-1 px-3 pt-4" showsVerticalScrollIndicator={false}>
+        <Text className="text-[10px] font-bold text-slate-400 tracking-wider mb-1.5 px-2">MENU</Text>
 
-        <View style={styles.navGroup}>
+        <View className="gap-1">
           {navItems.map((item) => {
             const isActive = currentPage === item.id;
             const isHovered = hoveredTab === item.id;
@@ -162,24 +173,22 @@ export default function WebSidebar({
                 onPress={() => onNavigateTab && onNavigateTab(item.id)}
                 onMouseEnter={() => setHoveredTab(item.id)}
                 onMouseLeave={() => setHoveredTab(null)}
-                style={[
-                  styles.navItem,
-                  isActive && styles.navItemActive,
-                  !isActive && isHovered && styles.navItemHover,
-                ]}
+                className={`flex-row items-center py-2 px-2.5 rounded-lg gap-2.5 ${
+                  isActive ? 'bg-red-50' : isHovered ? 'bg-slate-50' : 'bg-transparent'
+                }`}
               >
                 <Ionicons
                   name={isActive ? item.iconActive : item.iconInactive}
                   size={19}
                   color={isActive ? colors.primary : '#64748B'}
                 />
-                <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                <Text className={`text-[13px] flex-1 ${isActive ? 'text-primary font-bold' : 'text-slate-600 font-semibold'}`}>
                   {item.label}
                 </Text>
 
                 {item.badge && (
-                  <View style={[styles.badgePill, { backgroundColor: item.badgeBg }]}>
-                    <Text style={[styles.badgeText, { color: item.badgeColor }]}>
+                  <View className="px-1.5 py-0.5 rounded-md" style={{ backgroundColor: item.badgeBg }}>
+                    <Text className="text-[9px] font-extrabold" style={{ color: item.badgeColor }}>
                       {item.badge}
                     </Text>
                   </View>
@@ -195,15 +204,13 @@ export default function WebSidebar({
               onPress={onOpenAiCompanion}
               onMouseEnter={() => setHoveredTab('ai')}
               onMouseLeave={() => setHoveredTab(null)}
-              style={[
-                styles.navItem,
-                styles.aiNavItem,
-                hoveredTab === 'ai' && styles.aiNavItemHover,
-              ]}
+              className={`flex-row items-center py-2 px-2.5 rounded-lg gap-2.5 mt-1 border ${
+                hoveredTab === 'ai' ? 'bg-red-100 border-red-200' : 'bg-red-50 border-red-100'
+              }`}
             >
               <Ionicons name="sparkles" size={19} color="#DC2626" />
-              <Text style={styles.aiNavLabel}>AI Health Companion</Text>
-              <View style={styles.aiDot} />
+              <Text className="text-[13px] font-bold text-primary flex-1">AI Health Companion</Text>
+              <View className="w-1.5 h-1.5 rounded-full bg-primary" />
             </TouchableOpacity>
           )}
 
@@ -212,62 +219,62 @@ export default function WebSidebar({
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={onPreviewPatientView}
-              style={[styles.navItem, styles.previewNavItem]}
+              className="flex-row items-center py-2 px-2.5 rounded-lg gap-2.5 mt-1 bg-emerald-50"
             >
               <Ionicons name="eye-outline" size={18} color="#059669" />
-              <Text style={styles.previewNavLabel}>Patient Experience</Text>
+              <Text className="text-xs font-bold text-emerald-600">Patient Experience</Text>
               <Ionicons name="arrow-forward" size={13} color="#059669" style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Secondary Links */}
-        <Text style={[styles.groupHeading, { marginTop: 24 }]}>PREFERENCES</Text>
-        <View style={styles.navGroup}>
+        <Text className="text-[10px] font-bold text-slate-400 tracking-wider mb-1.5 px-2 mt-6">PREFERENCES</Text>
+        <View className="gap-1">
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onOpenNotifications}
-            style={styles.navItem}
+            className="flex-row items-center py-2 px-2.5 rounded-lg gap-2.5 bg-transparent"
           >
-            <View style={{ position: 'relative' }}>
+            <View className="relative">
               <Ionicons name="notifications-outline" size={19} color="#64748B" />
               {unreadNotificationsCount > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>
+                <View className="absolute -top-1 -right-1 bg-primary rounded-full min-w-[12px] h-3 items-center justify-center px-0.5">
+                  <Text className="text-[8px] font-extrabold text-white">
                     {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
                   </Text>
                 </View>
               )}
             </View>
-            <Text style={styles.navLabel}>Notifications</Text>
+            <Text className="text-[13px] font-semibold text-slate-600 flex-1">Notifications</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onOpenProfile}
-            style={styles.navItem}
+            className="flex-row items-center py-2 px-2.5 rounded-lg gap-2.5 bg-transparent"
           >
             <Ionicons name="person-outline" size={19} color="#64748B" />
-            <Text style={styles.navLabel}>Health Profile</Text>
+            <Text className="text-[13px] font-semibold text-slate-600 flex-1">Health Profile</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onOpenSettings}
-            style={styles.navItem}
+            className="flex-row items-center py-2 px-2.5 rounded-lg gap-2.5 bg-transparent"
           >
             <Ionicons name="settings-outline" size={19} color="#64748B" />
-            <Text style={styles.navLabel}>Settings</Text>
+            <Text className="text-[13px] font-semibold text-slate-600 flex-1">Settings</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* 3. USER FOOTER */}
-      <View style={styles.userFooter}>
+      <View className="flex-row items-center px-3.5 py-3 border-t border-slate-100 gap-2 bg-neutral-50">
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={onOpenProfile}
-          style={styles.userRow}
+          className="flex-row items-center flex-1 gap-2 min-w-0"
         >
           <Image
             source={{
@@ -277,13 +284,13 @@ export default function WebSidebar({
                   ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80'
                   : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'),
             }}
-            style={styles.userAvatar}
+            className="w-8 h-8 rounded-full bg-slate-200"
           />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.userName} numberOfLines={1}>
+          <View className="flex-1 min-w-0">
+            <Text className="text-xs font-bold text-slate-900" numberOfLines={1}>
               {userName}
             </Text>
-            <Text style={styles.userRole} numberOfLines={1}>
+            <Text className="text-[10px] font-medium text-slate-400" numberOfLines={1}>
               {userRole}
             </Text>
           </View>
@@ -293,7 +300,7 @@ export default function WebSidebar({
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onSignOut}
-            style={styles.signOutBtn}
+            className="w-[30px] h-[30px] rounded-md items-center justify-center"
             title="Sign out"
           >
             <Ionicons name="log-out-outline" size={17} color="#94A3B8" />
@@ -303,224 +310,3 @@ export default function WebSidebar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  sidebar: {
-    width: 245,
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    zIndex: 50,
-    ...Platform.select({
-      web: {
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        userSelect: 'none',
-      },
-      default: {},
-    }),
-  },
-
-  /* BRAND SECTION */
-  brandSection: {
-    paddingHorizontal: 18,
-    paddingTop: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  brandLogo: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-  },
-  brandTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.3,
-  },
-  clinicTag: {
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  clinicTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  brandSubtitle: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  modePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginTop: 12,
-    gap: 6,
-  },
-  modeEmoji: {
-    fontSize: 12,
-  },
-  modeLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  /* NAVIGATION */
-  navScroll: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingTop: 16,
-  },
-  groupHeading: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.6,
-    marginBottom: 6,
-    paddingHorizontal: 8,
-  },
-  navGroup: {
-    gap: 3,
-  },
-  navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-    gap: 10,
-  },
-  navItemActive: {
-    backgroundColor: '#FFF1F2',
-  },
-  navItemHover: {
-    backgroundColor: '#F8FAFC',
-  },
-  navLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-    flex: 1,
-  },
-  navLabelActive: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  badgePill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  aiNavItem: {
-    marginTop: 4,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  aiNavItemHover: {
-    backgroundColor: '#FEE2E2',
-  },
-  aiNavLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#DC2626',
-    flex: 1,
-  },
-  aiDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#DC2626',
-  },
-  previewNavItem: {
-    marginTop: 4,
-    backgroundColor: '#F0FDF4',
-  },
-  previewNavLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    backgroundColor: colors.primary,
-    borderRadius: 6,
-    minWidth: 12,
-    height: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  notifBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* USER FOOTER */
-  userFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    gap: 8,
-    backgroundColor: '#FAFAFA',
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 8,
-    minWidth: 0,
-  },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E2E8F0',
-  },
-  userName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  userRole: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#94A3B8',
-  },
-  signOutBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

@@ -6,6 +6,7 @@ import {
   appleAuth,
   refreshToken,
   logoutUser,
+  deleteAccount,
   getCurrentUser,
   updateProfile,
   forgotPassword,
@@ -137,5 +138,6 @@ router.get('/google/callback', (req, res) => {
 router.get('/me', authenticateToken, getCurrentUser);
 router.put('/profile', authenticateToken, updateProfile);
 router.post('/logout', authenticateToken, logoutUser);
+router.delete('/account', authenticateToken, deleteAccount);
 
 export default router;

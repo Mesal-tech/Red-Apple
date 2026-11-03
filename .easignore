@@ -1,0 +1,35 @@
+node_modules/
+**/node_modules/
+.expo/
+**/.expo/
+dist/
+**/dist/
+web-build/
+*.log
+.DS_Store
+.env
+*.env
+.env*
+!.env.example
+backend/data/
+
+# Generated Android build outputs under the Expo app
+mobile/android/.gradle/
+mobile/andriod/.gradle-cache/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/**/build/
+mobile/android/**/.cxx/
+
+# Downloaded app binaries
+*.apk
+*.aab
+*.ipa
+
+# Local signing credentials
+mobile/redapple-release.jks
+mobile/redapple-release.keystore
+mobile/redapple-release.p12
+
+# The mobile build needs its public EXPO_PUBLIC_* values at bundle time.
+!mobile/.env

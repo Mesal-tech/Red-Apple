@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Image, TouchableOpacity, StatusBar, AppState, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Image, TouchableOpacity, StatusBar, AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
 import AppLockModal, { PIN_STORAGE_KEY } from '../components/AppLockModal';
@@ -17,50 +17,26 @@ import {
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import notificationService from '../services/notificationService';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useTheme } from '../context/ThemeContext';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import OnboardingSetupScreen from '../screens/OnboardingSetupScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
-import HomeScreen from '../screens/HomeScreen';
+import MainTabNavigator from './MainTabNavigator';
 import DoctorDashboardScreen from '../screens/DoctorDashboardScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import CycleCalendarScreen from '../screens/CycleCalendarScreen';
+import AIAssistantScreen from '../screens/AIAssistantScreen';
+import PrivacyPolicyDetailScreen from '../screens/PrivacyPolicyDetailScreen';
+import TermsOfUseDetailScreen from '../screens/TermsOfUseDetailScreen';
 
-const splashStyles = StyleSheet.create({
-  splashContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoContainer: {
-    width: 120,
-    height: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 22,
-  },
-  appNameText: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-    marginTop: 16,
-  },
-  appSloganText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-});
+const Stack = createNativeStackNavigator();
 
 /**
  * Synchronously determine if user has completed onboarding.
  * Checks stage, completedAt, pregnancy_mode, or essential cycle metrics.
- * Note: reproductiveGoal alone does NOT count as completed onboarding, ensuring newly registered users always see the setup wizard.
  */
 function isUserOnboarded(user) {
   if (!user) return false;
@@ -70,6 +46,121 @@ function isUserOnboarded(user) {
   if (user.pregnancy_mode === true) return true;
   if (user.health_profile?.lastPeriodDate && user.health_profile?.cycleLength) return true;
   return false;
+}
+
+/**
+ * Authenticated Application Stack: includes MainTabs, dedicated ProfileScreen,
+ * dedicated CycleCalendarScreen and dedicated AIAssistantScreen.
+ */
+function AuthenticatedAppStack({
+  handleSignOut,
+  activeMode,
+  onActiveModeChange,
+  user,
+  setSetupCompletedOverride,
+}) {
+  const { theme } = useTheme();
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        contentStyle: { backgroundColor: theme.background },
+      }}
+    >
+      <Stack.Screen name="MainTabs">
+        {(props) => (
+          <MainTabNavigator
+            {...props}
+            onSignOut={handleSignOut}
+            initialMode={activeMode}
+            healthProfile={user?.health_profile}
+            onRedoSetup={() => setSetupCompletedOverride(false)}
+          />
+        )}
+      </Stack.Screen>
+
+      <Stack.Screen name="Profile">
+        {(props) => (
+          <ProfileScreen
+            {...props}
+            currentMode={activeMode}
+            onActiveModeChange={onActiveModeChange}
+            onSignOut={handleSignOut}
+            onBookDoctor={() => props.navigation.navigate('MainTabs', { screen: 'Telemed' })}
+          />
+        )}
+      </Stack.Screen>
+
+      <Stack.Screen name="CycleCalendar">
+        {(props) => (
+          <CycleCalendarScreen
+            {...props}
+            onNavigateAIAssistant={(dateKey) => {
+              props.navigation.navigate('MainTabs', {
+                screen: 'AICompanion',
+                params: { selectedDateKey: dateKey },
+              });
+            }}
+          />
+        )}
+      </Stack.Screen>
+
+      <Stack.Screen name="AIAssistant" component={AIAssistantScreen} />
+
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyDetailScreen} />
+      <Stack.Screen name="TermsOfUse" component={TermsOfUseDetailScreen} />
+    </Stack.Navigator>
+  );
+}
+
+const AuthStack = createNativeStackNavigator();
+
+/**
+ * Unauthenticated Authentication Stack.
+ * Native stack transitions between Onboarding, Login, and SignUp.
+ */
+function UnauthenticatedStack({ initialRoute = 'Onboarding' }) {
+  return (
+    <AuthStack.Navigator
+      initialRouteName={initialRoute}
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+      }}
+    >
+      <AuthStack.Screen name="Onboarding">
+        {(props) => (
+          <OnboardingScreen
+            {...props}
+            onNavigateLogin={() => props.navigation.navigate('Login')}
+            onNavigateSignUp={() => props.navigation.navigate('SignUp')}
+          />
+        )}
+      </AuthStack.Screen>
+
+      <AuthStack.Screen name="Login">
+        {(props) => (
+          <LoginScreen
+            {...props}
+            onBack={() => props.navigation.navigate('Onboarding')}
+            onNavigateSignUp={() => props.navigation.navigate('SignUp')}
+          />
+        )}
+      </AuthStack.Screen>
+
+      <AuthStack.Screen name="SignUp">
+        {(props) => (
+          <SignUpScreen
+            {...props}
+            onBack={() => props.navigation.navigate('Onboarding')}
+            onNavigateLogin={() => props.navigation.navigate('Login')}
+          />
+        )}
+      </AuthStack.Screen>
+    </AuthStack.Navigator>
+  );
 }
 
 /**
@@ -116,8 +207,6 @@ function MainNavigation() {
 
   const isDoctor = user?.role === 'doctor' || user?.email === 'mesalokubor63@gmail.com';
 
-  // Synchronous + cached evaluation:
-  // If user has completed on backend OR locally on device, do not show onboarding wizard
   const hasOnboarded = setupCompletedOverride !== null
     ? setupCompletedOverride
     : (isUserOnboarded(user) || localOnboarded);
@@ -140,7 +229,7 @@ function MainNavigation() {
         if (pin) {
           setIsAppLocked(true);
         }
-      } catch (e) { }
+      } catch (e) {}
     };
 
     checkPinLock();
@@ -207,7 +296,6 @@ function MainNavigation() {
             });
           }
 
-          // Handle cold start launch from tapped notification
           if (Notifications?.getLastNotificationResponseAsync) {
             Notifications.getLastNotificationResponseAsync()
               .then((response) => {
@@ -241,6 +329,8 @@ function MainNavigation() {
     setSetupCompletedOverride(true);
   };
 
+  const handleActiveModeChange = (mode) => setLocalMode(mode);
+
   const handleSignOut = async () => {
     setSetupCompletedOverride(null);
     setLocalMode(null);
@@ -250,20 +340,22 @@ function MainNavigation() {
     setAuthScreen('login');
   };
 
+  const { isDarkMode, theme } = useTheme();
+
   // Loading Splash Screen (Zero flash of onboarding screens while checking session)
   if (authLoading || initialLoading) {
     return (
-      <View style={splashStyles.splashContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <View style={splashStyles.logoContainer}>
+      <View style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
+        <View className="w-28 h-28 items-center justify-center">
           <Image
             source={require('../../assets/icon.png')}
-            style={splashStyles.logoImage}
+            className="w-24 h-24 rounded-3xl"
             resizeMode="contain"
           />
         </View>
-        <Text style={splashStyles.appNameText}>Red Apple</Text>
-        <Text style={splashStyles.appSloganText}>Intelligent Women's Health</Text>
+        <Text style={{ fontSize: 24, fontWeight: '900', color: theme.textPrimary, letterSpacing: -0.5, marginTop: 16 }}>Red Apple</Text>
+        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary, marginTop: 4 }}>Intelligent Women's Health</Text>
       </View>
     );
   }
@@ -271,23 +363,8 @@ function MainNavigation() {
   // Unauthenticated Stack
   if (!isAuthenticated) {
     return (
-      <View style={{ flex: 1 }}>
-        {authScreen === 'signup' ? (
-          <SignUpScreen
-            onBack={() => setAuthScreen(localOnboarded ? 'login' : 'onboarding')}
-            onNavigateLogin={() => setAuthScreen('login')}
-          />
-        ) : authScreen === 'login' ? (
-          <LoginScreen
-            onBack={() => setAuthScreen('onboarding')}
-            onNavigateSignUp={() => setAuthScreen('signup')}
-          />
-        ) : (
-          <OnboardingScreen
-            onNavigateLogin={() => setAuthScreen('login')}
-            onNavigateSignUp={() => setAuthScreen('signup')}
-          />
-        )}
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <UnauthenticatedStack initialRoute={localOnboarded ? 'Login' : 'Onboarding'} />
       </View>
     );
   }
@@ -300,10 +377,10 @@ function MainNavigation() {
     />
   );
 
-  // Doctor Provider Portal (Default view for doctors, with optional patient preview toggle)
+  // Doctor Provider Portal
   if (isDoctor && !previewPatientMode) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
         <DoctorDashboardScreen
           onSignOut={handleSignOut}
           onPreviewPatientView={() => setPreviewPatientMode(true)}
@@ -316,29 +393,30 @@ function MainNavigation() {
   // Doctor Patient Preview Mode Banner Header
   if (isDoctor && previewPatientMode) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-        <View style={navStyles.previewBanner}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={navStyles.previewBannerText}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <View className="bg-slate-800 pt-10 pb-2.5 px-4 flex-row items-center justify-between z-50">
+          <View className="flex-row items-center">
+            <Text className="text-xs font-bold text-slate-100">
               🩺 Viewing Patient Experience
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => setPreviewPatientMode(false)}
-            style={navStyles.returnClinicButton}
+            className="bg-emerald-600 py-1.5 px-3.5 rounded-full"
             activeOpacity={0.8}
           >
-            <Text style={navStyles.returnClinicButtonText}>
+            <Text className="text-xs font-bold text-white">
               Return to Clinic
             </Text>
           </TouchableOpacity>
         </View>
 
-        <HomeScreen
-          onSignOut={handleSignOut}
-          initialMode={activeMode}
-          healthProfile={user?.health_profile}
-          onRedoSetup={() => setSetupCompletedOverride(false)}
+        <AuthenticatedAppStack
+          handleSignOut={handleSignOut}
+          activeMode={activeMode}
+          onActiveModeChange={handleActiveModeChange}
+          user={user}
+          setSetupCompletedOverride={setSetupCompletedOverride}
         />
         {renderAppLock()}
       </View>
@@ -347,18 +425,19 @@ function MainNavigation() {
 
   // Standard Patient Authenticated Stack
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       {!hasOnboarded ? (
         <OnboardingSetupScreen
           onBack={handleSignOut}
           onComplete={handleCompleteSetup}
         />
       ) : (
-        <HomeScreen
-          onSignOut={handleSignOut}
-          initialMode={activeMode}
-          healthProfile={user?.health_profile}
-          onRedoSetup={() => setSetupCompletedOverride(false)}
+        <AuthenticatedAppStack
+          handleSignOut={handleSignOut}
+          activeMode={activeMode}
+          onActiveModeChange={handleActiveModeChange}
+          user={user}
+          setSetupCompletedOverride={setSetupCompletedOverride}
         />
       )}
 
@@ -367,41 +446,50 @@ function MainNavigation() {
   );
 }
 
+const defaultNavigationFonts = {
+  regular: {
+    fontFamily: Platform.select({ ios: 'System', default: 'sans-serif' }),
+    fontWeight: 'normal',
+  },
+  medium: {
+    fontFamily: Platform.select({ ios: 'System', default: 'sans-serif-medium' }),
+    fontWeight: 'normal',
+  },
+  bold: {
+    fontFamily: Platform.select({ ios: 'System', default: 'sans-serif' }),
+    fontWeight: '600',
+  },
+  heavy: {
+    fontFamily: Platform.select({ ios: 'System', default: 'sans-serif' }),
+    fontWeight: '700',
+  },
+};
+
 export default function AppNavigator() {
+  const { isDarkMode, theme } = useTheme();
+  const baseTheme = (isDarkMode ? DarkTheme : DefaultTheme) || {};
+
+  const navigationTheme = {
+    ...baseTheme,
+    dark: isDarkMode,
+    colors: {
+      ...(baseTheme.colors || {}),
+      background: theme.background,
+      card: theme.card,
+      text: theme.textPrimary,
+      border: theme.cardBorder,
+      primary: colors.primary,
+    },
+    fonts: baseTheme.fonts || defaultNavigationFonts,
+  };
+
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <MainNavigation />
-      </AuthProvider>
-    </ToastProvider>
+    <NavigationContainer theme={navigationTheme}>
+      <ToastProvider>
+        <AuthProvider>
+          <MainNavigation />
+        </AuthProvider>
+      </ToastProvider>
+    </NavigationContainer>
   );
 }
-
-const navStyles = StyleSheet.create({
-  previewBanner: {
-    backgroundColor: '#1E293B',
-    paddingTop: (StatusBar.currentHeight || 24) + 8,
-    paddingBottom: 10,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 100,
-  },
-  previewBannerText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  returnClinicButton: {
-    backgroundColor: '#059669',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-  },
-  returnClinicButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});

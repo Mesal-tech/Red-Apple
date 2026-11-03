@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   StatusBar,
@@ -9,36 +8,31 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
-  useWindowDimensions,
-  Image,
   ActivityIndicator,
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { useGoogleAuth } from '../services/googleAuth';
+import GoogleLogo from '../components/GoogleLogo';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import TermsOfUseDetailScreen from './TermsOfUseDetailScreen';
 import PrivacyPolicyDetailScreen from './PrivacyPolicyDetailScreen';
 
-export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess }) {
+export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess, navigation }) {
   const { register, loginApple, loginGoogle } = useAuth();
   const { showError, showSuccess } = useToast();
-  const { width: windowWidth } = useWindowDimensions();
-  const screenWidth = Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
-  const headerHeight = Math.min(Math.round(screenWidth * (830 / 1200)), 280);
+  const { theme, isDarkMode: isDark } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(true);
-
   const [showPassword, setShowPassword] = useState(false);
-
   const [loading, setLoading] = useState(false);
+
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
@@ -79,13 +73,17 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess 
     setLoading(true);
 
     try {
-      await register(email.trim(), password);
-      showSuccess('Account created successfully!');
+      await register({
+        email: email.trim(),
+        password,
+      });
+
+      showSuccess('Account created successfully! Welcome!');
       if (onSignUpSuccess) {
         onSignUpSuccess();
       }
     } catch (err) {
-      showError(err.message || 'Registration failed. Please try again.');
+      showError(err.message || 'Failed to create account. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -95,7 +93,7 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess 
     try {
       const isAvailable = await AppleAuthentication.isAvailableAsync();
       if (!isAvailable) {
-        showError('Apple Sign-In is only available on supported iOS devices.');
+        showError('Apple Sign-In is only available on iOS devices.');
         return;
       }
 
@@ -110,12 +108,12 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess 
 
       if (credential.identityToken) {
         await loginApple(credential.identityToken, credential.fullName);
-        showSuccess('Signed in with Apple!');
+        showSuccess('Registered with Apple!');
         if (onSignUpSuccess) onSignUpSuccess();
       }
     } catch (e) {
       if (e.code !== 'ERR_REQUEST_CANCELED') {
-        showError(e.message || 'Apple authentication failed.');
+        showError(e.message || 'Apple registration failed.');
       }
     } finally {
       setLoading(false);
@@ -126,459 +124,298 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess 
     try {
       await signInWithGoogle();
     } catch (err) {
-      showError(err.message);
+      showError(err.message || 'Google registration failed.');
     }
   };
 
+  const handleGoBack = () => {
+    if (onBack) onBack();
+    else if (navigation?.canGoBack && navigation.canGoBack()) navigation.goBack();
+    else if (navigation?.navigate) navigation.navigate('Onboarding');
+  };
+
+  const handleGoLogin = () => {
+    if (onNavigateLogin) onNavigateLogin();
+    else if (navigation?.navigate) navigation.navigate('Login');
+  };
+
   return (
-    <LinearGradient
-      colors={['#880E18', '#540810', '#220306', '#0C0103']}
-      locations={[0, 0.35, 0.72, 1]}
-      style={styles.screenWrapper}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
-      <View style={styles.glassmorphismOverlay} pointerEvents="none" />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          bounces={false}
-          showsVerticalScrollIndicator={false}
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
-          {/* HEADER CONTAINER WITH EXACT SWIRL WAVE BACKGROUND */}
-          <View style={[styles.headerContainer, { height: headerHeight }]}>
-            <Image
-              source={require('../../assets/top_wave_bg.png')}
-              style={[styles.headerWaveBg, { height: headerHeight }]}
-              resizeMode="stretch"
-            />
-
-            <SafeAreaView edges={['top', 'left', 'right']} style={styles.headerSafeArea}>
-              <View style={styles.topNavBar}>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  onPress={onBack}
-                  style={styles.backCircleBtn}
-                >
-                  <Ionicons name="chevron-back" size={20} color="#FFFFFF" style={{ marginRight: 2 }} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={onNavigateLogin}
-                  style={styles.signInHeaderBtn}
-                >
-                  <Ionicons name="log-in-outline" size={19} color="#000000" />
-                  <Text style={styles.signInHeaderText}>Sign In</Text>
-                </TouchableOpacity>
-              </View>
-            </SafeAreaView>
-          </View>
-
-          {/* LOWER SECTION */}
-          <View style={styles.darkSection}>
-
-            {/* EMAIL INPUT */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={styles.pillInputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={19}
-                  color="rgba(255, 255, 255, 0.6)"
-                  style={styles.inputLeftIcon}
-                />
-                <TextInput
-                  style={styles.pillTextInput}
-                  placeholder="amara@example.com"
-                  placeholderTextColor="rgba(255, 255, 255, 0.45)"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                  editable={!loading}
-                />
-              </View>
-            </View>
-
-            {/* PASSWORD INPUT */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password (8+ Characters)</Text>
-              <View style={styles.pillInputContainer}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={19}
-                  color="rgba(255, 255, 255, 0.6)"
-                  style={styles.inputLeftIcon}
-                />
-                <TextInput
-                  style={styles.pillTextInput}
-                  placeholder="••••••••••••"
-                  placeholderTextColor="rgba(255, 255, 255, 0.45)"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeBtn}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                    size={19}
-                    color="rgba(255, 255, 255, 0.65)"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* TERMS & PRIVACY CHECKBOX & LINKS */}
-            <View style={styles.termsRow}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingHorizontal: 24,
+              paddingBottom: 24,
+              width: '100%',
+              maxWidth: 480,
+              alignSelf: 'center',
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Top Navigation Bar */}
+            <View className="flex-row items-center pt-2 pb-4">
               <TouchableOpacity
-                activeOpacity={0.7}
-                style={[styles.checkboxBox, agreeTerms && styles.checkboxBoxChecked]}
-                onPress={() => setAgreeTerms(!agreeTerms)}
+                activeOpacity={0.75}
+                onPress={handleGoBack}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: theme.card,
+                  borderWidth: 1,
+                  borderColor: theme.cardBorder,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                {agreeTerms && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.termsText}>
-                <Text onPress={() => setAgreeTerms(!agreeTerms)}>I agree to the </Text>
-                <Text
-                  style={styles.termsLink}
-                  onPress={() => setShowTermsModal(true)}
-                >
-                  Terms of Service
-                </Text>
-                <Text onPress={() => setAgreeTerms(!agreeTerms)}> and </Text>
-                <Text
-                  style={styles.termsLink}
-                  onPress={() => setShowPrivacyModal(true)}
-                >
-                  Privacy Policy
-                </Text>
-                <Text onPress={() => setAgreeTerms(!agreeTerms)}>.</Text>
+
+              <Text className="ml-3 text-xs font-bold uppercase tracking-[2px]" style={{ color: theme.textMuted }}>Red Apple Health</Text>
+            </View>
+
+            {/* Header Identity */}
+            <View className="mt-4 mb-6">
+              <Text style={{ fontSize: 35, lineHeight: 41, fontWeight: '800', color: theme.textPrimary, letterSpacing: -0.8 }}>
+                Create Your Account
+              </Text>
+              <Text style={{ fontSize: 16, fontWeight: '400', color: theme.textSecondary, lineHeight: 24, marginTop: 8 }}>
+                Create an account for personalized care.
               </Text>
             </View>
 
-            {/* SIGN UP PILL BUTTON */}
+            {/* Form Fields */}
+            <View className="gap-4">
+              {/* Email Input */}
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, marginLeft: 4 }}>
+                  Email Address
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 56,
+                    backgroundColor: theme.inputBg,
+                    borderRadius: 28,
+                    borderWidth: 1,
+                    borderColor: isDark ? theme.inputBorder : '#D7DCE0',
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <Ionicons name="mail-outline" size={18} color={theme.textMuted} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, color: theme.textPrimary, fontWeight: '600', marginLeft: 12 }}
+                    placeholder="name@example.com"
+                    placeholderTextColor={theme.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    editable={!loading}
+                  />
+                </View>
+              </View>
+
+              {/* Password Input */}
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, marginLeft: 4 }}>
+                  Create Password
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 56,
+                    backgroundColor: theme.inputBg,
+                    borderRadius: 28,
+                    borderWidth: 1,
+                    borderColor: isDark ? theme.inputBorder : '#D7DCE0',
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, color: theme.textPrimary, fontWeight: '600', marginLeft: 12 }}
+                    placeholder="At least 8 characters"
+                    placeholderTextColor={theme.textMuted}
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!loading}
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setShowPassword(!showPassword)}
+                    className="p-1"
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                      size={18}
+                      color={theme.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ fontSize: 11, color: theme.textMuted, marginLeft: 8, marginTop: 4 }}>
+                  Minimum 8 characters with letters & numbers
+                </Text>
+              </View>
+
+              {/* Terms of Service & Privacy Checkbox */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setAgreeTerms(!agreeTerms)}
+                className="flex-row items-start gap-2.5 mt-1 px-1"
+              >
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 6,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 2,
+                    borderWidth: 1,
+                    backgroundColor: agreeTerms ? '#DC2626' : theme.inputBg,
+                    borderColor: agreeTerms ? '#DC2626' : theme.cardBorder,
+                  }}
+                >
+                  {agreeTerms && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                </View>
+
+                <View className="flex-1">
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 18, fontWeight: '500' }}>
+                    I agree to the{' '}
+                    <Text
+                      className="text-red-600 font-bold underline"
+                      onPress={() => setShowTermsModal(true)}
+                    >
+                      Terms of Service
+                    </Text>{' '}
+                    and{' '}
+                    <Text
+                      className="text-red-600 font-bold underline"
+                      onPress={() => setShowPrivacyModal(true)}
+                    >
+                      Privacy Policy
+                    </Text>
+                    .
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Primary Sign Up Button */}
             <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.signUpPillButton}
+              activeOpacity={0.88}
+              className="h-[62px] rounded-full items-center justify-center mt-6 mb-5"
+              style={{ backgroundColor: isDark ? '#A52B39' : '#101B1A' }}
               onPress={handleRegister}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#FFFFFF" size="small" /></View>
               ) : (
                 <>
-                  <Text style={styles.signUpButtonText}>Create Account</Text>
-                  <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
+                  <Text className="text-base font-bold text-white">Create Account</Text>
+                  <View className="absolute right-1.5 h-[49px] w-[49px] items-center justify-center rounded-full" style={{ backgroundColor: isDark ? '#DCEAE5' : '#FFFFFF' }}><Ionicons name="arrow-forward" size={19} color="#101B1A" /></View>
                 </>
               )}
             </TouchableOpacity>
 
-            {/* SOCIAL SIGN UP */}
-            <View style={styles.socialContainer}>
-              <Text style={styles.socialPromptText}>or sign up with</Text>
+            {/* Social Authentication */}
+            <View className="items-center my-4">
+              <View className="flex-row items-center w-full my-2">
+                <View style={{ flex: 1, height: 1, backgroundColor: theme.cardBorder }} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, paddingHorizontal: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Or register with
+                </Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: theme.cardBorder }} />
+              </View>
 
-              <View style={styles.socialRow}>
+              <View className="flex-row gap-3 w-full mt-3">
                 <TouchableOpacity
                   activeOpacity={0.8}
-                  style={styles.socialPillBtn}
+                  style={{
+                    flex: 1,
+                    height: 48,
+                    backgroundColor: theme.card,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
                   onPress={handleGoogleAuth}
                   disabled={loading}
                 >
-                  <Ionicons name="logo-google" size={18} color="#FFFFFF" />
-                  <Text style={styles.socialButtonText}>Google</Text>
+                  <GoogleLogo size={18} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}>Google</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   activeOpacity={0.8}
-                  style={styles.socialPillBtn}
+                  style={{
+                    flex: 1,
+                    height: 48,
+                    backgroundColor: theme.card,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
                   onPress={handleAppleAuth}
                   disabled={loading}
                 >
-                  <Ionicons name="logo-apple" size={19} color="#FFFFFF" />
-                  <Text style={styles.socialButtonText}>Apple</Text>
+                  <Ionicons name="logo-apple" size={19} color={isDark ? '#FFFFFF' : '#000000'} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}>Apple</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* ALREADY HAVE ACCOUNT */}
-            <View style={styles.bottomPromptRow}>
-              <Text style={styles.bottomPromptText}>Already have an account?</Text>
-              <TouchableOpacity activeOpacity={0.7} onPress={onNavigateLogin}>
-                <Text style={styles.bottomPromptLink}>Sign In</Text>
-              </TouchableOpacity>
-            </View>
+          </ScrollView>
+          <View style={{ width: '100%', maxWidth: 480, alignSelf: 'center', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24 }} className="flex-row items-center justify-center gap-1.5">
+            <Text style={{ fontSize: 14, color: theme.textMuted, fontWeight: '500' }}>Already have an account?</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={handleGoLogin}>
+              <Text className="text-sm font-bold text-red-600">Sign In</Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
 
-      {/* TERMS OF SERVICE MODAL */}
-      <Modal
-        visible={showTermsModal}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={() => setShowTermsModal(false)}
-      >
-        <TermsOfUseDetailScreen onBack={() => setShowTermsModal(false)} />
-      </Modal>
+        {/* Terms of Use Modal */}
+        <Modal
+          visible={showTermsModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowTermsModal(false)}
+        >
+          <TermsOfUseDetailScreen onBack={() => setShowTermsModal(false)} />
+        </Modal>
 
-      {/* PRIVACY POLICY MODAL */}
-      <Modal
-        visible={showPrivacyModal}
-        animationType="slide"
-        presentationStyle="fullScreen"
-        onRequestClose={() => setShowPrivacyModal(false)}
-      >
-        <PrivacyPolicyDetailScreen onBack={() => setShowPrivacyModal(false)} />
-      </Modal>
-    </LinearGradient>
+        {/* Privacy Policy Modal */}
+        <Modal
+          visible={showPrivacyModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowPrivacyModal(false)}
+        >
+          <PrivacyPolicyDetailScreen onBack={() => setShowPrivacyModal(false)} />
+        </Modal>
+      </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screenWrapper: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    backgroundColor: 'transparent',
-    paddingBottom: 40,
-    width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
-  },
-  glassmorphismOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-  },
-  headerContainer: {
-    width: '100%',
-    position: 'relative',
-  },
-  headerWaveBg: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    width: '100%',
-  },
-  headerSafeArea: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 52,
-  },
-  topNavBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Platform.OS === 'android' ? 12 : 6,
-  },
-  backCircleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#0C0103',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  signInHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 24,
-    gap: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  signInHeaderText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#000000',
-    letterSpacing: -0.2,
-  },
-  darkSection: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-  },
-  errorAlertContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(211, 47, 47, 0.25)',
-    borderWidth: 1,
-    borderColor: '#D32F2F',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorAlertText: {
-    color: '#FFCDD2',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginBottom: 7,
-    marginLeft: 4,
-  },
-  pillInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    paddingHorizontal: 18,
-    height: 52,
-  },
-  inputLeftIcon: {
-    marginRight: 12,
-  },
-  pillTextInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#FFFFFF',
-    paddingVertical: 0,
-  },
-  eyeBtn: {
-    padding: 6,
-  },
-  termsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 12,
-    paddingHorizontal: 4,
-  },
-  checkboxBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  checkboxBoxChecked: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
-  },
-  termsText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    flex: 1,
-    lineHeight: 18,
-  },
-  termsLink: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  signUpPillButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
-    borderRadius: 28,
-    height: 54,
-    gap: 8,
-    marginTop: 10,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  signUpButtonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  socialContainer: {
-    alignItems: 'center',
-    marginTop: 22,
-  },
-  socialPromptText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.45)',
-    marginBottom: 14,
-  },
-  socialRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    gap: 12,
-  },
-  socialPillBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.09)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  socialButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  socialCircleBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.09)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomPromptRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
-    gap: 6,
-  },
-  bottomPromptText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.65)',
-  },
-  bottomPromptLink: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textDecorationLine: 'underline',
-  },
-});

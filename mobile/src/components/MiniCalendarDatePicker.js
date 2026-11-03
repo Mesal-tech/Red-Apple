@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { Text, View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
@@ -70,24 +70,26 @@ export default function MiniCalendarDatePicker({ selectedDate, onSelectDate, max
     : '';
 
   return (
-    <View style={calStyles.calendarContainer}>
+    <View className="bg-white rounded-[18px] border border-gray-100 p-3.5 mt-2.5">
       {/* Month Header with Navigation */}
-      <View style={calStyles.monthNavRow}>
+      <View className="flex-row items-center justify-between mb-2.5 px-1">
         <TouchableOpacity
           activeOpacity={0.7}
-          style={calStyles.monthNavBtn}
+          className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
           onPress={prevMonth}
         >
           <Ionicons name="chevron-back" size={18} color="#374151" />
         </TouchableOpacity>
 
-        <Text style={calStyles.monthNavTitle}>
+        <Text className="text-[15px] font-extrabold text-gray-900 tracking-tight">
           {monthNames[month]} {year}
         </Text>
 
         <TouchableOpacity
           activeOpacity={0.7}
-          style={[calStyles.monthNavBtn, !canGoNext && { opacity: 0.25 }]}
+          className={`w-8 h-8 rounded-full bg-gray-100 items-center justify-center ${
+            !canGoNext ? 'opacity-25' : ''
+          }`}
           onPress={nextMonth}
           disabled={!canGoNext}
         >
@@ -96,19 +98,19 @@ export default function MiniCalendarDatePicker({ selectedDate, onSelectDate, max
       </View>
 
       {/* Weekday Letters */}
-      <View style={calStyles.weekdayRow}>
+      <View className="flex-row mb-1.5">
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((letter, idx) => (
-          <View key={idx} style={calStyles.weekdayCol}>
-            <Text style={calStyles.weekdayLetter}>{letter}</Text>
+          <View key={idx} className="flex-1 items-center py-1">
+            <Text className="text-[11px] font-bold text-gray-400">{letter}</Text>
           </View>
         ))}
       </View>
 
       {/* Days Grid */}
-      <View style={calStyles.daysGrid}>
+      <View className="flex-row flex-wrap">
         {gridCells.map((cell) => {
           if (cell.empty) {
-            return <View key={cell.key} style={calStyles.dayCell} />;
+            return <View key={cell.key} className="w-[14.28%] h-9 items-center justify-center my-0.5 rounded-full" />;
           }
 
           const isSelected = isSelectedDate(cell.dayNum);
@@ -120,20 +122,21 @@ export default function MiniCalendarDatePicker({ selectedDate, onSelectDate, max
               key={cell.key}
               activeOpacity={0.7}
               disabled={isFuture}
-              style={[
-                calStyles.dayCell,
-                isSelected && calStyles.dayCellSelected,
-                !isSelected && isToday && calStyles.dayCellToday,
-              ]}
+              className={`w-[14.28%] h-9 items-center justify-center my-0.5 rounded-full ${
+                isSelected ? 'bg-primary' : isToday ? 'border-[1.5px] border-primary' : ''
+              }`}
               onPress={() => onSelectDate(new Date(year, month, cell.dayNum))}
             >
               <Text
-                style={[
-                  calStyles.dayNumText,
-                  isSelected && calStyles.dayNumTextSelected,
-                  isToday && !isSelected && calStyles.dayNumTextToday,
-                  isFuture && calStyles.dayNumTextDisabled,
-                ]}
+                className={`text-[13px] font-semibold ${
+                  isSelected
+                    ? 'text-white font-extrabold'
+                    : isToday
+                    ? 'text-primary font-extrabold'
+                    : isFuture
+                    ? 'text-gray-200'
+                    : 'text-gray-800'
+                }`}
               >
                 {cell.dayNum}
               </Text>
@@ -144,111 +147,13 @@ export default function MiniCalendarDatePicker({ selectedDate, onSelectDate, max
 
       {/* Selected Date Confirmation Pill */}
       {selectedFormatted ? (
-        <View style={calStyles.selectedBadgeRow}>
+        <View className="flex-row items-center justify-center bg-pink-50 rounded-xl py-1.5 px-3 mt-2.5 self-center space-x-1.5">
           <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-          <Text style={calStyles.selectedBadgeText}>
-            Selected: <Text style={{ fontWeight: '800' }}>{selectedFormatted}</Text>
+          <Text className="text-xs text-primary font-semibold ml-1">
+            Selected: <Text className="font-extrabold">{selectedFormatted}</Text>
           </Text>
         </View>
       ) : null}
     </View>
   );
 }
-
-const calStyles = StyleSheet.create({
-  calendarContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    padding: 14,
-    marginTop: 10,
-  },
-  monthNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    paddingHorizontal: 4,
-  },
-  monthNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthNavTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  weekdayCol: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  weekdayLetter: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#9CA3AF',
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: `${100 / 7}%`,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 2,
-    borderRadius: 18,
-  },
-  dayCellSelected: {
-    backgroundColor: colors.primary,
-  },
-  dayCellToday: {
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-  dayNumText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  dayNumTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  dayNumTextToday: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  dayNumTextDisabled: {
-    color: '#E5E7EB',
-  },
-  selectedBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF0F5',
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginTop: 10,
-    alignSelf: 'center',
-    gap: 6,
-  },
-  selectedBadgeText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-});

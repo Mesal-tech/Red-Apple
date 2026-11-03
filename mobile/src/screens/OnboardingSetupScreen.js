@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   Image,
@@ -8,16 +7,15 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Dimensions,
   Animated,
   Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { requestAndScheduleNotifications } from '../utils/notifications';
 import {
   saveHealthProfileSafe,
@@ -25,10 +23,6 @@ import {
   saveOnboardingStatusSafe,
 } from '../utils/storage';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HORIZONTAL_PADDING = 20;
-const GRID_GAP = 12;
-const CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - GRID_GAP) / 2;
 const ITEM_HEIGHT = 58;
 
 function getDaysInMonth(monthName, year) {
@@ -38,6 +32,7 @@ function getDaysInMonth(monthName, year) {
 
 /* ================= WHEEL COLUMN ================= */
 function WheelColumn({ items, selectedValue, onSelect, unitText = '' }) {
+  const { theme, isDarkMode } = useTheme();
   const scrollViewRef = useRef(null);
   const selectedIndex = items.findIndex((item) => item === selectedValue);
 
@@ -69,7 +64,7 @@ function WheelColumn({ items, selectedValue, onSelect, unitText = '' }) {
   };
 
   return (
-    <View style={styles.wheelColContainer}>
+    <View className="h-full overflow-hidden">
       <ScrollView
         ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
@@ -86,10 +81,13 @@ function WheelColumn({ items, selectedValue, onSelect, unitText = '' }) {
             <TouchableOpacity
               key={index}
               activeOpacity={0.75}
-              style={styles.wheelItem}
+              className="h-[58px] items-center justify-center"
               onPress={() => handleItemPress(item, index)}
             >
-              <Text style={[styles.wheelItemText, isSelected && styles.wheelItemTextSelected]}>
+              <Text
+                className={`text-center ${isSelected ? 'text-lg font-bold' : 'text-base font-semibold'}`}
+                style={{ color: isSelected ? (isDarkMode ? '#A8D0C3' : '#173D36') : theme.textMuted }}
+              >
                 {item} {isSelected && unitText ? unitText : ''}
               </Text>
             </TouchableOpacity>
@@ -162,6 +160,7 @@ function ConstrainedDateWheelPicker({
   minDate,
   maxDate,
 }) {
+  const { theme, isDarkMode } = useTheme();
   const selYear = selectedDate.getFullYear();
   const selMonth = selectedDate.getMonth();
   const selDay = selectedDate.getDate();
@@ -225,34 +224,38 @@ function ConstrainedDateWheelPicker({
   const currentMonthName = MONTH_NAMES[selMonth];
 
   return (
-    <View style={styles.datePickerDirectWrapper}>
+    <View className="w-full rounded-[28px] p-4 mt-2" style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, borderWidth: 1, borderRadius: 28 }}>
       {/* COLUMN LABELS */}
-      <View style={styles.dateColsHeader}>
-        <Text style={[styles.dateColLabel, { flex: 1.3 }]}>Month</Text>
-        <Text style={[styles.dateColLabel, { flex: 0.9 }]}>Day</Text>
-        <Text style={[styles.dateColLabel, { flex: 1.1 }]}>Year</Text>
+      <View className="flex-row px-2 mb-2">
+        <Text className="text-xs font-bold text-center flex-[1.3]" style={{ color: theme.textSecondary }}>Month</Text>
+        <Text className="text-xs font-bold text-center flex-[0.9]" style={{ color: theme.textSecondary }}>Day</Text>
+        <Text className="text-xs font-bold text-center flex-[1.1]" style={{ color: theme.textSecondary }}>Year</Text>
       </View>
 
       {/* 3-COLUMN WHEEL WITH CONTINUOUS HIGHLIGHT BAND */}
-      <View style={styles.unifiedWheelContainer}>
-        <View style={styles.unifiedHighlightBand} pointerEvents="none" />
+      <View className="h-[174px] relative justify-center overflow-hidden">
+        <View
+          className="absolute left-0 right-0 h-[58px] rounded-full"
+          style={{ backgroundColor: isDarkMode ? '#293A35' : '#E4ECEA', borderTopWidth: 1, borderBottomWidth: 1, borderTopColor: isDarkMode ? '#3E5A50' : '#C7D7D2', borderBottomColor: isDarkMode ? '#3E5A50' : '#C7D7D2' }}
+          pointerEvents="none"
+        />
 
-        <View style={styles.unifiedColsRow}>
-          <View style={{ flex: 1.3 }}>
+        <View className="flex-row h-full">
+          <View className="flex-[1.3]">
             <WheelColumn
               items={availableMonths}
               selectedValue={currentMonthName}
               onSelect={handleMonthChange}
             />
           </View>
-          <View style={{ flex: 0.9 }}>
+          <View className="flex-[0.9]">
             <WheelColumn
               items={availableDays}
               selectedValue={selDay}
               onSelect={handleDayChange}
             />
           </View>
-          <View style={{ flex: 1.1 }}>
+          <View className="flex-[1.1]">
             <WheelColumn
               items={years}
               selectedValue={selYear}
@@ -267,10 +270,15 @@ function ConstrainedDateWheelPicker({
 
 /* ================= SINGLE WHEEL PICKER (DIRECT) ================= */
 function SingleWheelPickerCard({ items, selectedValue, onSelect, unitText = '' }) {
+  const { theme, isDarkMode } = useTheme();
   return (
-    <View style={styles.singleWheelDirectWrapper}>
-      <View style={styles.singleWheelContainer}>
-        <View style={styles.unifiedHighlightBand} pointerEvents="none" />
+    <View className="w-full rounded-[28px] p-4 mt-2" style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, borderWidth: 1, borderRadius: 28 }}>
+      <View className="h-[174px] relative justify-center overflow-hidden items-center">
+        <View
+          className="absolute left-0 right-0 h-[58px] rounded-full"
+          style={{ backgroundColor: isDarkMode ? '#293A35' : '#E4ECEA', borderTopWidth: 1, borderBottomWidth: 1, borderTopColor: isDarkMode ? '#3E5A50' : '#C7D7D2', borderBottomColor: isDarkMode ? '#3E5A50' : '#C7D7D2' }}
+          pointerEvents="none"
+        />
         <WheelColumn
           items={items}
           selectedValue={selectedValue}
@@ -320,7 +328,7 @@ function StaggerItem({ delay = 0, style, children }) {
   );
 }
 
-/* ================= BENTO SQUIRCLE CARD (LIGHT THEME) ================= */
+/* ================= LIFE STAGE OPTION CARD ================= */
 function BentoCard({
   icon,
   title,
@@ -330,6 +338,7 @@ function BentoCard({
   isFullWidth = false,
   delay = 0,
 }) {
+  const { theme, isDarkMode } = useTheme();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -345,22 +354,22 @@ function BentoCard({
   return (
     <AnimatedTouchable
       activeOpacity={0.85}
-      style={[
-        styles.bentoCard,
-        isFullWidth ? styles.bentoCardFullWidth : styles.bentoCardHalfWidth,
-        isSelected ? styles.bentoCardSelected : styles.bentoCardUnselected,
-        {
-          opacity: anim,
-          transform: [
-            {
-              translateY: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [18, 0],
-              }),
-            },
-          ],
-        },
-      ]}
+      className={`rounded-[24px] p-4 border justify-between ${isFullWidth ? 'w-full flex-row items-center' : 'w-[48%]'}`}
+      style={{
+        backgroundColor: isSelected ? (isDarkMode ? '#263C35' : '#EAF1EF') : theme.inputBg,
+        borderColor: isSelected ? (isDarkMode ? '#6B9D8C' : '#173D36') : theme.inputBorder,
+        borderWidth: 1,
+        borderRadius: 24,
+        opacity: anim,
+        transform: [
+          {
+            translateY: anim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [18, 0],
+            }),
+          },
+        ],
+      }}
       onPress={onPress}
     >
       {isFullWidth ? (
@@ -368,19 +377,21 @@ function BentoCard({
           <Ionicons
             name={icon}
             size={28}
-            color="#1C1C1E"
+            color={isSelected ? (isDarkMode ? '#A8D0C3' : '#173D36') : theme.textSecondary}
           />
 
-          <View style={styles.bentoBottomColFullWidth}>
+          <View className="flex-1 ml-3">
             <Text
-              style={[styles.bentoTitle, isSelected && styles.bentoTitleSelected]}
+              className="text-sm font-bold leading-snug"
+              style={{ color: isSelected ? (isDarkMode ? '#C4DED5' : '#173D36') : theme.textPrimary }}
               numberOfLines={2}
             >
               {title}
             </Text>
             {subtitle ? (
               <Text
-                style={[styles.bentoSubtitle, isSelected && styles.bentoSubtitleSelected]}
+                className="text-xs mt-0.5 leading-snug"
+                style={{ color: isSelected ? (isDarkMode ? '#A8C8BC' : '#365B52') : theme.textSecondary }}
                 numberOfLines={2}
               >
                 {subtitle}
@@ -389,36 +400,38 @@ function BentoCard({
           </View>
 
           {isSelected && (
-            <View style={styles.bentoCheckCircle}>
+            <View className="w-5 h-5 rounded-full items-center justify-center" style={{ backgroundColor: isDarkMode ? '#4C8375' : '#173D36' }}>
               <Ionicons name="checkmark" size={13} color="#FFFFFF" />
             </View>
           )}
         </>
       ) : (
         <>
-          <View style={styles.bentoTopRow}>
+          <View className="flex-row items-center justify-between w-full mb-3">
             <Ionicons
               name={icon}
               size={28}
-              color="#1C1C1E"
+              color={isSelected ? (isDarkMode ? '#A8D0C3' : '#173D36') : theme.textSecondary}
             />
             {isSelected && (
-              <View style={styles.bentoCheckCircle}>
+              <View className="w-5 h-5 rounded-full items-center justify-center" style={{ backgroundColor: isDarkMode ? '#4C8375' : '#173D36' }}>
                 <Ionicons name="checkmark" size={13} color="#FFFFFF" />
               </View>
             )}
           </View>
 
-          <View style={styles.bentoBottomCol}>
+          <View className="w-full">
             <Text
-              style={[styles.bentoTitle, isSelected && styles.bentoTitleSelected]}
+              className="text-sm font-bold leading-snug"
+              style={{ color: isSelected ? (isDarkMode ? '#C4DED5' : '#173D36') : theme.textPrimary }}
               numberOfLines={2}
             >
               {title}
             </Text>
             {subtitle ? (
               <Text
-                style={[styles.bentoSubtitle, isSelected && styles.bentoSubtitleSelected]}
+                className="text-xs mt-0.5 leading-snug"
+                style={{ color: isSelected ? (isDarkMode ? '#A8C8BC' : '#365B52') : theme.textSecondary }}
                 numberOfLines={2}
               >
                 {subtitle}
@@ -461,38 +474,39 @@ const COMPLETION_CONTENT = {
 };
 
 function CompletionStep({ stage }) {
+  const { theme, isDarkMode } = useTheme();
   const content = COMPLETION_CONTENT[stage] || COMPLETION_CONTENT.cycle;
 
   return (
-    <View style={styles.completionContainer}>
-      <StaggerItem delay={0} style={styles.illustrationWrapper}>
+    <View className="items-center w-full px-2">
+      <StaggerItem delay={0} style={{ width: '100%', height: 224, alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 16 }}>
         <Image
           source={require('../../assets/images/onboarding_done.png')}
-          style={styles.completionIllustration}
+          style={{ width: '100%', height: '100%' }}
           resizeMode="contain"
         />
         <LinearGradient
-          colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.75)', '#FFFFFF']}
+          colors={isDarkMode ? ['rgba(20,24,23,0)', 'rgba(20,24,23,0.8)', theme.background] : ['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.75)', '#FFFFFF']}
           locations={[0, 0.5, 1]}
-          style={styles.illustrationFadeOverlay}
+          className="absolute left-0 right-0 bottom-0 h-16"
           pointerEvents="none"
         />
       </StaggerItem>
 
-      <StaggerItem delay={90}>
-        <Text style={styles.completionTitle}>{content.title}</Text>
+      <StaggerItem delay={90} style={{ width: '100%' }}>
+        <Text className="text-[32px] leading-[38px] font-extrabold mb-2 tracking-tight" style={{ color: theme.textPrimary }}>{content.title}</Text>
       </StaggerItem>
 
-      <StaggerItem delay={160}>
-        <Text style={styles.completionSubtitle}>{content.subtitle}</Text>
+      <StaggerItem delay={160} style={{ width: '100%' }}>
+        <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>{content.subtitle}</Text>
       </StaggerItem>
 
-      <View style={styles.completionPerksContainer}>
+      <View className="w-full gap-2.5 px-2">
         {content.perks.map((perk, idx) => (
           <StaggerItem key={idx} delay={230 + idx * 80}>
-            <View style={styles.completionPerkPill}>
-              <Ionicons name="checkmark-circle" size={17} color={colors.primary} />
-              <Text style={styles.completionPerkText}>{perk}</Text>
+            <View className="flex-row items-center rounded-[24px] p-3.5 gap-3" style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, borderWidth: 1, borderRadius: 24 }}>
+              <Ionicons name="checkmark-circle" size={18} color={isDarkMode ? '#75B09C' : '#173D36'} />
+              <Text className="text-sm font-semibold flex-1" style={{ color: theme.textPrimary }}>{perk}</Text>
             </View>
           </StaggerItem>
         ))}
@@ -501,7 +515,7 @@ function CompletionStep({ stage }) {
   );
 }
 
-/* ================= MAIN ONBOARDING SETUP (LIGHT THEME) ================= */
+/* ================= MAIN ONBOARDING SETUP ================= */
 export default function OnboardingSetupScreen({
   onBack,
   onComplete,
@@ -510,6 +524,7 @@ export default function OnboardingSetupScreen({
 }) {
   const { updateProfile } = useAuth();
   const { showError, showSuccess } = useToast();
+  const { theme, isDarkMode } = useTheme();
 
   // Step 1: Life Stage
   const [selectedStage, setSelectedStage] = useState(initialStage || 'cycle');
@@ -648,59 +663,38 @@ export default function OnboardingSetupScreen({
   };
 
   return (
-    <View style={styles.screenWrapper}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
-      {/* AMBIENT RADIAL RED GLOW: (WAY MORE WHITE THAN RED) */}
-      <View style={styles.radialGlowWrapper} pointerEvents="none">
-        <LinearGradient
-          colors={['rgba(220, 38, 38, 0.16)', 'rgba(251, 113, 133, 0.06)', 'rgba(255, 255, 255, 0)']}
-          locations={[0, 0.45, 1]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.radialGlowDisc}
-        />
-      </View>
-
-      <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right', 'bottom']}>
+      <SafeAreaView className="flex-1 bg-transparent" edges={['top', 'left', 'right', 'bottom']}>
         {/* HEADER: BACK, PROGRESS, CLOSE */}
-        <View style={styles.header}>
-          <TouchableOpacity activeOpacity={0.7} style={styles.headerIconButton} onPress={handlePrevStep}>
-            <Ionicons name="chevron-back" size={22} color="#1C1C1E" />
-          </TouchableOpacity>
-
-          <View style={styles.progressBarContainer}>
+        <View className="flex-row items-center justify-between px-6 pt-2 pb-2">
+          <View className="flex-1 flex-row items-center justify-center mx-3 gap-1.5">
             {[1, 2, 3, 4, 5].map((i) => (
               <View
                 key={i}
-                style={[
-                  styles.progressSegment,
-                  i <= step ? styles.progressSegmentActive : styles.progressSegmentInactive,
-                ]}
+                className="flex-1 h-[5px] rounded-full"
+                style={{ backgroundColor: i <= step ? (isDarkMode ? '#A52B39' : '#173D36') : (isDarkMode ? '#38433F' : '#D8E0DE') }}
               />
             ))}
           </View>
-
-          <TouchableOpacity activeOpacity={0.7} style={styles.headerIconButton} onPress={onBack}>
-            <Ionicons name="close" size={22} color="#1C1C1E" />
-          </TouchableOpacity>
         </View>
 
         {/* SCROLLABLE MAIN CONTENT */}
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* ================= STEP 1: PRIMARY GOAL (BENTO 2x2 + FULL) ================= */}
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+          {/* ================= STEP 1: PRIMARY GOAL ================= */}
           {step === 1 && (
-            <View style={styles.stepContainer}>
+            <View className="w-full">
               <StaggerItem delay={0}>
-                <Text style={styles.questionTitle}>What is your current primary goal?</Text>
+                <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>What is your current primary goal?</Text>
               </StaggerItem>
               <StaggerItem delay={50}>
-                <Text style={styles.questionSubtitle}>
+                <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>
                   Select your life stage to customize your daily insights and medical tools.
                 </Text>
               </StaggerItem>
 
-              <View style={styles.bentoGrid}>
+              <View className="flex-row flex-wrap justify-between gap-3">
                 <BentoCard
                   icon="water-outline"
                   title="Track my cycle"
@@ -754,12 +748,12 @@ export default function OnboardingSetupScreen({
           {(selectedStage === 'cycle' || selectedStage === 'ttc') && (
             <>
               {step === 2 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>How many days does your period usually last?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How many days does your period usually last?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Bleeding usually lasts between 4–7 days.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Bleeding usually lasts between 4–7 days.</Text>
                   </StaggerItem>
 
                   <StaggerItem delay={110}>
@@ -774,12 +768,12 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 3 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>How many days does your cycle usually last?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How many days does your cycle usually last?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>
                       Duration from the first day of one period to the next (typically 23–35 days).
                     </Text>
                   </StaggerItem>
@@ -796,12 +790,12 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 4 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>When did your last period start?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>When did your last period start?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Select the first day of bleeding from your most recent period.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Select the first day of bleeding from your most recent period.</Text>
                   </StaggerItem>
 
                   <StaggerItem delay={110}>
@@ -816,7 +810,7 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 5 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <CompletionStep stage={selectedStage} />
                 </View>
               )}
@@ -827,15 +821,15 @@ export default function OnboardingSetupScreen({
           {selectedStage === 'pregnancy' && (
             <>
               {step === 2 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>How would you like to calculate your pregnancy?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How would you like to calculate your pregnancy?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Pick the option that matches your doctor's advice.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Pick the option that matches your doctor's advice.</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="calendar-outline"
                       title="First Day of Last Period"
@@ -873,9 +867,9 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 3 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>
                       {pregnancyCalcMethod === 'dueDate'
                         ? 'What is your estimated due date?'
                         : pregnancyCalcMethod === 'conception'
@@ -886,7 +880,7 @@ export default function OnboardingSetupScreen({
                     </Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>We'll track your pregnancy progress week by week.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>We'll track your pregnancy progress week by week.</Text>
                   </StaggerItem>
 
                   <StaggerItem delay={110}>
@@ -901,18 +895,18 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 4 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>Tell us about your baby</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Tell us about your baby</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Personalizes health articles and developmental milestones.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Personalizes health articles and developmental milestones.</Text>
                   </StaggerItem>
 
                   <StaggerItem delay={90}>
-                    <Text style={styles.sectionDividerLabel}>IS THIS YOUR FIRST PREGNANCY?</Text>
+                    <Text className="text-xs font-bold tracking-wide mb-3 px-1" style={{ color: theme.textSecondary }}>IS THIS YOUR FIRST PREGNANCY?</Text>
                   </StaggerItem>
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="happy-outline"
                       title="First Baby"
@@ -932,9 +926,9 @@ export default function OnboardingSetupScreen({
                   </View>
 
                   <StaggerItem delay={220}>
-                    <Text style={[styles.sectionDividerLabel, { marginTop: 24 }]}>ARE YOU EXPECTING MULTIPLES?</Text>
+                    <Text className="text-xs font-bold tracking-wide mb-3 px-1 mt-6" style={{ color: theme.textSecondary }}>ARE YOU EXPECTING MULTIPLES?</Text>
                   </StaggerItem>
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="person-outline"
                       title="Single Baby"
@@ -965,7 +959,7 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 5 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <CompletionStep stage="pregnancy" />
                 </View>
               )}
@@ -976,15 +970,15 @@ export default function OnboardingSetupScreen({
           {selectedStage === 'perimenopause' && (
             <>
               {step === 2 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>How are your periods shifting?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How are your periods shifting?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Select the option that best reflects your recent cycles.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Select the option that best reflects your recent cycles.</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="shuffle-outline"
                       title="Becoming Irregular"
@@ -1022,15 +1016,15 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 3 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>Which symptoms are you noticing most?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Which symptoms are you noticing most?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Select all that apply. Tap each card to toggle.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Select all that apply. Tap each card to toggle.</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="flame-outline"
                       title="Hot Flashes"
@@ -1084,15 +1078,15 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 4 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>When did these shifts begin?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>When did these shifts begin?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Helps map your hormonal trajectory over time.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Helps map your hormonal trajectory over time.</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="time-outline"
                       title="Last 6 Months"
@@ -1130,7 +1124,7 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 5 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <CompletionStep stage="perimenopause" />
                 </View>
               )}
@@ -1141,15 +1135,15 @@ export default function OnboardingSetupScreen({
           {selectedStage === 'postmenopause' && (
             <>
               {step === 2 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>Time since your last period?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Time since your last period?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Menopause is clinically confirmed after 12 consecutive months.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Menopause is clinically confirmed after 12 consecutive months.</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="ribbon-outline"
                       title="12 to 24 Months"
@@ -1187,15 +1181,15 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 3 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>Top wellness priorities?</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Top wellness priorities?</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Select all areas you want Red Apple to monitor and support.</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Select all areas you want Red Apple to monitor and support.</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="shield-outline"
                       title="Bone Strength"
@@ -1249,15 +1243,15 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 4 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <StaggerItem delay={0}>
-                    <Text style={styles.questionTitle}>Hormone Therapy (HRT)</Text>
+                    <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Hormone Therapy (HRT)</Text>
                   </StaggerItem>
                   <StaggerItem delay={50}>
-                    <Text style={styles.questionSubtitle}>Are you taking hormone pills, patches, or creams?</Text>
+                    <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>Are you taking hormone pills, patches, or creams?</Text>
                   </StaggerItem>
 
-                  <View style={styles.bentoGrid}>
+                  <View className="flex-row flex-wrap justify-between gap-3">
                     <BentoCard
                       icon="medkit-outline"
                       title="Taking HRT"
@@ -1288,7 +1282,7 @@ export default function OnboardingSetupScreen({
               )}
 
               {step === 5 && (
-                <View style={styles.stepContainer}>
+                <View className="w-full">
                   <CompletionStep stage="postmenopause" />
                 </View>
               )}
@@ -1296,26 +1290,28 @@ export default function OnboardingSetupScreen({
           )}
         </ScrollView>
 
-        {/* BOTTOM ACTION BAR (SIGNATURE CRIMSON PILL BUTTON) */}
-        <View style={styles.bottomActions}>
+        {/* BOTTOM ACTION BAR */}
+        <View className="px-6 pb-4 pt-3 gap-2" style={{ backgroundColor: theme.background }}>
           <TouchableOpacity
             activeOpacity={0.88}
             disabled={submitting}
-            style={styles.primaryPillButton}
+            className="h-[62px] rounded-full items-center justify-center"
+            style={{ backgroundColor: isDarkMode ? '#A52B39' : '#101B1A' }}
             onPress={handleNextStep}
           >
             {submitting ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.primaryPillButtonText}>
+              <Text className="text-base font-bold text-white">
                 {step === TOTAL_STEPS ? 'Complete Setup' : 'Next'}
               </Text>
             )}
+            {!submitting && <View className="absolute right-1.5 h-[49px] w-[49px] items-center justify-center rounded-full" style={{ backgroundColor: isDarkMode ? '#DCEAE5' : '#FFFFFF' }}><Ionicons name="arrow-forward" size={19} color="#101B1A" /></View>}
           </TouchableOpacity>
 
           {step > 1 && step < TOTAL_STEPS && (
-            <TouchableOpacity activeOpacity={0.7} style={styles.skipButton} onPress={handleNextStep}>
-              <Text style={styles.skipButtonText}>I'm not sure, skip this</Text>
+            <TouchableOpacity activeOpacity={0.7} className="py-2 items-center justify-center" onPress={handleNextStep}>
+              <Text className="text-sm font-semibold" style={{ color: theme.textSecondary }}>I'm not sure, skip this</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1323,404 +1319,3 @@ export default function OnboardingSetupScreen({
     </View>
   );
 }
-
-/* ================= CLEAN LIGHT THEMED STYLES ================= */
-const styles = StyleSheet.create({
-  screenWrapper: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  radialGlowWrapper: {
-    position: 'absolute',
-    top: -SCREEN_WIDTH * 0.35,
-    left: -SCREEN_WIDTH * 0.25,
-    width: SCREEN_WIDTH * 1.5,
-    height: SCREEN_WIDTH * 1.5,
-    borderRadius: (SCREEN_WIDTH * 1.5) / 2,
-    overflow: 'hidden',
-  },
-  radialGlowDisc: {
-    width: '100%',
-    height: '100%',
-  },
-  safeContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
-    width: '100%',
-    maxWidth: 540,
-    alignSelf: 'center',
-  },
-
-  /* HEADER */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  headerIconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E8EE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  progressBarContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 6,
-  },
-  progressSegment: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-  },
-  progressSegmentActive: {
-    backgroundColor: colors.primary,
-  },
-  progressSegmentInactive: {
-    backgroundColor: '#E5E7EB',
-  },
-
-  /* SCROLL CONTENT */
-  scrollContent: {
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingTop: 16,
-    paddingBottom: 24,
-  },
-  stepContainer: {
-    width: '100%',
-  },
-  questionTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    lineHeight: 38,
-    letterSpacing: -0.5,
-    paddingTop: 10,
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  questionSubtitle: {
-    fontSize: 14.5,
-    fontWeight: '400',
-    color: '#6E6266',
-    lineHeight: 21,
-    marginBottom: 26,
-  },
-  questionTitleCentered: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    textAlign: 'center',
-    lineHeight: 32,
-    marginTop: 28,
-    marginBottom: 8,
-  },
-  questionSubtitleCentered: {
-    fontSize: 14.5,
-    fontWeight: '400',
-    color: '#6E6266',
-    textAlign: 'center',
-    lineHeight: 21,
-    paddingHorizontal: 12,
-  },
-
-  sectionDividerLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#8E8E93',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-  },
-
-  /* BENTO GRID LAYOUT */
-  bentoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: GRID_GAP,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  bentoCard: {
-    borderRadius: 26,
-    padding: 18,
-    minHeight: 162,
-    justifyContent: 'space-between',
-  },
-  bentoCardHalfWidth: {
-    width: '48%',
-    minWidth: 140,
-    flexGrow: 1,
-  },
-  bentoCardFullWidth: {
-    width: '100%',
-    minHeight: 96,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    gap: 16,
-  },
-
-  /* LIGHT THEME CARD STATES (UNSELECTED vs SELECTED) */
-  bentoCardUnselected: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#ECECF0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  bentoCardSelected: {
-    backgroundColor: '#EDEDF2',
-    borderWidth: 1.5,
-    borderColor: '#E2E4E8',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  bentoTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  bentoTopRowFullWidth: {
-    width: 'auto',
-  },
-  bentoCheckCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#1C1C1E',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  bentoBottomCol: {
-    marginTop: 18,
-  },
-  bentoBottomColFullWidth: {
-    marginTop: 0,
-    flex: 1,
-  },
-  bentoTitle: {
-    fontSize: 16.5,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    letterSpacing: -0.2,
-    marginBottom: 4,
-  },
-  bentoTitleSelected: {
-    color: '#1C1C1E',
-  },
-  bentoSubtitle: {
-    fontSize: 12.5,
-    fontWeight: '400',
-    color: '#6E6266',
-    lineHeight: 16,
-  },
-  bentoSubtitleSelected: {
-    color: '#6E6266',
-  },
-
-  /* UNIFIED DATE WHEEL (DIRECT ON SCREEN) */
-  datePickerDirectWrapper: {
-    width: '100%',
-    marginTop: 28,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  dateColsHeader: {
-    flexDirection: 'row',
-    width: '100%',
-    paddingHorizontal: 14,
-    marginBottom: 12,
-  },
-  dateColLabel: {
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  unifiedWheelContainer: {
-    height: ITEM_HEIGHT * 3,
-    width: '100%',
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  unifiedHighlightBand: {
-    position: 'absolute',
-    top: ITEM_HEIGHT,
-    left: 0,
-    right: 0,
-    height: ITEM_HEIGHT,
-    backgroundColor: '#EDEDF2',
-    borderRadius: 29,
-    zIndex: 0,
-  },
-  unifiedColsRow: {
-    flexDirection: 'row',
-    width: '100%',
-    height: ITEM_HEIGHT * 3,
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  wheelColContainer: {
-    height: ITEM_HEIGHT * 3,
-    justifyContent: 'center',
-  },
-  wheelItem: {
-    height: ITEM_HEIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  wheelItemText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#A0A0AB',
-  },
-  wheelItemTextSelected: {
-    fontSize: 21,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-
-  /* SINGLE WHEEL PICKER (DIRECT ON SCREEN) */
-  singleWheelDirectWrapper: {
-    width: '100%',
-    marginTop: 28,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  singleWheelContainer: {
-    height: ITEM_HEIGHT * 3,
-    width: '100%',
-    position: 'relative',
-    justifyContent: 'center',
-  },
-
-  /* COMPLETION SCREEN (LIGHT THEME) */
-  completionContainer: {
-    width: '100%',
-    alignItems: 'center',
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  illustrationWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: 8,
-  },
-  completionIllustration: {
-    width: Math.min(SCREEN_WIDTH * 0.70, 260),
-    height: Math.min(SCREEN_WIDTH * 0.70, 260),
-  },
-  illustrationFadeOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 70,
-  },
-  completionTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    textAlign: 'center',
-    letterSpacing: -0.5,
-    lineHeight: 34,
-    marginBottom: 8,
-    paddingHorizontal: 8,
-  },
-  completionSubtitle: {
-    fontSize: 14.5,
-    fontWeight: '400',
-    color: '#6E6266',
-    textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  completionPerksContainer: {
-    width: '100%',
-    gap: 10,
-    paddingHorizontal: 4,
-  },
-  completionPerkPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 1.5,
-    borderColor: '#ECECF0',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  completionPerkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-
-  /* BOTTOM ACTIONS (SIGNATURE CRIMSON PILL BUTTON) */
-  bottomActions: {
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingBottom: 26,
-    paddingTop: 12,
-    alignItems: 'center',
-  },
-  primaryPillButton: {
-    width: '100%',
-    height: 58,
-    backgroundColor: colors.primary,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  primaryPillButtonText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  skipButton: {
-    marginTop: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  skipButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textDecorationLine: 'underline',
-  },
-});

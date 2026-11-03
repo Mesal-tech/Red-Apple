@@ -49,94 +49,119 @@ class AIService {
 
   /**
    * Real-time SSE streaming chat with Gemini 2.5
-   * Streams tokens chunk by chunk directly into the chat UI
+   * Streams tokens chunk by chunk directly into the chat UI, with real-time tool execution events
    */
-  streamChatWithAgent(message, history = [], healthContext = {}, onChunk, onComplete, onError) {
+  streamChatWithAgent(message, history = [], healthContext = {}, onChunk, onComplete, onError, onToolAction) {
     const baseUrl = getBaseApiUrl();
     const url = `${baseUrl}/ai/symptom-chat-stream`;
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
+    let aborted = false;
+    let xhr = null;
 
-    getAuthSessionSafe().then((session) => {
-      if (session?.token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${session.token}`);
-      }
-    }).catch(() => {});
-
-    let processedIndex = 0;
-    let accumulatedText = '';
-    let finalTriage = null;
-    let finalQuickReplies = [];
-
-    xhr.onprogress = () => {
-      const currentText = xhr.responseText;
-      const newChunk = currentText.slice(processedIndex);
-      processedIndex = currentText.length;
-
-      const lines = newChunk.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data:')) {
-          const jsonStr = trimmed.slice(5).trim();
-          try {
-            const data = JSON.parse(jsonStr);
-            if (data.chunk) {
-              accumulatedText += data.chunk;
-              if (onChunk) onChunk(accumulatedText);
-            }
-            if (data.done) {
-              if (data.triage) finalTriage = data.triage;
-              if (data.suggestedQuickReplies) finalQuickReplies = data.suggestedQuickReplies;
-            }
-            if (data.error) {
-              if (onError) onError(new Error(data.error));
-              return;
-            }
-          } catch {}
+    getAuthSessionSafe()
+      .then((session) => {
+        if (aborted) return;
+        xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        if (session?.token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${session.token}`);
         }
-      }
-    };
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        if (onComplete) {
-          onComplete({
-            reply: accumulatedText,
-            triage: finalTriage,
-            suggestedQuickReplies: finalQuickReplies,
-            isAiGenerated: true,
-          });
-        }
-      } else {
-        if (onError) onError(new Error('There was a problem connecting to the AI. Please try again.'));
-      }
-    };
+        let processedIndex = 0;
+        let accumulatedText = '';
+        let finalTriage = null;
+        let finalQuickReplies = [];
+        const executedToolActions = [];
 
-    xhr.onerror = () => {
-      if (onError) onError(new Error('Network error connecting to AI.'));
-    };
+        xhr.onprogress = () => {
+          const currentText = xhr.responseText;
+          const newChunk = currentText.slice(processedIndex);
+          processedIndex = currentText.length;
 
-    xhr.ontimeout = () => {
-      if (onError) onError(new Error('AI request timed out.'));
-    };
+          const lines = newChunk.split('\n');
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data:')) {
+              const jsonStr = trimmed.slice(5).trim();
+              try {
+                const data = JSON.parse(jsonStr);
+                if (data.chunk) {
+                  accumulatedText += data.chunk;
+                  if (onChunk) onChunk(accumulatedText);
+                }
+                if (data.triage) {
+                  finalTriage = data.triage;
+                }
+                if (data.suggestedQuickReplies) {
+                  finalQuickReplies = data.suggestedQuickReplies;
+                }
+                if (data.tool_action) {
+                  executedToolActions.push(data.tool_action);
+                  if (onToolAction) onToolAction(data.tool_action);
+                }
+                if (data.toolActions && Array.isArray(data.toolActions)) {
+                  for (const ta of data.toolActions) {
+                    if (!executedToolActions.some((e) => e.id === ta.id && e.tool === ta.tool)) {
+                      executedToolActions.push(ta);
+                    }
+                  }
+                }
+                if (data.error) {
+                  if (onError) onError(new Error(data.error));
+                  return;
+                }
+              } catch {}
+            }
+          }
+        };
 
-    xhr.timeout = 25000;
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            if (onComplete) {
+              onComplete({
+                reply: accumulatedText,
+                triage: finalTriage,
+                suggestedQuickReplies: finalQuickReplies,
+                toolActions: executedToolActions,
+                isAiGenerated: true,
+              });
+            }
+          } else {
+            if (onError) onError(new Error('There was a problem connecting to the AI. Please try again.'));
+          }
+        };
 
-    xhr.send(
-      JSON.stringify({
-        message,
-        history,
-        healthContext,
-        cycleContext: healthContext.cycle || healthContext,
+        xhr.onerror = () => {
+          if (onError) onError(new Error('Network error connecting to AI.'));
+        };
+
+        xhr.ontimeout = () => {
+          if (onError) onError(new Error('AI request timed out.'));
+        };
+
+        xhr.timeout = 25000;
+
+        xhr.send(
+          JSON.stringify({
+            message,
+            history,
+            healthContext,
+            cycleContext: healthContext.cycle || healthContext,
+          })
+        );
       })
-    );
+      .catch((err) => {
+        if (onError) onError(err);
+      });
 
     return () => {
-      try {
-        xhr.abort();
-      } catch {}
+      aborted = true;
+      if (xhr) {
+        try {
+          xhr.abort();
+        } catch {}
+      }
     };
   }
 }

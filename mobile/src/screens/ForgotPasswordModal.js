@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   Modal,
@@ -14,11 +13,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function ForgotPasswordModal({ visible, onClose, onSuccess }) {
   const { forgotPassword, resetPassword } = useAuth();
+  const { theme, isDark } = useTheme();
 
-  const [step, setStep] = useState(1); // 1 = Enter Email, 2 = Enter OTP & New Password
+  const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -95,54 +96,124 @@ export default function ForgotPasswordModal({ visible, onClose, onSuccess }) {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
       >
-        <View style={styles.modalCard}>
+        <View
+          style={{
+            backgroundColor: theme.card,
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            padding: 20,
+            borderTopWidth: 1,
+            borderTopColor: theme.cardBorder,
+            maxHeight: '85%',
+          }}
+        >
           {/* Header */}
-          <View style={styles.headerRow}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="key-outline" size={22} color={colors.primary} />
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.cardBorder,
+              marginBottom: 14,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}
+            >
+              <Ionicons name="key-outline" size={20} color={colors.primary} />
             </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.modalTitle}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: theme.textPrimary }}>
                 {step === 1 ? 'Reset Password' : 'Enter Verification Code'}
               </Text>
-              <Text style={styles.modalSubTitle}>
+              <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
                 {step === 1
                   ? "Enter your email and we'll send a 6-digit recovery code."
                   : `Enter the code sent to ${email}`}
               </Text>
             </View>
-            <TouchableOpacity activeOpacity={0.7} onPress={handleClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color="#666" />
+            <TouchableOpacity activeOpacity={0.7} onPress={handleClose} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color={theme.textMuted} />
             </TouchableOpacity>
           </View>
 
           {/* Feedback Banners */}
           {!!errorMessage && (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={18} color="#D32F2F" style={{ marginRight: 6 }} />
-              <Text style={styles.errorText}>{errorMessage}</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+                padding: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#FECACA',
+                marginBottom: 14,
+              }}
+            >
+              <Ionicons name="alert-circle" size={17} color="#DC2626" />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#EF4444', marginLeft: 8, flex: 1 }}>
+                {errorMessage}
+              </Text>
             </View>
           )}
 
           {!!successMessage && (
-            <View style={styles.successBanner}>
-              <Ionicons name="checkmark-circle" size={18} color="#2E7D32" style={{ marginRight: 6 }} />
-              <Text style={styles.successText}>{successMessage}</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
+                padding: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0',
+                marginBottom: 14,
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={17} color="#10B981" />
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#10B981', marginLeft: 8, flex: 1 }}>
+                {successMessage}
+              </Text>
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 8 }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 4 }}>
             {step === 1 ? (
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Account Email</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="mail-outline" size={19} color="#777" style={styles.inputIcon} />
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, marginLeft: 2 }}>
+                  Account Email
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 52,
+                    backgroundColor: theme.backgroundSecondary,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                    paddingHorizontal: 14,
+                    marginBottom: 20,
+                  }}
+                >
+                  <Ionicons name="mail-outline" size={18} color={theme.textMuted} />
                   <TextInput
-                    style={styles.textInput}
+                    style={{ flex: 1, fontSize: 14, color: theme.textPrimary, marginLeft: 10, paddingVertical: 10 }}
                     placeholder="e.g. name@example.com"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={theme.textMuted}
                     autoCapitalize="none"
                     keyboardType="email-address"
                     value={email}
@@ -153,26 +224,46 @@ export default function ForgotPasswordModal({ visible, onClose, onSuccess }) {
 
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={styles.actionBtn}
+                  style={{
+                    height: 52,
+                    backgroundColor: colors.primary,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                   onPress={handleRequestOtp}
                   disabled={loading}
                 >
                   {loading ? (
                     <ActivityIndicator color="#FFF" size="small" />
                   ) : (
-                    <Text style={styles.actionBtnText}>Send Reset Code</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>Send Reset Code</Text>
                   )}
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="shield-checkmark-outline" size={19} color="#777" style={styles.inputIcon} />
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, marginLeft: 2 }}>
+                  6-Digit Verification Code
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 52,
+                    backgroundColor: theme.backgroundSecondary,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                    paddingHorizontal: 14,
+                    marginBottom: 14,
+                  }}
+                >
+                  <Ionicons name="shield-checkmark-outline" size={18} color={theme.textMuted} />
                   <TextInput
-                    style={styles.textInput}
+                    style={{ flex: 1, fontSize: 14, color: theme.textPrimary, marginLeft: 10, paddingVertical: 10 }}
                     placeholder="123456"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={theme.textMuted}
                     keyboardType="number-pad"
                     maxLength={6}
                     value={otpCode}
@@ -181,34 +272,62 @@ export default function ForgotPasswordModal({ visible, onClose, onSuccess }) {
                   />
                 </View>
 
-                <Text style={styles.inputLabel}>New Password</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed-outline" size={19} color="#777" style={styles.inputIcon} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, marginLeft: 2 }}>
+                  New Password
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 52,
+                    backgroundColor: theme.backgroundSecondary,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                    paddingHorizontal: 14,
+                    marginBottom: 14,
+                  }}
+                >
+                  <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} />
                   <TextInput
-                    style={styles.textInput}
+                    style={{ flex: 1, fontSize: 14, color: theme.textPrimary, marginLeft: 10, paddingVertical: 10 }}
                     placeholder="At least 8 characters"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={theme.textMuted}
                     secureTextEntry={!showPassword}
                     value={newPassword}
                     onChangeText={setNewPassword}
                     editable={!loading}
                   />
-                  <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPassword(!showPassword)}>
+                  <TouchableOpacity activeOpacity={0.7} onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
                     <Ionicons
                       name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={19}
-                      color="#777"
+                      size={18}
+                      color={theme.textMuted}
                     />
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.inputLabel}>Confirm New Password</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed-outline" size={19} color="#777" style={styles.inputIcon} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, marginLeft: 2 }}>
+                  Confirm New Password
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 52,
+                    backgroundColor: theme.backgroundSecondary,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.cardBorder,
+                    paddingHorizontal: 14,
+                    marginBottom: 20,
+                  }}
+                >
+                  <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} />
                   <TextInput
-                    style={styles.textInput}
+                    style={{ flex: 1, fontSize: 14, color: theme.textPrimary, marginLeft: 10, paddingVertical: 10 }}
                     placeholder="Repeat new password"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={theme.textMuted}
                     secureTextEntry={!showPassword}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
@@ -218,24 +337,31 @@ export default function ForgotPasswordModal({ visible, onClose, onSuccess }) {
 
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={styles.actionBtn}
+                  style={{
+                    height: 52,
+                    backgroundColor: colors.primary,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 12,
+                  }}
                   onPress={handleResetPassword}
                   disabled={loading}
                 >
                   {loading ? (
                     <ActivityIndicator color="#FFF" size="small" />
                   ) : (
-                    <Text style={styles.actionBtnText}>Update Password & Log In</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>Update Password & Log In</Text>
                   )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  style={styles.resendBtn}
+                  style={{ paddingVertical: 10, alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => setStep(1)}
                   disabled={loading}
                 >
-                  <Text style={styles.resendBtnText}>Back to Email</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted }}>Back to Email</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -245,138 +371,3 @@ export default function ForgotPasswordModal({ visible, onClose, onSuccess }) {
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFEBEE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  modalSubTitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 12,
-  },
-  errorText: {
-    color: '#D32F2F',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
-  },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 12,
-  },
-  successText: {
-    color: '#2E7D32',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
-  },
-  formGroup: {
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 14,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  textInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  actionBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 25,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  actionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  resendBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 6,
-  },
-  resendBtnText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});

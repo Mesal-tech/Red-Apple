@@ -1,144 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import {
-  StyleSheet,
+  Alert,
+  Linking,
   Text,
   View,
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  Dimensions,
   Modal,
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { getPostmenopauseDataSafe, savePostmenopauseDataSafe } from '../utils/storage';
-import ArticleCarousel from '../components/ArticleCarousel';
+import { useTheme } from '../context/ThemeContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const NIA_MENOPAUSE_URL = 'https://www.nia.nih.gov/health/menopause/what-menopause';
+const ACOG_HORMONE_THERAPY_URL = 'https://www.acog.org/womens-health/faqs/hormone-therapy-for-menopause';
+const NHS_POSTMENOPAUSAL_BLEEDING_URL = 'https://www.nhs.uk/symptoms/post-menopausal-bleeding/';
 
-// Functional Circular Ring for 12-Month Postmenopause Milestone
-function PostmenopauseMilestoneRing() {
-  const totalDegrees = 360;
-  const rightDeg = 180;
-  const leftDeg = 180;
-
-  return (
-    <View style={ringStyles.ringContainer}>
-      <View style={ringStyles.trackCircle} />
-
-      <View style={ringStyles.halfCircleContainerRight}>
-        <View
-          style={[
-            ringStyles.halfCircleRight,
-            { transform: [{ rotate: `${rightDeg}deg` }] },
-          ]}
-        />
-      </View>
-
-      <View style={ringStyles.halfCircleContainerLeft}>
-        <View
-          style={[
-            ringStyles.halfCircleLeft,
-            { transform: [{ rotate: `${leftDeg}deg` }] },
-          ]}
-        />
-      </View>
-
-      <View style={ringStyles.innerMaskCircle}>
-        <Text style={ringStyles.ringMonthNumber}>12+</Text>
-        <Text style={ringStyles.ringMonthTotal}>Months</Text>
-      </View>
-    </View>
-  );
-}
-
-const ringStyles = StyleSheet.create({
-  ringContainer: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  trackCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 7,
-    borderColor: '#FFEBEE',
-    position: 'absolute',
-  },
-  halfCircleContainerRight: {
-    width: 52,
-    height: 104,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    overflow: 'hidden',
-  },
-  halfCircleRight: {
-    width: 52,
-    height: 104,
-    borderTopRightRadius: 52,
-    borderBottomRightRadius: 52,
-    borderWidth: 7,
-    borderColor: '#DC2626',
-    borderLeftWidth: 0,
-    transformOrigin: 'left center',
-  },
-  halfCircleContainerLeft: {
-    width: 52,
-    height: 104,
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    overflow: 'hidden',
-  },
-  halfCircleLeft: {
-    width: 52,
-    height: 104,
-    borderTopLeftRadius: 52,
-    borderBottomLeftRadius: 52,
-    borderWidth: 7,
-    borderColor: '#DC2626',
-    borderRightWidth: 0,
-    transformOrigin: 'right center',
-  },
-  innerMaskCircle: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  ringMonthNumber: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#DC2626',
-  },
-  ringMonthTotal: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-});
-
-const RED_FLAGS = [
-  { id: 'bleeding', title: 'Vaginal bleeding after menopause', subtitle: 'Any postmenopausal bleeding requires prompt clinical evaluation' },
-  { id: 'breast_lump', title: 'A new breast lump', subtitle: 'New thickening or lumps should be examined by a doctor' },
-  { id: 'pelvic_pain', title: 'Severe pelvic pain', subtitle: 'Unusual or persistent severe lower abdominal/pelvic pain' },
-  { id: 'weight_loss', title: 'Unexplained weight loss', subtitle: 'Noticeable weight loss without diet or exercise changes' },
-  { id: 'bloating', title: 'Persistent bloating', subtitle: 'Bloating lasting more than a few weeks or increasing in size' },
-  { id: 'blood_urine', title: 'Blood in urine', subtitle: 'Pink, red, or dark urinary discoloration' },
-  { id: 'chest_pain', title: 'Chest pain or shortness of breath', subtitle: 'Immediate emergency medical care required' },
+const TRACKABLE_SYMPTOMS = [
+  { id: 'hot_flushes', label: 'Hot flushes', icon: 'sunny-outline' },
+  { id: 'night_sweats', label: 'Night sweats', icon: 'moon-outline' },
+  { id: 'sleep', label: 'Sleep difficulty', icon: 'bed-outline' },
+  { id: 'mood', label: 'Mood or anxiety changes', icon: 'heart-outline' },
+  { id: 'vaginal_discomfort', label: 'Vaginal discomfort or dryness', icon: 'water-outline' },
+  { id: 'urinary', label: 'Urinary changes', icon: 'medical-outline' },
+  { id: 'sexual_wellbeing', label: 'Sexual wellbeing', icon: 'people-outline' },
+  { id: 'joint_muscle', label: 'Joint or muscle aches', icon: 'body-outline' },
 ];
 
 const EDU_ARTICLES = [
@@ -147,129 +36,128 @@ const EDU_ARTICLES = [
     title: 'What happens after menopause?',
     category: 'General Health',
     readTime: '4 min read',
-    content: `Menopause is reached once you have gone 12 full months without a period. In this postmenopausal chapter, your estrogen and progesterone levels settle into a new, lower baseline. While hot flushes often ease over time, lower estrogen continues to affect your bones, heart, skin, and intimate comfort. Simple daily nutrition, gentle movement, and routine checkups help you protect your vitality and feel your best.`,
+    summary: 'A simple overview of menopause and common changes people may notice afterward.',
+    icon: 'leaf-outline',
+    iconBg: '#FCE7E7',
+    iconColor: '#DC2626',
+    sourceLabel: 'National Institute on Aging',
+    sourceUrl: NIA_MENOPAUSE_URL,
+    content: `Menopause is generally identified after 12 months without a menstrual period when there is no other cause. Experiences after menopause vary: some symptoms ease, while others can continue or begin later. Keeping a symptom log can help you describe changes and their effect on daily life. Bring new, persistent, or worrying symptoms to a clinician rather than assuming they are caused by menopause.`,
   },
   {
     id: '2',
     title: 'Hormone therapy (HRT): What to know',
     category: 'Therapy & Care',
     readTime: '6 min read',
-    content: `Hormone Replacement Therapy (HRT) gently supplements the hormones your body produces in lower amounts after menopause. Key benefits include strong relief from hot flushes, night sweats, mood dips, and sleep troubles, as well as protecting your bones from thinning. Because HRT comes in different forms (pills, patches, or creams), talking with your doctor helps you choose what fits your body best.`,
+    summary: 'Questions to discuss with a clinician when considering hormone therapy.',
+    icon: 'chatbubble-ellipses-outline',
+    iconBg: '#E0F2FE',
+    iconColor: '#0284C7',
+    sourceLabel: 'American College of Obstetricians and Gynecologists',
+    sourceUrl: ACOG_HORMONE_THERAPY_URL,
+    content: `Menopausal hormone therapy can help some symptoms, but its benefits and risks depend on the person, the type of treatment, medical history, and timing. Options differ, and treatment is not right for everyone. If you are considering hormone therapy or already use it, discuss your symptoms, health history, alternatives, and follow-up plan with a qualified clinician. Do not start, stop, or change a prescribed treatment based on this overview.`,
   },
   {
     id: '3',
     title: 'Protecting your bone strength',
     category: 'Bone Health',
     readTime: '5 min read',
-    content: `Estrogen helps keep your bones dense and strong. After your periods stop, your bones can lose calcium faster, which can make them more fragile over time (osteoporosis). You can protect your bones by getting enough calcium in your diet, taking vitamin D, doing weight-bearing exercises like brisk walking, and doing occasional bone density checkups (DEXA scans).`,
+    summary: 'Learn about bone health and the role of clinician-guided screening.',
+    icon: 'fitness-outline',
+    iconBg: '#DCFCE7',
+    iconColor: '#15803D',
+    sourceLabel: 'National Institute on Aging',
+    sourceUrl: NIA_MENOPAUSE_URL,
+    content: `Bone health is one part of long-term health after menopause. Your personal risk depends on factors such as age, health history, medicines, and previous fractures. A clinician can advise whether bone-density screening is appropriate and discuss nutrition, activity, or treatment options for you. Avoid starting supplements or treatment solely on the basis of a general article.`,
   },
   {
     id: '4',
     title: 'Heart health after menopause',
     category: 'Cardiovascular',
     readTime: '5 min read',
-    content: `Estrogen naturally helps protect your blood vessels and cholesterol balance. After menopause, keeping your heart strong becomes a top priority. Simple, effective ways to care for your heart include checking your blood pressure regularly, eating heart-healthy foods like vegetables, fish, and nuts, taking daily 30-minute walks, and taking time to relax.`,
+    summary: 'Everyday topics and routine checks to discuss for cardiovascular health.',
+    icon: 'heart-outline',
+    iconBg: '#FEE2E2',
+    iconColor: '#DC2626',
+    sourceLabel: 'National Institute on Aging',
+    sourceUrl: NIA_MENOPAUSE_URL,
+    content: `Heart health is influenced by many factors, including age, family history, blood pressure, cholesterol, smoking, activity, and other health conditions. Menopause alone cannot explain an individual person's heart risk. Keep routine appointments and ask a clinician which checks or changes are relevant to you. Seek urgent help for possible emergency symptoms such as chest pain or severe difficulty breathing.`,
   },
   {
     id: '5',
     title: 'Nutrition for everyday energy',
     category: 'Nutrition',
     readTime: '4 min read',
-    content: `Your nutritional needs shift gracefully after menopause. To protect muscle tone and energy, make sure you enjoy adequate protein (fish, beans, eggs, lean meats). Add calcium-rich foods (greens, dairy, fortified milks) for bone health, fiber for digestion, and colorful fruit for natural antioxidants. Drinking plenty of water also keeps your skin and joints comfortable.`,
+    summary: 'General nutrition topics to explore with your care team.',
+    icon: 'nutrition-outline',
+    iconBg: '#FEF3C7',
+    iconColor: '#D97706',
+    sourceLabel: 'National Institute on Aging',
+    sourceUrl: NIA_MENOPAUSE_URL,
+    content: `There is no single menopause diet that fits everyone. A varied eating pattern can support general health, but specific nutrition needs depend on your health, preferences, access to food, and any medicines or conditions. If you have a restrictive diet, persistent appetite or weight changes, or questions about supplements, ask a qualified clinician or dietitian for individualized advice.`,
   },
   {
     id: '6',
     title: 'Gentle exercise for vitality',
     category: 'Fitness',
     readTime: '4 min read',
-    content: `A simple, enjoyable movement routine gives you energy and protects your body: 1) Light strength training 2–3 times a week keeps your bones and muscles firm; 2) Daily walking for 30 minutes supports your heart and elevates your mood; 3) Gentle stretching or yoga keeps your joints flexible and helps balance.`,
+    summary: 'Movement ideas and questions to tailor to your health and abilities.',
+    icon: 'walk-outline',
+    iconBg: '#DCFCE7',
+    iconColor: '#15803D',
+    sourceLabel: 'National Institute on Aging',
+    sourceUrl: NIA_MENOPAUSE_URL,
+    content: `Movement can support general health, but the right type and amount depend on your current health, ability, and preferences. Start from a level that feels manageable and ask a clinician before changing activity if you have a health condition, pain, recent injury, or concerns about safety. A physiotherapist can help adapt movement to your needs.`,
   },
   {
     id: '7',
     title: 'Comfort, intimacy, and sexual wellness',
     category: 'Sexual Wellness',
     readTime: '5 min read',
-    content: `Lower estrogen levels commonly lead to intimate dryness and sensitivity during sex. This is completely natural and very treatable. Gentle, hydrating moisturizers, water-based lubricants, or low-dose localized creams from your doctor can quickly restore comfort and confidence in your intimate life.`,
+    summary: 'Common intimate and urinary changes, and options to discuss with a clinician.',
+    icon: 'heart-circle-outline',
+    iconBg: '#FCE7F3',
+    iconColor: '#DB2777',
+    sourceLabel: 'American College of Obstetricians and Gynecologists',
+    sourceUrl: ACOG_HORMONE_THERAPY_URL,
+    content: `Vaginal or urinary discomfort and changes in sexual wellbeing can happen after menopause, but they can also have other causes. You do not need to ignore symptoms that affect comfort or daily life. A clinician can discuss possible causes and suitable options; what is safe or appropriate depends on your health history.`,
   },
   {
     id: '8',
     title: 'Pelvic floor exercises (Kegels)',
     category: 'Pelvic Health',
     readTime: '3 min read',
-    content: `Strengthening your pelvic floor muscles gives your bladder firm support, helping prevent accidental leaks when you cough, laugh, or sneeze. Practice gently squeezing your pelvic muscles (as if holding back urine) for 3–5 seconds, relaxing for 3–5 seconds, and repeating 10 times daily.`,
+    summary: 'An introduction to pelvic floor health and when to ask for professional guidance.',
+    icon: 'body-outline',
+    iconBg: '#EDE9FE',
+    iconColor: '#7C3AED',
+    content: `Pelvic floor concerns can include leakage, pressure, or discomfort. Pelvic floor exercises help some people, but the right approach depends on the symptoms and how the muscles are working. If exercises cause pain or do not help, stop and ask a clinician or pelvic health physiotherapist for guidance.`,
   },
   {
     id: '9',
     title: 'Healthy sleep habits and restful nights',
     category: 'Sleep & Mood',
     readTime: '4 min read',
-    content: `Sleep disturbances postmenopause may stem from night sweats, anxiety, or altered circadian rhythms. Maintain a cool bedroom environment (65-68°F / 18-20°C), wear breathable cotton sleepwear, adhere to consistent bedtime schedules, limit caffeine after noon, and practice wind-down routines like light reading or meditation.`,
+    summary: 'Sleep changes can have many causes; learn what may help and when to seek care.',
+    icon: 'moon-outline',
+    iconBg: '#E0E7FF',
+    iconColor: '#4F46E5',
+    sourceLabel: 'National Institute on Aging',
+    sourceUrl: NIA_MENOPAUSE_URL,
+    content: `Sleep can be affected by symptoms, stress, medicines, health conditions, and other factors. A short log of sleep and related symptoms may help you spot patterns to discuss with a clinician. If sleep problems persist or affect daily functioning, seek advice rather than relying on sleep tips alone.`,
   },
 ];
-
-const PRESET_AI_QUESTIONS = [
-  'Why am I still having hot flushes?',
-  'Is this vaginal bleeding normal?',
-  'Can I still become pregnant?',
-  'Should I consider hormone replacement therapy?',
-  'What foods are good for my bones?',
-  'How can I improve my sex drive after menopause?',
-];
-
-const AI_KNOWLEDGE_BASE = {
-  'Why am I still having hot flushes?':
-    'Hot flushes occur due to thermoregulatory adjustments in the brain (hypothalamus) caused by lower estrogen levels. While they peak during perimenopause, up to 40% of postmenopausal women continue to experience hot flushes for years. Triggers include caffeine, spicy foods, alcohol, stress, and warm environments. Dress in layers, practice deep slow breathing during an onset, and consult your doctor about HRT or non-hormonal prescription options if symptoms disrupt daily life.',
-
-  'Is this vaginal bleeding normal?':
-    'No. Any vaginal bleeding occurring after 12 consecutive months of no periods (postmenopausal bleeding) is considered unexpected and requires medical evaluation by a doctor or gynaecologist. While causes are often benign (such as vaginal thinning/atrophy or polyps), it must be evaluated promptly to rule out endometrial hyperplasia or uterine conditions.',
-
-  'Can I still become pregnant?':
-    'Once you have reached clinical menopause (12 full consecutive months without a menstrual period), spontaneous ovulation has permanently ceased, and natural pregnancy is no longer possible. However, if you are unsure whether you have completed 12 consecutive months, barrier contraception should be maintained until confirmed by a physician.',
-
-  'Should I consider hormone replacement therapy?':
-    'Hormone Replacement Therapy (HRT) is highly effective for relieving vasomotor symptoms (hot flushes, night sweats), vaginal dryness, and preventing bone density loss. HRT choice depends on your age, time since menopause onset, health history, and personal preferences. Women under 60 or within 10 years of menopause generally have a favorable benefit-risk profile. Schedule a consultation with your doctor to evaluate your individual candidacy.',
-
-  'What foods are good for my bones?':
-    'For robust bone density postmenopause, focus on:\n- Calcium-rich foods: Greek yogurt, aged cheese, leafy green vegetables (kale, broccoli), canned salmon/sardines with bones, and fortified plant milks.\n- Vitamin D sources: Wild fatty fish (salmon, mackerel), egg yolks, and fortified foods (essential for calcium absorption).\n- Magnesium & Potassium: Nuts, seeds, legumes, and whole grains.\n- Adequate protein: Essential for preserving muscle mass and structural bone matrix.',
-
-  'How can I improve my sex drive after menopause?':
-    'Low libido postmenopause is common and multi-factorial, stemming from reduced estrogen/androgens, vaginal dryness, fatigue, or stress. Key steps include:\n1. Using non-hormonal vaginal moisturizers regularly and lubricants during intimacy.\n2. Discussing localized low-dose vaginal estrogen with your doctor to relieve pain during sex.\n3. Prioritizing open communication with your partner and stress reduction.\n4. Exercising regularly to enhance circulation and energy.\n5. Discussing medical options with your gynaecologist if low libido causes distress.',
-};
 
 export default function PostmenopauseScreen({
   onSwitchToCycleMode,
   onBookDoctor,
   onOpenDoctorPage,
-  greetingDisplayName = 'Amara',
-  weekDays = [],
+  greetingDisplayName = '',
+  healthProfile = {},
   onOpenSetupWizard,
 }) {
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'assessments' | 'lifestyle' | 'meds' | 'screenings' | 'learn' | 'ai'
-  const [selectedDateKey, setSelectedDateKey] = useState(() => new Date().toISOString().split('T')[0]);
-
-  const calendarWeekDays = React.useMemo(() => {
-    if (weekDays && weekDays.length > 0) return weekDays;
-    const today = new Date();
-    const currentDayOfWeek = today.getDay(); // 0 = Sun, 1 = Mon ...
-    const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + mondayOffset);
-
-    const singleLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const isToday = d.toDateString() === today.toDateString();
-      days.push({
-        singleLetter: singleLetters[i],
-        dayNum: d.getDate(),
-        dateKey: d.toISOString().split('T')[0],
-        isToday,
-      });
-    }
-    return days;
-  }, [weekDays]);
+  const { isDarkMode, theme } = useTheme();
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'symptoms' | 'assessments' | 'lifestyle' | 'meds' | 'screenings' | 'learn'
 
   // Postmenopause Onboarding State
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
@@ -277,74 +165,80 @@ export default function PostmenopauseScreen({
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
 
   // Profile State
-  const [profile, setProfile] = useState({
-    currentAge: 54,
-    menopauseAge: 51,
-    twelveMonthsPeriodFree: true,
-    menopauseType: 'Natural',
-    onHRT: 'No',
-  });
+  const [profile, setProfile] = useState({});
 
   // Health Assessments State
   const [boneHealth, setBoneHealth] = useState({
-    fracturePost50: false,
-    familyOsteoporosis: true,
-    smoker: false,
-    alcoholRegular: false,
-    exerciseFreq: '3-5 times/week',
-    supplements: 'Yes, both',
+    fracturePost50: null,
+    familyOsteoporosis: null,
+    smoker: null,
+    alcoholRegular: null,
+    exerciseFreq: null,
+    supplements: null,
   });
 
   const [heartHealth, setHeartHealth] = useState({
-    bloodPressure: 'Normal (<120/80)',
-    diabetes: 'No',
-    cholesterol: 'Normal',
-    smokingStatus: 'Non-smoker',
-    physicalActivity: 'Moderate 150+ mins/week',
-    familyHeartDisease: false,
+    bloodPressure: null,
+    diabetes: null,
+    cholesterol: null,
+    smokingStatus: null,
+    physicalActivity: null,
+    familyHeartDisease: null,
   });
 
   // Lifestyle Tracker State
   const [lifestyle, setLifestyle] = useState({
-    waterGlasses: 7,
-    exerciseMins: 30,
-    sleepHours: 7.5,
-    weightKg: 64.5,
-    dietQuality: 'Healthy & balanced',
-    stressLevel: 'Moderate',
+    waterGlasses: null,
+    exerciseMins: null,
+    sleepHours: null,
+    weightKg: null,
+    dietQuality: null,
+    stressLevel: null,
   });
 
   // Medication & Supplement State
-  const [medications, setMedications] = useState([
-    { id: '1', name: 'Calcium + Vitamin D3', dose: '1200mg / 1000 IU', time: '8:00 AM', takenToday: true, isHRT: false },
-    { id: '2', name: 'Estradiol Transdermal Patch', dose: '0.05 mg/day', time: 'Weekly', takenToday: true, isHRT: true },
-  ]);
+  const [medications, setMedications] = useState([]);
   const [newMedName, setNewMedName] = useState('');
   const [newMedDose, setNewMedDose] = useState('');
   const [showAddMedModal, setShowAddMedModal] = useState(false);
+  const [newScreeningTitle, setNewScreeningTitle] = useState('');
+  const [newScreeningDate, setNewScreeningDate] = useState('');
+  const [newScreeningLastDate, setNewScreeningLastDate] = useState('');
+  const [showAddScreeningModal, setShowAddScreeningModal] = useState(false);
 
   // Screening Reminders State
-  const [screenings, setScreenings] = useState([
-    { id: '1', title: 'Breast Cancer Screening (Mammogram)', lastDate: '2025-09-15', nextDue: '2026-09-15', status: 'Up to date' },
-    { id: '2', title: 'Bone Density (DEXA) Scan', lastDate: '2024-11-10', nextDue: '2026-11-10', status: 'Up to date' },
-    { id: '3', title: 'Blood Pressure Check', lastDate: '2026-06-01', nextDue: '2026-12-01', status: 'Up to date' },
-    { id: '4', title: 'Lipid Panel (Cholesterol)', lastDate: '2025-05-20', nextDue: '2026-05-20', status: 'Due soon' },
-    { id: '5', title: 'Diabetes Screening (HbA1c)', lastDate: '2025-07-10', nextDue: '2026-07-10', status: 'Due soon' },
-    { id: '6', title: 'Cervical Screening', lastDate: '2023-04-12', nextDue: '2028-04-12', status: 'Up to date' },
-    { id: '7', title: 'Colorectal Cancer Screening', lastDate: '2025-01-18', nextDue: '2027-01-18', status: 'Up to date' },
-  ]);
+  const [screenings, setScreenings] = useState([]);
+  const [symptomLogs, setSymptomLogs] = useState([]);
+  const [symptomDraft, setSymptomDraft] = useState({});
+  const [symptomNote, setSymptomNote] = useState('');
 
   // Educational Reader State
   const [selectedArticle, setSelectedArticle] = useState(null);
 
-  // Red Flag State
-  const [activeRedFlags, setActiveRedFlags] = useState([]);
-
-  // AI Chat State
-  const [aiChatMessages, setAiChatMessages] = useState([
-    { id: '1', sender: 'ai', text: 'Hello Amara! I am RedApple AI, your specialized postmenopausal health assistant. Ask me anything about symptoms, HRT, bone health, or lifestyle support.' },
-  ]);
-  const [aiInputText, setAiInputText] = useState('');
+  const postmenopauseDetails = healthProfile?.postmenopauseDetails || {};
+  const yearsSinceLastPeriod = profile.yearsSinceLastPeriod || postmenopauseDetails.yearsSinceLastPeriod;
+  const hrtStatus = profile.onHRT || ({
+    taking_hrt: 'Taking HRT',
+    considering: 'Considering HRT',
+    not_taking: 'Not taking HRT',
+  }[postmenopauseDetails.hrtStatus] || '');
+  const yearsSinceLastPeriodLabel = ({
+    '1_2_years': '1–2 years since last period',
+    '2_5_years': '2–5 years since last period',
+    '5_plus_years': '5+ years since last period',
+    surgical: 'Surgical menopause',
+  }[yearsSinceLastPeriod] || '');
+  const priorityLabels = (postmenopauseDetails.priorities || []).map((priority) => ({
+    bone_density: 'Bone health',
+    cardio: 'Heart health',
+    pelvic: 'Pelvic health',
+    metabolism: 'Metabolism',
+    energy: 'Energy',
+    mental_health: 'Mood and wellbeing',
+  }[priority] || priority));
+  const hasPersonalDetails = Boolean(
+    yearsSinceLastPeriodLabel || hrtStatus || profile.currentAge || profile.menopauseType || priorityLabels.length
+  );
 
   // Initial Load from Storage
   useEffect(() => {
@@ -360,7 +254,7 @@ export default function PostmenopauseScreen({
       if (data.lifestyle) setLifestyle(data.lifestyle);
       if (data.medications) setMedications(data.medications);
       if (data.screenings) setScreenings(data.screenings);
-      if (data.activeRedFlags) setActiveRedFlags(data.activeRedFlags);
+      if (data.symptomLogs) setSymptomLogs(data.symptomLogs);
       if (data.hasCompletedOnboarding !== undefined) {
         setHasCompletedOnboarding(data.hasCompletedOnboarding);
       }
@@ -384,39 +278,29 @@ export default function PostmenopauseScreen({
       lifestyle,
       medications,
       screenings,
-      activeRedFlags,
+      symptomLogs,
       hasCompletedOnboarding,
       ...updatedFields,
     };
     await savePostmenopauseDataSafe(payload);
   };
 
-  // Red Flag Toggle
-  const handleToggleRedFlag = (flagId) => {
-    let updated;
-    if (activeRedFlags.includes(flagId)) {
-      updated = activeRedFlags.filter((id) => id !== flagId);
-    } else {
-      updated = [...activeRedFlags, flagId];
+  const handleSaveSymptomCheckIn = () => {
+    const symptoms = Object.entries(symptomDraft)
+      .filter(([, severity]) => severity)
+      .map(([id, severity]) => ({ id, severity }));
+    if (!symptoms.length && !symptomNote.trim()) {
+      Alert.alert('Add something to your check-in', 'Choose a symptom or add a note before saving.');
+      return;
     }
-    setActiveRedFlags(updated);
-    persistData({ activeRedFlags: updated });
-  };
-
-  // AI Ask Handler
-  const handleAskAI = (questionText) => {
-    const query = questionText || aiInputText;
-    if (!query.trim()) return;
-
-    const userMsg = { id: Date.now().toString(), sender: 'user', text: query };
-    const answer =
-      AI_KNOWLEDGE_BASE[query] ||
-      `Regarding "${query}": In postmenopause, hormone shifts can influence your general wellbeing. Maintaining regular exercise, balanced nutrition rich in calcium and vitamin D, adequate hydration, and consulting your physician for persistent symptoms is recommended. Please seek direct medical advice for specific diagnoses.`;
-
-    const aiMsg = { id: (Date.now() + 1).toString(), sender: 'ai', text: answer };
-
-    setAiChatMessages((prev) => [...prev, userMsg, aiMsg]);
-    setAiInputText('');
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const entry = { id: Date.now().toString(), date, symptoms, ...(symptomNote.trim() ? { note: symptomNote.trim() } : {}) };
+    const updated = [entry, ...symptomLogs];
+    setSymptomLogs(updated);
+    setSymptomDraft({});
+    setSymptomNote('');
+    persistData({ symptomLogs: updated });
   };
 
   // Add Medication Handler
@@ -425,8 +309,7 @@ export default function PostmenopauseScreen({
     const newMed = {
       id: Date.now().toString(),
       name: newMedName,
-      dose: newMedDose || 'Standard Dose',
-      time: '9:00 AM',
+      dose: newMedDose.trim(),
       takenToday: false,
       isHRT: newMedName.toLowerCase().includes('hrt') || newMedName.toLowerCase().includes('estrogen'),
     };
@@ -436,6 +319,35 @@ export default function PostmenopauseScreen({
     setNewMedDose('');
     setShowAddMedModal(false);
     persistData({ medications: updated });
+  };
+
+  const handleAddScreening = () => {
+    const title = newScreeningTitle.trim();
+    const nextDue = newScreeningDate.trim();
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (!title || !datePattern.test(nextDue) || Number.isNaN(Date.parse(nextDue))) {
+      Alert.alert('Add screening details', 'Enter a screening name and next due date in YYYY-MM-DD format.');
+      return;
+    }
+    const lastDate = newScreeningLastDate.trim();
+    if (lastDate && (!datePattern.test(lastDate) || Number.isNaN(Date.parse(lastDate)))) {
+      Alert.alert('Check the last date', 'Use YYYY-MM-DD format, or leave the last date blank.');
+      return;
+    }
+    const screening = {
+      id: Date.now().toString(),
+      title,
+      nextDue,
+      ...(lastDate ? { lastDate } : {}),
+      status: new Date(`${nextDue}T23:59:59`) < new Date() ? 'Due' : 'Upcoming',
+    };
+    const updated = [...screenings, screening];
+    setScreenings(updated);
+    setNewScreeningTitle('');
+    setNewScreeningDate('');
+    setNewScreeningLastDate('');
+    setShowAddScreeningModal(false);
+    persistData({ screenings: updated });
   };
 
   // Toggle Medication Taken
@@ -450,9 +362,18 @@ export default function PostmenopauseScreen({
     if (onboardingStep < 5) {
       setOnboardingStep(onboardingStep + 1);
     } else {
+      const currentAge = Number(profile.currentAge);
+      const menopauseAge = Number(profile.menopauseAge);
+      if (!Number.isInteger(currentAge) || currentAge < 18 || currentAge > 100
+        || !Number.isInteger(menopauseAge) || menopauseAge < 18 || menopauseAge > currentAge) {
+        Alert.alert('Check your ages', 'Enter a valid current age and the age your periods stopped.');
+        return;
+      }
+      const savedProfile = { ...profile, currentAge, menopauseAge };
+      setProfile(savedProfile);
       setHasCompletedOnboarding(true);
       setShowOnboardingWizard(false);
-      persistData({ hasCompletedOnboarding: true, profile });
+      persistData({ hasCompletedOnboarding: true, profile: savedProfile });
     }
   };
 
@@ -468,12 +389,12 @@ export default function PostmenopauseScreen({
   // PRIMARY VIEW: POSTMENOPAUSE ONBOARDING SETUP WIZARD (Legacy fallback only if no onOpenSetupWizard)
   if (!onOpenSetupWizard && (!hasCompletedOnboarding || showOnboardingWizard)) {
     return (
-      <ScrollView contentContainerStyle={styles.wizardMainScrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 48, paddingTop: 24, paddingHorizontal: 16, backgroundColor: '#FFFFFF', flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         {/* Top Header */}
-        <View style={styles.wizardMainHeader}>
+        <View className="flex-row items-center justify-between mb-6">
           <TouchableOpacity
             activeOpacity={0.7}
-            style={styles.wizardCloseBtn}
+            className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
             onPress={() => {
               if (hasCompletedOnboarding) {
                 setShowOnboardingWizard(false);
@@ -486,113 +407,79 @@ export default function PostmenopauseScreen({
           </TouchableOpacity>
 
           {/* 5-Segment Progress Bar */}
-          <View style={styles.wizardProgressContainer}>
+          <View className="flex-1 flex-row items-center gap-1.5 mx-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <View
                 key={i}
-                style={[
-                  styles.wizardProgressSegment,
-                  i <= onboardingStep ? styles.wizardProgressSegmentActive : styles.wizardProgressSegmentInactive,
-                ]}
+                className={`flex-1 h-1.5 rounded-full ${i <= onboardingStep ? 'bg-red-600' : 'bg-gray-200'
+                  }`}
               />
             ))}
           </View>
 
-          <Text style={styles.wizardStepBadge}>Step {onboardingStep} of 5</Text>
+          <Text className="text-xs font-bold text-gray-500">Step {onboardingStep} of 5</Text>
         </View>
 
-        <View style={styles.wizardMainBody}>
+        <View className="flex-1">
           {onboardingStep === 1 && (
-            <View style={styles.wizardStepContent}>
-              <View style={styles.wizardIconCircle}>
+            <View className="items-center py-4">
+              <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4">
                 <Ionicons name="person-outline" size={32} color="#DC2626" />
               </View>
-              <Text style={styles.wizardQuestionTitle}>How old are you?</Text>
-              <Text style={styles.wizardQuestionSub}>
+              <Text className="text-xl font-extrabold text-gray-900 text-center mb-2 px-2">How old are you?</Text>
+              <Text className="text-sm font-medium text-gray-500 text-center mb-6 px-4 leading-5">
                 Knowing your current age helps calibrate bone density, cardiovascular risk factors, and health recommendations.
               </Text>
 
-              <View style={styles.wizardStepperCard}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.wizardStepperBtn}
-                  onPress={() => {
-                    const val = Math.max(30, profile.currentAge - 1);
-                    setProfile({ ...profile, currentAge: val });
-                  }}
-                >
-                  <Ionicons name="remove" size={24} color={colors.textPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.wizardStepperText}>{profile.currentAge} years</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.wizardStepperBtn}
-                  onPress={() => {
-                    const val = Math.min(100, profile.currentAge + 1);
-                    setProfile({ ...profile, currentAge: val });
-                  }}
-                >
-                  <Ionicons name="add" size={24} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
+              <TextInput
+                value={profile.currentAge == null ? '' : String(profile.currentAge)}
+                onChangeText={(value) => setProfile({ ...profile, currentAge: value.replace(/\D/g, '') })}
+                keyboardType="number-pad"
+                placeholder="Age in years"
+                placeholderTextColor={theme.textMuted}
+                style={{ width: '100%', maxWidth: 280, color: theme.textPrimary, backgroundColor: theme.card, borderColor: theme.cardBorder, borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, textAlign: 'center', fontSize: 17, fontWeight: '700' }}
+              />
             </View>
           )}
 
           {onboardingStep === 2 && (
-            <View style={styles.wizardStepContent}>
-              <View style={styles.wizardIconCircle}>
+            <View className="items-center py-4">
+              <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4">
                 <Ionicons name="calendar-outline" size={32} color="#DC2626" />
               </View>
-              <Text style={styles.wizardQuestionTitle}>At what age did your periods stop completely?</Text>
-              <Text style={styles.wizardQuestionSub}>
+              <Text className="text-xl font-extrabold text-gray-900 text-center mb-2 px-2">At what age did your periods stop completely?</Text>
+              <Text className="text-sm font-medium text-gray-500 text-center mb-6 px-4 leading-5">
                 The age when periods stop marks the clinical start of your postmenopausal transition.
               </Text>
 
-              <View style={styles.wizardStepperCard}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.wizardStepperBtn}
-                  onPress={() => {
-                    const val = Math.max(25, profile.menopauseAge - 1);
-                    setProfile({ ...profile, menopauseAge: val });
-                  }}
-                >
-                  <Ionicons name="remove" size={24} color={colors.textPrimary} />
-                </TouchableOpacity>
-                <Text style={styles.wizardStepperText}>{profile.menopauseAge} years</Text>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.wizardStepperBtn}
-                  onPress={() => {
-                    const val = Math.min(profile.currentAge, profile.menopauseAge + 1);
-                    setProfile({ ...profile, menopauseAge: val });
-                  }}
-                >
-                  <Ionicons name="add" size={24} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
+              <TextInput
+                value={profile.menopauseAge == null ? '' : String(profile.menopauseAge)}
+                onChangeText={(value) => setProfile({ ...profile, menopauseAge: value.replace(/\D/g, '') })}
+                keyboardType="number-pad"
+                placeholder="Age in years"
+                placeholderTextColor={theme.textMuted}
+                style={{ width: '100%', maxWidth: 280, color: theme.textPrimary, backgroundColor: theme.card, borderColor: theme.cardBorder, borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, textAlign: 'center', fontSize: 17, fontWeight: '700' }}
+              />
             </View>
           )}
 
           {onboardingStep === 3 && (
-            <View style={styles.wizardStepContent}>
-              <View style={styles.wizardIconCircle}>
+            <View className="items-center py-4">
+              <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4">
                 <Ionicons name="checkmark-circle-outline" size={32} color="#DC2626" />
               </View>
-              <Text style={styles.wizardQuestionTitle}>Gone 12 consecutive months without a period?</Text>
-              <Text style={styles.wizardQuestionSub}>
+              <Text className="text-xl font-extrabold text-gray-900 text-center mb-2 px-2">Gone 12 consecutive months without a period?</Text>
+              <Text className="text-sm font-medium text-gray-500 text-center mb-6 px-4 leading-5">
                 Clinical menopause is officially confirmed after 12 full consecutive months without bleeding.
               </Text>
 
-              <View style={styles.wizardOptionsCol}>
+              <View className="w-full gap-3 px-2">
                 {[true, false].map((val) => (
                   <TouchableOpacity
                     key={String(val)}
                     activeOpacity={0.8}
-                    style={[
-                      styles.wizardOptionCard,
-                      profile.twelveMonthsPeriodFree === val && styles.wizardOptionCardActive,
-                    ]}
+                    className={`flex-row items-center p-4 rounded-2xl border ${profile.twelveMonthsPeriodFree === val ? 'border-red-600 bg-red-50/40' : 'border-gray-200 bg-white'
+                      } gap-3.5`}
                     onPress={() => setProfile({ ...profile, twelveMonthsPeriodFree: val })}
                   >
                     <Ionicons
@@ -601,10 +488,8 @@ export default function PostmenopauseScreen({
                       color={profile.twelveMonthsPeriodFree === val ? '#DC2626' : colors.textMuted}
                     />
                     <Text
-                      style={[
-                        styles.wizardOptionText,
-                        profile.twelveMonthsPeriodFree === val && styles.wizardOptionTextActive,
-                      ]}
+                      className={`text-base flex-1 ${profile.twelveMonthsPeriodFree === val ? 'text-red-600 font-bold' : 'font-semibold text-gray-700'
+                        }`}
                     >
                       {val ? 'Yes (12+ Months Confirmed)' : 'No (Currently Transitioning)'}
                     </Text>
@@ -615,24 +500,22 @@ export default function PostmenopauseScreen({
           )}
 
           {onboardingStep === 4 && (
-            <View style={styles.wizardStepContent}>
-              <View style={styles.wizardIconCircle}>
+            <View className="items-center py-4">
+              <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4">
                 <Ionicons name="medical-outline" size={32} color="#DC2626" />
               </View>
-              <Text style={styles.wizardQuestionTitle}>Did menopause occur naturally or after surgery?</Text>
-              <Text style={styles.wizardQuestionSub}>
+              <Text className="text-xl font-extrabold text-gray-900 text-center mb-2 px-2">Did menopause occur naturally or after surgery?</Text>
+              <Text className="text-sm font-medium text-gray-500 text-center mb-6 px-4 leading-5">
                 Surgical menopause (removal of ovaries) often induces rapid hormonal shifts.
               </Text>
 
-              <View style={styles.wizardOptionsCol}>
+              <View className="w-full gap-3 px-2">
                 {['Natural', 'Surgical', 'Medical'].map((type) => (
                   <TouchableOpacity
                     key={type}
                     activeOpacity={0.8}
-                    style={[
-                      styles.wizardOptionCard,
-                      profile.menopauseType === type && styles.wizardOptionCardActive,
-                    ]}
+                    className={`flex-row items-center p-4 rounded-2xl border ${profile.menopauseType === type ? 'border-red-600 bg-red-50/40' : 'border-gray-200 bg-white'
+                      } gap-3.5`}
                     onPress={() => setProfile({ ...profile, menopauseType: type })}
                   >
                     <Ionicons
@@ -641,10 +524,8 @@ export default function PostmenopauseScreen({
                       color={profile.menopauseType === type ? '#DC2626' : colors.textMuted}
                     />
                     <Text
-                      style={[
-                        styles.wizardOptionText,
-                        profile.menopauseType === type && styles.wizardOptionTextActive,
-                      ]}
+                      className={`text-base flex-1 ${profile.menopauseType === type ? 'text-red-600 font-bold' : 'font-semibold text-gray-700'
+                        }`}
                     >
                       {type} Menopause
                     </Text>
@@ -655,24 +536,22 @@ export default function PostmenopauseScreen({
           )}
 
           {onboardingStep === 5 && (
-            <View style={styles.wizardStepContent}>
-              <View style={styles.wizardIconCircle}>
+            <View className="items-center py-4">
+              <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4">
                 <Ionicons name="shield-checkmark-outline" size={32} color="#DC2626" />
               </View>
-              <Text style={styles.wizardQuestionTitle}>Are you taking Hormone Replacement Therapy (HRT)?</Text>
-              <Text style={styles.wizardQuestionSub}>
+              <Text className="text-xl font-extrabold text-gray-900 text-center mb-2 px-2">Are you taking Hormone Replacement Therapy (HRT)?</Text>
+              <Text className="text-sm font-medium text-gray-500 text-center mb-6 px-4 leading-5">
                 Your HRT status customizes symptom management guidance and supplement tracking.
               </Text>
 
-              <View style={styles.wizardOptionsCol}>
+              <View className="w-full gap-3 px-2">
                 {['Yes', 'No', 'Previously'].map((status) => (
                   <TouchableOpacity
                     key={status}
                     activeOpacity={0.8}
-                    style={[
-                      styles.wizardOptionCard,
-                      profile.onHRT === status && styles.wizardOptionCardActive,
-                    ]}
+                    className={`flex-row items-center p-4 rounded-2xl border ${profile.onHRT === status ? 'border-red-600 bg-red-50/40' : 'border-gray-200 bg-white'
+                      } gap-3.5`}
                     onPress={() => setProfile({ ...profile, onHRT: status })}
                   >
                     <Ionicons
@@ -681,10 +560,8 @@ export default function PostmenopauseScreen({
                       color={profile.onHRT === status ? '#DC2626' : colors.textMuted}
                     />
                     <Text
-                      style={[
-                        styles.wizardOptionText,
-                        profile.onHRT === status && styles.wizardOptionTextActive,
-                      ]}
+                      className={`text-base flex-1 ${profile.onHRT === status ? 'text-red-600 font-bold' : 'font-semibold text-gray-700'
+                        }`}
                     >
                       {status}
                     </Text>
@@ -696,23 +573,23 @@ export default function PostmenopauseScreen({
         </View>
 
         {/* Bottom Actions */}
-        <View style={styles.wizardBottomActions}>
+        <View className="flex-row items-center gap-3 mt-8 pt-4 border-t border-gray-100">
           {onboardingStep > 1 && (
             <TouchableOpacity
               activeOpacity={0.7}
-              style={styles.wizardBackBtn}
+              className="px-6 py-4 rounded-2xl bg-gray-100 items-center justify-center"
               onPress={() => setOnboardingStep(onboardingStep - 1)}
             >
-              <Text style={styles.wizardBackBtnText}>Back</Text>
+              <Text className="text-base font-bold text-gray-700">Back</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
             activeOpacity={0.85}
-            style={styles.wizardNextBtn}
+            className="flex-1 py-4 rounded-2xl bg-red-600 items-center justify-center shadow-md"
             onPress={handleOnboardingNext}
           >
-            <Text style={styles.wizardNextBtnText}>
+            <Text className="text-base font-bold text-white">
               {onboardingStep === 5 ? 'Complete Onboarding' : 'Next Step'}
             </Text>
           </TouchableOpacity>
@@ -724,7 +601,8 @@ export default function PostmenopauseScreen({
   // MAIN DASHBOARD VIEW (ONCE ONBOARDING COMPLETED)
   return (
     <ScrollView
-      contentContainerStyle={styles.pageScrollContent}
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={{ paddingBottom: 110, paddingTop: 6, backgroundColor: theme.background }}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -732,292 +610,219 @@ export default function PostmenopauseScreen({
           onRefresh={handleRefresh}
           tintColor="#D97706"
           colors={['#D97706', '#FA4A14']}
-          progressBackgroundColor="#FFFFFF"
+          progressBackgroundColor={theme.card}
         />
       }
     >
       {activeTab === 'dashboard' ? (
         <>
-          {/* CAL AI STYLE 7-DAY CALENDAR STRIP */}
-          <View style={styles.calAiCalendarRow}>
-            {calendarWeekDays.map((item) => {
-              const isSelected = selectedDateKey === item.dateKey;
-              return (
+          {/* Education feature and topic cards, following the Cycle screen layout */}
+          <View className="mx-4 mb-5">
+            <TouchableOpacity
+              activeOpacity={0.92}
+              className="rounded-[28px] p-5 mb-5 overflow-hidden border"
+              style={{
+                minHeight: 190,
+                backgroundColor: isDarkMode ? '#2B2334' : '#80658E',
+                borderColor: isDarkMode ? '#44374F' : '#80658E',
+              }}
+              onPress={() => setSelectedArticle(EDU_ARTICLES[0])}
+            >
+              <View className="absolute right-4 top-5 w-24 h-24 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.13)' }}>
+                <Ionicons name="flower-outline" size={58} color="rgba(255,255,255,0.88)" />
+              </View>
+              <View className="pr-24">
+                <Text className="text-[21px] font-black leading-7 mb-3" style={{ color: '#FFFFFF' }}>Life after menopause</Text>
+                <Text className="text-[13px] font-semibold leading-5 mb-4" style={{ color: 'rgba(255,255,255,0.9)' }}>
+                  Understand common changes and find questions to bring to your care team.
+                </Text>
+                <View className="self-start rounded-full px-4 py-2" style={{ backgroundColor: '#FFFFFF' }}>
+                  <Text className="text-xs font-extrabold" style={{ color: '#1F2937' }}>Read insight</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-black" style={{ color: theme.textPrimary }}>Explore topics</Text>
+              <TouchableOpacity onPress={() => setActiveTab('learn')}>
+                <Text className="text-[13px] font-bold" style={{ color: '#DC2626' }}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 8 }}>
+              {EDU_ARTICLES.slice(1).map((article) => (
                 <TouchableOpacity
-                  key={item.dateKey}
-                  activeOpacity={0.75}
-                  style={styles.calAiDayCol}
-                  onPress={() => setSelectedDateKey(item.dateKey)}
+                  key={article.id}
+                  activeOpacity={0.88}
+                  style={{ width: 148, marginRight: 12 }}
+                  onPress={() => setSelectedArticle(article)}
                 >
                   <View
-                    style={[
-                      styles.calAiCircle,
-                      item.isToday
-                        ? styles.calAiCircleToday
-                        : styles.calAiCircleDashed,
-                      isSelected && !item.isToday && styles.calAiCircleSelected,
-                    ]}
+                    className="rounded-[22px] items-center justify-center border mb-2"
+                    style={{
+                      height: 126,
+                      backgroundColor: isDarkMode ? theme.card : article.iconBg,
+                      borderColor: theme.cardBorder,
+                    }}
                   >
-                    <Text
-                      style={[
-                        styles.calAiDayLetter,
-                        item.isToday
-                          ? styles.calAiDayLetterToday
-                          : styles.calAiDayLetterNormal,
-                      ]}
-                    >
-                      {item.singleLetter}
-                    </Text>
+                    <Ionicons name={article.icon} size={42} color={isDarkMode ? '#F87171' : article.iconColor} />
                   </View>
-                  <Text
-                    style={[
-                      styles.calAiDateNum,
-                      item.isToday && styles.calAiDateNumToday,
-                      isSelected && styles.calAiDateNumSelected,
-                    ]}
-                  >
-                    {item.dayNum}
-                  </Text>
+                  <Text className="text-[10px] font-extrabold tracking-wider uppercase mb-1" style={{ color: isDarkMode ? '#F87171' : article.iconColor }} numberOfLines={1}>{article.category}</Text>
+                  <Text className="text-sm font-extrabold leading-5" style={{ color: theme.textPrimary }} numberOfLines={2}>{article.title}</Text>
                 </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* HERO FEATURED WHITE CARD (MATCHING CYCLE SCREEN) */}
-          <TouchableOpacity
-            activeOpacity={0.92}
-            style={styles.heroCardContainer}
-            onPress={handleOpenOnboardingWizard}
-          >
-            <View style={styles.heroWhiteCard}>
-              {/* Big Display Headline */}
-              <Text style={styles.heroHeadlineDisplay}>
-                Stay Vibrant, Strong{"\n"}& Hormonally Balanced.
-              </Text>
-
-              {/* Functional Ring & Key Health Details */}
-              <View style={styles.heroRingRow}>
-                <PostmenopauseMilestoneRing />
-                <View style={styles.heroMetricsCol}>
-                  <View style={styles.metricItemRow}>
-                    <View style={[styles.metricDot, { backgroundColor: '#DC2626' }]} />
-                    <Text style={styles.metricItemText}>
-                      Status: <Text style={{ fontWeight: '800', color: '#111827' }}>12+ Mo Period-Free</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.metricItemRow}>
-                    <View style={[styles.metricDot, { backgroundColor: '#0284C7' }]} />
-                    <Text style={styles.metricItemText}>
-                      Bone & Heart: <Text style={{ fontWeight: '700', color: '#111827' }}>Optimal vitality</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.metricItemRow}>
-                    <View style={[styles.metricDot, { backgroundColor: '#D97706' }]} />
-                    <Text style={styles.metricItemText}>
-                      HRT Support: <Text style={{ fontWeight: '700', color: '#111827' }}>{profile.onHRT}</Text> ({profile.menopauseType})
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* FEATURED CARD: TALK TO A DOCTOR (MATCHING CYCLE SCREEN) */}
-          <TouchableOpacity
-            activeOpacity={0.88}
-            style={styles.doctorFeaturedCard}
-            onPress={() => {
-              if (onOpenDoctorPage) {
-                onOpenDoctorPage();
-              } else if (onBookDoctor) {
-                onBookDoctor({ name: 'Telemedicine Specialist', spec: 'Obstetrics & Gynecological Telemedicine' });
-              }
-            }}
-          >
-            <View style={styles.doctorFeaturedTopRow}>
-              <View style={styles.doctorBadgeIconLarge}>
-                <Ionicons name="videocam" size={26} color="#008080" />
-              </View>
-              <View style={styles.doctorActionPill}>
-                <Text style={styles.doctorActionPillText}>Consult</Text>
-                <Ionicons name="arrow-forward" size={13} color="#008080" />
-              </View>
-            </View>
-            <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
-            <Text style={styles.doctorFeaturedSubtitle}>
-              Book an HD video consultation with a certified menopause & hormone specialist.
-            </Text>
-          </TouchableOpacity>
-
-          {/* 2-COLUMN BENTO GRID: CYCLE MODE & HEALTH SCORES */}
-          <View style={styles.bentoSectionGrid}>
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.bentoWhiteCard}
-              onPress={onSwitchToCycleMode}
-            >
-              <View style={[styles.bentoIconSquare, { backgroundColor: '#FFE5E9' }]}>
-                <Ionicons name="sparkles" size={22} color="#DC2626" />
-              </View>
-              <Text style={styles.bentoCardHeading}>Cycle Mode</Text>
-              <Text style={styles.bentoCardSub}>Fertile & period tracker</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.bentoWhiteCard}
-              onPress={() => setActiveTab('assessments')}
-            >
-              <View style={[styles.bentoIconSquare, { backgroundColor: '#FFEBEE' }]}>
-                <Ionicons name="fitness" size={22} color="#DC2626" />
-              </View>
-              <Text style={styles.bentoCardHeading}>Health Scores</Text>
-              <Text style={styles.bentoCardSub}>Bone & heart health</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* UPCOMING SCREENINGS & MILESTONES SECTION */}
-          <View style={styles.predictionsContainer}>
-            <Text style={styles.sectionHeaderLabelDark}>UPCOMING SCREENINGS & MILESTONES</Text>
-            <View style={{ gap: 12 }}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.upcomingPredictionCardClean}
-                onPress={() => setActiveTab('screenings')}
-              >
-                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FFEBEE' }]}>
-                  <Ionicons name="fitness" size={22} color="#DC2626" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.upcomingCardMainTitle}>DEXA Bone Density Scan</Text>
-                  <Text style={styles.upcomingCardSubTitle}>Annual bone mineral density review</Text>
-                </View>
-                <View style={styles.upcomingPillRed}>
-                  <Text style={styles.upcomingPillRedText}>Due Oct</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.upcomingPredictionCardClean}
-                onPress={() => setActiveTab('assessments')}
-              >
-                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons name="heart" size={22} color="#0284C7" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.upcomingCardMainTitle}>Cardiovascular Health Review</Text>
-                  <Text style={styles.upcomingCardSubTitle}>Lipids, blood pressure & arterial vitality</Text>
-                </View>
-                <View style={styles.upcomingPillBlue}>
-                  <Text style={styles.upcomingPillBlueText}>Annual</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.upcomingPredictionCardClean}
-                onPress={() => setActiveTab('screenings')}
-              >
-                <View style={[styles.upcomingIconSquircle, { backgroundColor: '#FEF3C7' }]}>
-                  <Ionicons name="shield-checkmark" size={22} color="#D97706" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.upcomingCardMainTitle}>Mammogram Screening</Text>
-                  <Text style={styles.upcomingCardSubTitle}>Routine annual breast wellness check</Text>
-                </View>
-                <View style={[styles.upcomingPillRed, { backgroundColor: '#FEF3C7' }]}>
-                  <Text style={[styles.upcomingPillRedText, { color: '#B45309' }]}>Upcoming</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* PERSONALIZED INSIGHTS CAROUSEL OF ARTICLES */}
-          <View style={{ marginBottom: 16 }}>
-            <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
-              <Text style={styles.sectionHeaderLabelDark}>PERSONALIZED INSIGHTS</Text>
-            </View>
-            <ArticleCarousel onSelectArticle={(article) => setSelectedArticle(article)} />
+              ))}
+            </ScrollView>
           </View>
         </>
       ) : (
-        <View style={{ paddingHorizontal: 16 }}>
+        <View className="px-4">
           <TouchableOpacity
             activeOpacity={0.75}
-            style={styles.backToDashboardHeader}
+            className="flex-row items-center gap-2 py-3 mb-2"
             onPress={() => setActiveTab('dashboard')}
           >
-            <Ionicons name="arrow-back" size={20} color="#111827" />
-            <Text style={styles.backToDashboardHeaderText}>Back to Overview</Text>
+            <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
+            <Text className="text-sm font-bold" style={{ color: theme.textPrimary }}>Back to Overview</Text>
           </TouchableOpacity>
+
+          {activeTab === 'symptoms' && (
+            <View className="pb-6">
+              <Text className="text-xl font-black mb-1" style={{ color: theme.textPrimary }}>Symptom check-in</Text>
+              <Text className="text-sm leading-5 mb-4" style={{ color: theme.textSecondary }}>
+                Record what you notice today. This is a personal log, not a diagnosis.
+              </Text>
+              <View className="rounded-3xl border p-4 mb-5" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
+                {TRACKABLE_SYMPTOMS.map((symptom, index) => (
+                  <View key={symptom.id} className={`py-3 ${index < TRACKABLE_SYMPTOMS.length - 1 ? 'border-b' : ''}`} style={{ borderBottomColor: theme.cardBorder }}>
+                    <View className="flex-row items-center mb-2.5">
+                      <Ionicons name={symptom.icon} size={19} color="#DC2626" />
+                      <Text className="text-sm font-bold ml-2" style={{ color: theme.textPrimary }}>{symptom.label}</Text>
+                    </View>
+                    <View className="flex-row gap-2">
+                      {['Mild', 'Moderate', 'Severe'].map((severity) => {
+                        const selected = symptomDraft[symptom.id] === severity;
+                        return (
+                          <TouchableOpacity
+                            key={severity}
+                            activeOpacity={0.75}
+                            onPress={() => setSymptomDraft((current) => ({
+                              ...current,
+                              [symptom.id]: selected ? undefined : severity,
+                            }))}
+                            className="px-3 py-2 rounded-full border"
+                            style={{
+                              backgroundColor: selected ? (isDarkMode ? '#4A2024' : '#FEE2E2') : theme.inputBg,
+                              borderColor: selected ? '#DC2626' : theme.inputBorder,
+                            }}
+                          >
+                            <Text className="text-xs font-bold" style={{ color: selected ? '#DC2626' : theme.textSecondary }}>{severity}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+                <TextInput
+                  multiline
+                  value={symptomNote}
+                  onChangeText={setSymptomNote}
+                  placeholder="Optional note"
+                  placeholderTextColor={theme.textMuted}
+                  className="rounded-2xl border p-3 mt-4 text-sm min-h-[76px]"
+                  style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary, textAlignVertical: 'top' }}
+                />
+                <TouchableOpacity activeOpacity={0.85} onPress={handleSaveSymptomCheckIn} className="rounded-2xl py-3.5 items-center mt-4" style={{ backgroundColor: '#DC2626' }}>
+                  <Text className="text-sm font-extrabold text-white">Save check-in</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text className="text-lg font-black mb-3" style={{ color: theme.textPrimary }}>Recent check-ins</Text>
+              {symptomLogs.slice(0, 10).map((entry) => (
+                <View key={entry.id} className="rounded-2xl border p-4 mb-2.5" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
+                  <Text className="text-xs font-bold mb-2" style={{ color: theme.textMuted }}>{entry.date}</Text>
+                  {entry.symptoms?.length ? (
+                    <Text className="text-sm leading-5" style={{ color: theme.textPrimary }}>
+                      {entry.symptoms.map(({ id, severity }) => `${TRACKABLE_SYMPTOMS.find((item) => item.id === id)?.label || id} · ${severity}`).join('  |  ')}
+                    </Text>
+                  ) : null}
+                  {entry.note ? <Text className="text-sm mt-2 leading-5" style={{ color: theme.textSecondary }}>{entry.note}</Text> : null}
+                </View>
+              ))}
+              {symptomLogs.length === 0 ? (
+                <Text className="text-sm" style={{ color: theme.textSecondary }}>Your saved check-ins will appear here.</Text>
+              ) : null}
+            </View>
+          )}
 
           {/* 2. HEALTH SCORES & ASSESSMENTS */}
           {activeTab === 'assessments' && (
-            <View style={styles.tabSection}>
-              <Text style={styles.sectionHeaderTitle}>Health Risk Assessments</Text>
+            <View className="gap-4 pb-6">
+              <Text className="text-xl font-black mb-1" style={{ color: theme.textPrimary }}>Health check-in questions</Text>
+              <Text className="text-sm leading-5 mb-2" style={{ color: theme.textSecondary }}>Use these prompts to organize information for a clinician. They do not provide a diagnosis or calculate your risk.</Text>
 
               {/* Bone Health Card */}
-              <View style={styles.card}>
-                <View style={styles.cardHeaderRow}>
+              <View className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm mb-3">
+                <View className="flex-row items-center gap-2.5 mb-3">
                   <Ionicons name="fitness" size={20} color="#0284C7" />
-                  <Text style={styles.cardTitle}>Bone Health Assessment</Text>
+                  <Text className="text-base font-extrabold text-gray-900">Bone Health Assessment</Text>
                 </View>
 
-                <Text style={styles.fieldLabel}>Fracture after age 50?</Text>
-                <View style={styles.radioGroup}>
+                <Text className="text-xs font-bold text-gray-600 mt-3 mb-2">Fracture after age 50?</Text>
+                <View className="flex-row flex-wrap gap-2 mb-2">
                   {[true, false].map((val) => (
                     <TouchableOpacity
                       key={String(val)}
                       activeOpacity={0.7}
-                      style={[styles.radioPill, boneHealth.fracturePost50 === val && styles.radioPillActive]}
+                      className={`px-3.5 py-2 rounded-xl border ${boneHealth.fracturePost50 === val ? 'bg-red-50 border-red-600' : 'bg-gray-50 border-gray-200'
+                        }`}
                       onPress={() => {
                         const updated = { ...boneHealth, fracturePost50: val };
                         setBoneHealth(updated);
                         persistData({ boneHealth: updated });
                       }}
                     >
-                      <Text style={[styles.radioText, boneHealth.fracturePost50 === val && styles.radioTextActive]}>
+                      <Text className={`text-xs font-semibold ${boneHealth.fracturePost50 === val ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                         {val ? 'Yes' : 'No'}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                <Text style={styles.fieldLabel}>Family history of osteoporosis?</Text>
-                <View style={styles.radioGroup}>
+                <Text className="text-xs font-bold text-gray-600 mt-3 mb-2">Family history of osteoporosis?</Text>
+                <View className="flex-row flex-wrap gap-2 mb-2">
                   {[true, false].map((val) => (
                     <TouchableOpacity
                       key={String(val)}
                       activeOpacity={0.7}
-                      style={[styles.radioPill, boneHealth.familyOsteoporosis === val && styles.radioPillActive]}
+                      className={`px-3.5 py-2 rounded-xl border ${boneHealth.familyOsteoporosis === val ? 'bg-red-50 border-red-600' : 'bg-gray-50 border-gray-200'
+                        }`}
                       onPress={() => {
                         const updated = { ...boneHealth, familyOsteoporosis: val };
                         setBoneHealth(updated);
                         persistData({ boneHealth: updated });
                       }}
                     >
-                      <Text style={[styles.radioText, boneHealth.familyOsteoporosis === val && styles.radioTextActive]}>
+                      <Text className={`text-xs font-semibold ${boneHealth.familyOsteoporosis === val ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                         {val ? 'Yes' : 'No'}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                <Text style={styles.fieldLabel}>Calcium & Vitamin D intake?</Text>
-                <View style={styles.radioGroup}>
+                <Text className="text-xs font-bold text-gray-600 mt-3 mb-2">Calcium & Vitamin D intake?</Text>
+                <View className="flex-row flex-wrap gap-2 mb-2">
                   {['Yes, both', 'Calcium only', 'Vitamin D only', 'Neither'].map((opt) => (
                     <TouchableOpacity
                       key={opt}
                       activeOpacity={0.7}
-                      style={[styles.radioPill, boneHealth.supplements === opt && styles.radioPillActive]}
+                      className={`px-3.5 py-2 rounded-xl border ${boneHealth.supplements === opt ? 'bg-red-50 border-red-600' : 'bg-gray-50 border-gray-200'
+                        }`}
                       onPress={() => {
                         const updated = { ...boneHealth, supplements: opt };
                         setBoneHealth(updated);
                         persistData({ boneHealth: updated });
                       }}
                     >
-                      <Text style={[styles.radioText, boneHealth.supplements === opt && styles.radioTextActive]}>
+                      <Text className={`text-xs font-semibold ${boneHealth.supplements === opt ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                         {opt}
                       </Text>
                     </TouchableOpacity>
@@ -1026,46 +831,48 @@ export default function PostmenopauseScreen({
               </View>
 
               {/* Heart Health Card */}
-              <View style={styles.card}>
-                <View style={styles.cardHeaderRow}>
+              <View className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm mb-3">
+                <View className="flex-row items-center gap-2.5 mb-3">
                   <Ionicons name="heart" size={20} color="#DC2626" />
-                  <Text style={styles.cardTitle}>Heart Health Profile</Text>
+                  <Text className="text-base font-extrabold text-gray-900">Heart Health Profile</Text>
                 </View>
 
-                <Text style={styles.fieldLabel}>Blood Pressure</Text>
-                <View style={styles.radioGroup}>
+                <Text className="text-xs font-bold text-gray-600 mt-3 mb-2">Blood Pressure</Text>
+                <View className="flex-row flex-wrap gap-2 mb-2">
                   {['Normal (<120/80)', 'Elevated', 'High Stage 1', 'Unsure'].map((bp) => (
                     <TouchableOpacity
                       key={bp}
                       activeOpacity={0.7}
-                      style={[styles.radioPill, heartHealth.bloodPressure === bp && styles.radioPillActive]}
+                      className={`px-3.5 py-2 rounded-xl border ${heartHealth.bloodPressure === bp ? 'bg-red-50 border-red-600' : 'bg-gray-50 border-gray-200'
+                        }`}
                       onPress={() => {
                         const updated = { ...heartHealth, bloodPressure: bp };
                         setHeartHealth(updated);
                         persistData({ heartHealth: updated });
                       }}
                     >
-                      <Text style={[styles.radioText, heartHealth.bloodPressure === bp && styles.radioTextActive]}>
+                      <Text className={`text-xs font-semibold ${heartHealth.bloodPressure === bp ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                         {bp}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                <Text style={styles.fieldLabel}>Smoking Status</Text>
-                <View style={styles.radioGroup}>
+                <Text className="text-xs font-bold text-gray-600 mt-3 mb-2">Smoking Status</Text>
+                <View className="flex-row flex-wrap gap-2 mb-2">
                   {['Non-smoker', 'Former smoker', 'Current smoker'].map((sm) => (
                     <TouchableOpacity
                       key={sm}
                       activeOpacity={0.7}
-                      style={[styles.radioPill, heartHealth.smokingStatus === sm && styles.radioPillActive]}
+                      className={`px-3.5 py-2 rounded-xl border ${heartHealth.smokingStatus === sm ? 'bg-red-50 border-red-600' : 'bg-gray-50 border-gray-200'
+                        }`}
                       onPress={() => {
                         const updated = { ...heartHealth, smokingStatus: sm };
                         setHeartHealth(updated);
                         persistData({ heartHealth: updated });
                       }}
                     >
-                      <Text style={[styles.radioText, heartHealth.smokingStatus === sm && styles.radioTextActive]}>
+                      <Text className={`text-xs font-semibold ${heartHealth.smokingStatus === sm ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                         {sm}
                       </Text>
                     </TouchableOpacity>
@@ -1077,19 +884,19 @@ export default function PostmenopauseScreen({
 
           {/* 4. LIFESTYLE TRACKER */}
           {activeTab === 'lifestyle' && (
-            <View style={styles.tabSection}>
-              <Text style={styles.sectionHeaderTitle}>Daily Lifestyle Tracker</Text>
+            <View className="gap-4 pb-6">
+              <Text className="text-xl font-black text-gray-900 mb-1">Daily Lifestyle Tracker</Text>
 
-              <View style={styles.card}>
-                <View style={styles.metricRow}>
+              <View className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm mb-3">
+                <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
                   <Ionicons name="water" size={22} color="#0284C7" />
-                  <Text style={styles.metricTitle}>Water Intake</Text>
-                  <View style={styles.stepperSmallRow}>
+                  <Text className="text-sm font-bold text-gray-900 flex-1 ml-3">Water Intake</Text>
+                  <View className="flex-row items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      style={styles.stepperSmallBtn}
+                      className="w-7 h-7 rounded-lg bg-white items-center justify-center shadow-xs"
                       onPress={() => {
-                        const val = Math.max(0, lifestyle.waterGlasses - 1);
+                        const val = Math.max(0, (Number(lifestyle.waterGlasses) || 0) - 1);
                         const updated = { ...lifestyle, waterGlasses: val };
                         setLifestyle(updated);
                         persistData({ lifestyle: updated });
@@ -1097,12 +904,12 @@ export default function PostmenopauseScreen({
                     >
                       <Ionicons name="remove" size={16} color={colors.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={styles.metricValText}>{lifestyle.waterGlasses} glasses</Text>
+                    <Text className="text-xs font-extrabold text-gray-900 px-1">{lifestyle.waterGlasses == null ? 'Not logged' : `${lifestyle.waterGlasses} glasses`}</Text>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      style={styles.stepperSmallBtn}
+                      className="w-7 h-7 rounded-lg bg-white items-center justify-center shadow-xs"
                       onPress={() => {
-                        const val = lifestyle.waterGlasses + 1;
+                        const val = (Number(lifestyle.waterGlasses) || 0) + 1;
                         const updated = { ...lifestyle, waterGlasses: val };
                         setLifestyle(updated);
                         persistData({ lifestyle: updated });
@@ -1113,15 +920,15 @@ export default function PostmenopauseScreen({
                   </View>
                 </View>
 
-                <View style={styles.metricRow}>
+                <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
                   <Ionicons name="walk" size={22} color="#15803D" />
-                  <Text style={styles.metricTitle}>Exercise</Text>
-                  <View style={styles.stepperSmallRow}>
+                  <Text className="text-sm font-bold text-gray-900 flex-1 ml-3">Exercise</Text>
+                  <View className="flex-row items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      style={styles.stepperSmallBtn}
+                      className="w-7 h-7 rounded-lg bg-white items-center justify-center shadow-xs"
                       onPress={() => {
-                        const val = Math.max(0, lifestyle.exerciseMins - 10);
+                        const val = Math.max(0, (Number(lifestyle.exerciseMins) || 0) - 10);
                         const updated = { ...lifestyle, exerciseMins: val };
                         setLifestyle(updated);
                         persistData({ lifestyle: updated });
@@ -1129,12 +936,12 @@ export default function PostmenopauseScreen({
                     >
                       <Ionicons name="remove" size={16} color={colors.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={styles.metricValText}>{lifestyle.exerciseMins} mins</Text>
+                    <Text className="text-xs font-extrabold text-gray-900 px-1">{lifestyle.exerciseMins == null ? 'Not logged' : `${lifestyle.exerciseMins} mins`}</Text>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      style={styles.stepperSmallBtn}
+                      className="w-7 h-7 rounded-lg bg-white items-center justify-center shadow-xs"
                       onPress={() => {
-                        const val = lifestyle.exerciseMins + 10;
+                        const val = (Number(lifestyle.exerciseMins) || 0) + 10;
                         const updated = { ...lifestyle, exerciseMins: val };
                         setLifestyle(updated);
                         persistData({ lifestyle: updated });
@@ -1145,15 +952,15 @@ export default function PostmenopauseScreen({
                   </View>
                 </View>
 
-                <View style={styles.metricRow}>
+                <View className="flex-row items-center justify-between py-3 border-b border-gray-100">
                   <Ionicons name="moon" size={22} color="#DC2626" />
-                  <Text style={styles.metricTitle}>Sleep Duration</Text>
-                  <View style={styles.stepperSmallRow}>
+                  <Text className="text-sm font-bold text-gray-900 flex-1 ml-3">Sleep Duration</Text>
+                  <View className="flex-row items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      style={styles.stepperSmallBtn}
+                      className="w-7 h-7 rounded-lg bg-white items-center justify-center shadow-xs"
                       onPress={() => {
-                        const val = Math.max(0, lifestyle.sleepHours - 0.5);
+                        const val = Math.max(0, (Number(lifestyle.sleepHours) || 0) - 0.5);
                         const updated = { ...lifestyle, sleepHours: val };
                         setLifestyle(updated);
                         persistData({ lifestyle: updated });
@@ -1161,12 +968,12 @@ export default function PostmenopauseScreen({
                     >
                       <Ionicons name="remove" size={16} color={colors.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={styles.metricValText}>{lifestyle.sleepHours} hrs</Text>
+                    <Text className="text-xs font-extrabold text-gray-900 px-1">{lifestyle.sleepHours == null ? 'Not logged' : `${lifestyle.sleepHours} hrs`}</Text>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      style={styles.stepperSmallBtn}
+                      className="w-7 h-7 rounded-lg bg-white items-center justify-center shadow-xs"
                       onPress={() => {
-                        const val = lifestyle.sleepHours + 0.5;
+                        const val = (Number(lifestyle.sleepHours) || 0) + 0.5;
                         const updated = { ...lifestyle, sleepHours: val };
                         setLifestyle(updated);
                         persistData({ lifestyle: updated });
@@ -1182,21 +989,21 @@ export default function PostmenopauseScreen({
 
           {/* 5. MEDS & HRT */}
           {activeTab === 'meds' && (
-            <View style={styles.tabSection}>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionHeaderTitle}>Meds & Supplements</Text>
+            <View className="gap-4 pb-6">
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-xl font-black text-gray-900 mb-1">Meds & Supplements</Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
-                  style={styles.addMedBtn}
+                  className="flex-row items-center gap-1 bg-red-600 px-3.5 py-1.5 rounded-full"
                   onPress={() => setShowAddMedModal(true)}
                 >
                   <Ionicons name="add" size={18} color="#FFFFFF" />
-                  <Text style={styles.addMedBtnText}>Add</Text>
+                  <Text className="text-xs font-bold text-white">Add</Text>
                 </TouchableOpacity>
               </View>
 
               {medications.map((med) => (
-                <View key={med.id} style={styles.medCard}>
+                <View key={med.id} className="flex-row items-center p-4 rounded-2xl border mb-2.5" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={() => handleToggleMedTaken(med.id)}
@@ -1208,121 +1015,90 @@ export default function PostmenopauseScreen({
                     />
                   </TouchableOpacity>
 
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.medTitle, med.takenToday && styles.medTitleTaken]}>
+                  <View className="flex-1 ml-3">
+                    <Text className={`text-sm font-bold ${med.takenToday ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                       {med.name} {med.isHRT ? '(HRT)' : ''}
                     </Text>
-                    <Text style={styles.medDoseText}>{med.dose} • {med.time}</Text>
+                    {!!med.dose && <Text className="text-xs mt-0.5" style={{ color: theme.textSecondary }}>{med.dose}</Text>}
                   </View>
                 </View>
               ))}
+              {medications.length === 0 && (
+                <View className="rounded-2xl border p-5" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
+                  <Text className="text-sm font-semibold" style={{ color: theme.textPrimary }}>No medications added</Text>
+                  <Text className="text-xs mt-1.5 leading-5" style={{ color: theme.textSecondary }}>Add medications or supplements you want to keep track of.</Text>
+                </View>
+              )}
             </View>
           )}
 
           {/* 6. REMINDERS */}
           {activeTab === 'screenings' && (
-            <View style={styles.tabSection}>
-              <Text style={styles.sectionHeaderTitle}>Screening Reminders</Text>
-              <Text style={styles.sectionHeaderSub}>Preventive health checks for postmenopausal care.</Text>
+            <View className="gap-4 pb-6">
+              <View className="flex-row items-center justify-between mb-1">
+                <Text className="text-xl font-black" style={{ color: theme.textPrimary }}>Screening Reminders</Text>
+                <TouchableOpacity onPress={() => setShowAddScreeningModal(true)} className="flex-row items-center gap-1 bg-red-600 px-3.5 py-1.5 rounded-full">
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                  <Text className="text-xs font-bold text-white">Add</Text>
+                </TouchableOpacity>
+              </View>
+              <Text className="text-xs font-medium text-gray-500 mb-2">Preventive health checks for postmenopausal care.</Text>
 
               {screenings.map((sc) => (
-                <View key={sc.id} style={styles.card}>
-                  <View style={styles.cardHeaderRow}>
+                <View key={sc.id} className="rounded-3xl p-5 border mb-3" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
+                  <View className="flex-row items-center gap-2.5 mb-3">
                     <Ionicons name="calendar-outline" size={20} color="#DC2626" />
-                    <Text style={styles.cardTitle}>{sc.title}</Text>
+                    <Text className="text-base font-extrabold text-gray-900">{sc.title}</Text>
                   </View>
-                  <Text style={styles.screeningText}>Last performed: {sc.lastDate}</Text>
-                  <Text style={styles.screeningText}>Next due date: {sc.nextDue}</Text>
+                  {!!sc.lastDate && <Text className="text-xs mb-1" style={{ color: theme.textSecondary }}>Last performed: {sc.lastDate}</Text>}
+                  {!!sc.nextDue && <Text className="text-xs mb-1" style={{ color: theme.textSecondary }}>Next due date: {sc.nextDue}</Text>}
 
-                  <View style={styles.statusBadgeRow}>
-                    <Text style={[styles.statusBadge, sc.status === 'Up to date' ? styles.statusBadgeGood : styles.statusBadgeWarn]}>
+                  <View className="flex-row mt-2">
+                    <Text className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full border ${sc.status === 'Up to date' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
                       {sc.status}
                     </Text>
                   </View>
                 </View>
               ))}
+              {screenings.length === 0 && (
+                <View className="rounded-2xl border p-5" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
+                  <Text className="text-sm font-semibold" style={{ color: theme.textPrimary }}>No reminders added</Text>
+                  <Text className="text-xs mt-1.5 leading-5" style={{ color: theme.textSecondary }}>Add the screening names and dates you want to keep track of. Your clinician can help you decide what is appropriate for you.</Text>
+                </View>
+              )}
             </View>
           )}
 
           {/* 7. LIBRARY */}
           {activeTab === 'learn' && (
-            <View style={styles.tabSection}>
-              <Text style={styles.sectionHeaderTitle}>Postmenopausal Library</Text>
+            <View className="gap-3 pb-6">
+              <Text className="text-xl font-black mb-1" style={{ color: theme.textPrimary }}>Postmenopause insights</Text>
+              <Text className="text-sm leading-5 mb-2" style={{ color: theme.textSecondary }}>General education to help you prepare questions for your care team.</Text>
 
               {EDU_ARTICLES.map((article) => (
                 <TouchableOpacity
                   key={article.id}
-                  activeOpacity={0.8}
-                  style={styles.articleCard}
+                  activeOpacity={0.88}
+                  className="rounded-3xl border p-4 mb-1"
+                  style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
                   onPress={() => setSelectedArticle(article)}
                 >
-                  <View style={styles.articleTagRow}>
-                    <Text style={styles.articleCategory}>{article.category}</Text>
-                    <Text style={styles.articleTime}>{article.readTime}</Text>
+                  <View className="flex-row items-center">
+                    <View className="w-[58px] h-[58px] rounded-2xl items-center justify-center mr-3" style={{ backgroundColor: isDarkMode ? '#3A2529' : article.iconBg }}>
+                      <Ionicons name={article.icon} size={28} color={isDarkMode ? '#F87171' : article.iconColor} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-[10px] font-extrabold uppercase tracking-wider mb-1" style={{ color: isDarkMode ? '#F87171' : article.iconColor }}>{article.category} · {article.readTime}</Text>
+                      <Text className="text-sm font-extrabold mb-1" style={{ color: theme.textPrimary }}>{article.title}</Text>
+                      <Text className="text-xs leading-4" style={{ color: theme.textSecondary }} numberOfLines={2}>{article.summary}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.articleTitle}>{article.title}</Text>
-                  <Text style={styles.articleSnippet} numberOfLines={2}>{article.content}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           )}
 
-          {/* 8. ASK AI */}
-          {activeTab === 'ai' && (
-            <View style={styles.tabSection}>
-              <Text style={styles.sectionHeaderTitle}>Ask RedApple AI</Text>
-              <Text style={styles.sectionHeaderSub}>Get instant answers tailored for postmenopausal wellness.</Text>
-
-              <Text style={styles.fieldLabel}>Preset Questions</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-                {PRESET_AI_QUESTIONS.map((q) => (
-                  <TouchableOpacity
-                    key={q}
-                    activeOpacity={0.8}
-                    style={styles.presetChip}
-                    onPress={() => handleAskAI(q)}
-                  >
-                    <Ionicons name="help-circle-outline" size={14} color="#DC2626" style={{ marginRight: 4 }} />
-                    <Text style={styles.presetChipText}>{q}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <View style={styles.chatList}>
-                {aiChatMessages.map((msg) => {
-                  const isUser = msg.sender === 'user';
-                  return (
-                    <View
-                      key={msg.id}
-                      style={[styles.chatBubble, isUser ? styles.userBubble : styles.aiBubble]}
-                    >
-                      <Text style={[styles.chatText, isUser ? styles.userChatText : styles.aiChatText]}>
-                        {msg.text}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-
-              <View style={styles.chatInputRow}>
-                <TextInput
-                  style={styles.chatTextInput}
-                  placeholder="Ask about symptoms, HRT, diet, sex..."
-                  placeholderTextColor={colors.textMuted}
-                  value={aiInputText}
-                  onChangeText={setAiInputText}
-                  onSubmitEditing={() => handleAskAI()}
-                />
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.chatSendBtn}
-                  onPress={() => handleAskAI()}
-                >
-                  <Ionicons name="send" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </View>
       )}
 
@@ -1332,23 +1108,37 @@ export default function PostmenopauseScreen({
         animationType="slide"
         onRequestClose={() => setSelectedArticle(null)}
       >
-        <View style={styles.modalFullContainer}>
-          <View style={styles.modalFullHeader}>
+        <View className="flex-1" style={{ backgroundColor: theme.background }}>
+          <View
+            className="flex-row items-center justify-between px-4 pt-12 pb-3 border-b"
+            style={{ borderBottomColor: theme.cardBorder }}
+          >
             <TouchableOpacity
               activeOpacity={0.7}
-              style={styles.closeBtn}
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: isDarkMode ? '#2B2B2B' : '#F3F4F6' }}
               onPress={() => setSelectedArticle(null)}
             >
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
+              <Ionicons name="close" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.modalCategoryText}>{selectedArticle?.category}</Text>
+            <Text className="text-xs font-extrabold text-red-600 uppercase">{selectedArticle?.category}</Text>
             <View style={{ width: 40 }} />
           </View>
 
-          <ScrollView contentContainerStyle={styles.modalContentPadding}>
-            <Text style={styles.modalArticleTitle}>{selectedArticle?.title}</Text>
-            <Text style={styles.modalArticleTime}>{selectedArticle?.readTime}</Text>
-            <Text style={styles.modalArticleBody}>{selectedArticle?.content}</Text>
+          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, backgroundColor: theme.background }}>
+            <Text className="text-2xl font-black mb-2 leading-7" style={{ color: theme.textPrimary }}>{selectedArticle?.title}</Text>
+            <Text className="text-xs font-semibold mb-4" style={{ color: theme.textMuted }}>{selectedArticle?.readTime}</Text>
+            <Text className="text-base font-normal leading-6" style={{ color: isDarkMode ? '#D1D5DB' : '#374151' }}>{selectedArticle?.content}</Text>
+            {selectedArticle?.sourceUrl ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                className="mt-6 pt-4 border-t"
+                style={{ borderTopColor: theme.cardBorder }}
+                onPress={() => Linking.openURL(selectedArticle.sourceUrl)}
+              >
+                <Text className="text-xs font-bold" style={{ color: '#DC2626' }}>Further reading: {selectedArticle.sourceLabel}</Text>
+              </TouchableOpacity>
+            ) : null}
           </ScrollView>
         </View>
       </Modal>
@@ -1360,38 +1150,97 @@ export default function PostmenopauseScreen({
         animationType="fade"
         onRequestClose={() => setShowAddMedModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalCardTitle}>Add Medication</Text>
+        <View className="flex-1 bg-black/60 items-center justify-center p-5">
+          <View
+            className="w-full rounded-3xl p-6 shadow-xl border"
+            style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
+          >
+            <Text className="text-lg font-black mb-4" style={{ color: theme.textPrimary }}>Add Medication</Text>
             <TextInput
-              style={styles.modalInput}
+              className="rounded-xl px-4 py-3 text-sm mb-3 border"
+              style={{
+                backgroundColor: theme.inputBg,
+                borderColor: theme.inputBorder,
+                color: theme.textPrimary,
+              }}
               placeholder="Name (e.g. Calcium, HRT patch)"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={theme.textMuted}
               value={newMedName}
               onChangeText={setNewMedName}
             />
             <TextInput
-              style={styles.modalInput}
+              className="rounded-xl px-4 py-3 text-sm mb-3 border"
+              style={{
+                backgroundColor: theme.inputBg,
+                borderColor: theme.inputBorder,
+                color: theme.textPrimary,
+              }}
               placeholder="Dose (e.g. 1200mg)"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={theme.textMuted}
               value={newMedDose}
               onChangeText={setNewMedDose}
             />
 
-            <View style={styles.modalBtnRow}>
+            <View className="flex-row justify-end gap-3 mt-2">
               <TouchableOpacity
                 activeOpacity={0.7}
-                style={styles.modalCancelBtn}
+                className="py-2.5 px-4"
                 onPress={() => setShowAddMedModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text className="text-sm font-semibold" style={{ color: theme.textSecondary }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                style={styles.modalSaveBtn}
+                className="bg-red-600 py-2.5 px-5 rounded-xl"
                 onPress={handleAddMedication}
               >
-                <Text style={styles.modalSaveText}>Save</Text>
+                <Text className="text-sm font-bold text-white">Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showAddScreeningModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddScreeningModal(false)}
+      >
+        <View className="flex-1 bg-black/60 items-center justify-center p-5">
+          <View className="w-full rounded-3xl p-6 border" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
+            <Text className="text-lg font-black mb-1" style={{ color: theme.textPrimary }}>Add a reminder</Text>
+            <Text className="text-xs leading-5 mb-4" style={{ color: theme.textSecondary }}>Enter details from your clinician or appointment. Red Apple won’t choose a screening schedule for you.</Text>
+            <TextInput
+              className="rounded-xl px-4 py-3 text-sm mb-3 border"
+              style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
+              placeholder="Screening name"
+              placeholderTextColor={theme.textMuted}
+              value={newScreeningTitle}
+              onChangeText={setNewScreeningTitle}
+            />
+            <TextInput
+              className="rounded-xl px-4 py-3 text-sm mb-3 border"
+              style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
+              placeholder="Next due date (YYYY-MM-DD)"
+              placeholderTextColor={theme.textMuted}
+              value={newScreeningDate}
+              onChangeText={setNewScreeningDate}
+            />
+            <TextInput
+              className="rounded-xl px-4 py-3 text-sm mb-3 border"
+              style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
+              placeholder="Last completed (optional, YYYY-MM-DD)"
+              placeholderTextColor={theme.textMuted}
+              value={newScreeningLastDate}
+              onChangeText={setNewScreeningLastDate}
+            />
+            <View className="flex-row justify-end gap-3 mt-2">
+              <TouchableOpacity activeOpacity={0.7} className="py-2.5 px-4" onPress={() => setShowAddScreeningModal(false)}>
+                <Text className="text-sm font-semibold" style={{ color: theme.textSecondary }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.8} className="bg-red-600 py-2.5 px-5 rounded-xl" onPress={handleAddScreening}>
+                <Text className="text-sm font-bold text-white">Save reminder</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1400,1209 +1249,3 @@ export default function PostmenopauseScreen({
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  pageScrollContent: {
-    paddingBottom: 48,
-    paddingTop: 6,
-  },
-
-  /* Cal AI Style 7-Day Calendar Strip */
-  calAiCalendarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 16,
-  },
-  calAiDayCol: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  calAiCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  calAiCircleDashed: {
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-  },
-  calAiCircleToday: {
-    backgroundColor: '#DC2626',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  calAiCircleSelected: {
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1.5,
-    borderColor: '#DC2626',
-  },
-  calAiDayLetter: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  calAiDayLetterNormal: {
-    color: '#6B7280',
-  },
-  calAiDayLetterToday: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  calAiDateNum: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  calAiDateNumToday: {
-    color: '#111827',
-    fontWeight: '900',
-  },
-  calAiDateNumSelected: {
-    color: '#DC2626',
-    fontWeight: '900',
-  },
-
-  /* Hero Featured White Card */
-  heroCardContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  heroWhiteCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroUserAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: '#FFEBEE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroUserAvatarText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  heroUserName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  heroUserPhase: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  heroHeadlineDisplay: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#111827',
-    letterSpacing: -0.5,
-    lineHeight: 28,
-    marginBottom: 16,
-  },
-  heroRingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroMetricsCol: {
-    flex: 1,
-    marginLeft: 18,
-    gap: 10,
-  },
-  metricItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metricDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  metricItemText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-  heroFooterRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-    marginTop: 2,
-  },
-  heroFooterMeta: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#9CA3AF',
-  },
-
-  /* Doctor Featured Card */
-  doctorFeaturedCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 22,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  doctorFeaturedTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  doctorBadgeIconLarge: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: '#E0F2F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doctorFeaturedTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  doctorFeaturedSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  doctorActionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0F2F1',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 4,
-  },
-  doctorActionPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#008080',
-  },
-
-  /* 2-Column Bento Grid */
-  bentoSectionGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
-  },
-  bentoWhiteCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 26,
-    padding: 18,
-    minHeight: 140,
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  bentoIconSquare: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bentoCardHeading: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-    marginTop: 12,
-    marginBottom: 2,
-  },
-  bentoCardSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-
-  /* Upcoming Predictions / Milestones Container */
-  predictionsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionHeaderLabelDark: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#6B7280',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  upcomingPredictionCardClean: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  upcomingIconSquircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upcomingPillRed: {
-    backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  upcomingPillRedText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  upcomingPillBlue: {
-    backgroundColor: '#E0F2FE',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  upcomingPillBlueText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0284C7',
-  },
-  upcomingCardMainTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  upcomingCardSubTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-
-  /* Toolkits Chip Row */
-  toolkitChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  toolkitChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-
-  /* Back to Dashboard Navigation Header */
-  backToDashboardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 8,
-    marginBottom: 8,
-  },
-  backToDashboardHeaderText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-
-  /* Top Mode Selector Pill matching PregnancyScreen */
-  topModeBar: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modePillContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  modeTabInactive: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  modeTabTextInactive: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  modeTabActive: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  modeTabTextActive: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* Sub-Tab Navigation Bar */
-  subTabBar: {
-    marginBottom: 18,
-  },
-  subTabBarContent: {
-    gap: 8,
-    paddingVertical: 2,
-  },
-  subTabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  subTabPillActive: {
-    backgroundColor: '#DC2626',
-    borderColor: '#DC2626',
-  },
-  subTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  subTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  /* Urgent Red Flag Alert Banner */
-  redFlagAlertBanner: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 20,
-  },
-  redFlagAlertHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  redFlagAlertTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#DC2626',
-    marginLeft: 8,
-  },
-  redFlagAlertBody: {
-    fontSize: 13,
-    color: '#7F1D1D',
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  redFlagAlertButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
-    borderRadius: 14,
-    paddingVertical: 10,
-  },
-  redFlagAlertButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  /* Section Containers */
-  tabSection: {
-    width: '100%',
-  },
-  sectionHeaderTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  sectionHeaderSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-
-  /* Hero Card */
-  mainHeroCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-    borderWidth: 1,
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 20,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  ringCol: {
-    marginRight: 14,
-  },
-  heroInfoCol: {
-    flex: 1,
-  },
-  heroHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  heroSubHeader: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#DC2626',
-    letterSpacing: 0.8,
-  },
-  editSetupBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FECACA',
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  editSetupBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-    marginLeft: 4,
-  },
-  heroMainTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  heroBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7E22CE',
-    marginTop: 2,
-  },
-  heroMetricsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  heroMetricItem: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  heroMetricLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: colors.textMuted,
-  },
-  heroMetricVal: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  hrtStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  hrtStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-
-  /* Quick Action Grid */
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  quickCard: {
-    width: '48%',
-    minWidth: 140,
-    flexGrow: 1,
-    borderRadius: 18,
-    padding: 16,
-  },
-  quickCardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: 8,
-  },
-  quickCardSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-
-  /* Cards */
-  card: {
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginLeft: 8,
-  },
-  cardBodyText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-
-  /* Red Flag Checklist */
-  redFlagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  redFlagRowSelected: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-  },
-  redFlagTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  redFlagSub: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-
-  /* Personalised Insights */
-  insightItem: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  insightTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  insightDesc: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 17,
-    marginTop: 2,
-  },
-
-  /* Form & Control Inputs */
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  radioGroup: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  radioPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-  },
-  radioPillActive: {
-    backgroundColor: '#DC2626',
-  },
-  radioText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  radioTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  /* Metrics */
-  metricRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  metricTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flex: 1,
-    marginLeft: 10,
-  },
-  stepperSmallRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepperSmallBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricValText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    minWidth: 70,
-    textAlign: 'center',
-  },
-
-  /* Meds */
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  addMedBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-  },
-  addMedBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginLeft: 4,
-  },
-  medCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  medTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  medTitleTaken: {
-    textDecorationLine: 'line-through',
-    color: colors.textMuted,
-  },
-  medDoseText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-
-  /* Screenings */
-  screeningText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  statusBadgeRow: {
-    marginTop: 8,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusBadgeGood: {
-    backgroundColor: '#DCFCE7',
-    color: '#15803D',
-  },
-  statusBadgeWarn: {
-    backgroundColor: '#FEF3C7',
-    color: '#B45309',
-  },
-
-  /* Articles */
-  articleCard: {
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  articleTagRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  articleCategory: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-    textTransform: 'uppercase',
-  },
-  articleTime: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  articleTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 6,
-  },
-  articleSnippet: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-
-  /* AI Chat */
-  presetChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-    borderWidth: 1,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 8,
-  },
-  presetChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#DC2626',
-  },
-  chatList: {
-    gap: 10,
-    marginBottom: 16,
-  },
-  chatBubble: {
-    maxWidth: '85%',
-    borderRadius: 18,
-    padding: 14,
-  },
-  aiBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFEBEE',
-  },
-  userBubble: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#DC2626',
-  },
-  chatText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  aiChatText: {
-    color: '#991B1B',
-  },
-  userChatText: {
-    color: '#FFFFFF',
-  },
-  chatInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  chatTextInput: {
-    flex: 1,
-    height: 44,
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  chatSendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* Postmenopause Onboarding Primary View */
-  wizardMainScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
-  wizardMainHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  wizardMainBody: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  wizardCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  wizardProgressContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 14,
-  },
-  wizardProgressSegment: {
-    flex: 1,
-    height: 5,
-    borderRadius: 3,
-  },
-  wizardProgressSegmentActive: {
-    backgroundColor: '#DC2626',
-  },
-  wizardProgressSegmentInactive: {
-    backgroundColor: '#E5E7EB',
-  },
-  wizardStepBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  wizardStepContent: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  wizardIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  wizardQuestionTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    lineHeight: 32,
-    marginBottom: 10,
-  },
-  wizardQuestionSub: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 28,
-  },
-  wizardStepperCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  wizardStepperBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wizardStepperText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#DC2626',
-  },
-  wizardOptionsCol: {
-    width: '100%',
-    gap: 12,
-  },
-  wizardOptionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  wizardOptionCardActive: {
-    borderColor: '#DC2626',
-    backgroundColor: '#FEF2F2',
-  },
-  wizardOptionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginLeft: 12,
-  },
-  wizardOptionTextActive: {
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  wizardBottomActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    gap: 12,
-  },
-  wizardBackBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
-  },
-  wizardBackBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  wizardNextBtn: {
-    flex: 1,
-    backgroundColor: '#DC2626',
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  wizardNextBtnText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* Full Article Reader Modal */
-  modalFullContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundSurface,
-  },
-  modalFullHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCategoryText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  modalContentPadding: {
-    padding: 20,
-  },
-  modalArticleTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  modalArticleTime: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginBottom: 20,
-  },
-  modalArticleBody: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: colors.textPrimary,
-  },
-
-  /* Add Med Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 20,
-    padding: 20,
-  },
-  modalCardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 16,
-  },
-  modalInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  modalBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalCancelBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  modalSaveBtn: {
-    backgroundColor: '#DC2626',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  modalSaveText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});

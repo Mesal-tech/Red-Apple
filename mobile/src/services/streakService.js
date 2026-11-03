@@ -341,11 +341,14 @@ async function syncStreakToBackend(streakData) {
   }
 }
 
+export const getLiveStreakData = getStreakData;
+
 export default {
   formatLocalDate,
   computeStreakStats,
   getWeekDaysWithStatus,
   getStreakData,
+  getLiveStreakData,
   recordStreakActivity,
   restoreStreak,
 };

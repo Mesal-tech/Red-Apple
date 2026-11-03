@@ -1,29 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  Modal,
   ScrollView,
   RefreshControl,
-  StatusBar,
   Alert,
   Image,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppBottomSheet from '../components/AppBottomSheet';
 import * as telemedService from '../services/telemedicineService';
 import PaystackCheckoutModal from '../components/PaystackCheckoutModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { initializeConsultationPayment } from '../services/paymentService';
+import { useTheme } from '../context/ThemeContext';
 
-const STATUSBAR_HEIGHT =
-  Platform.OS === 'android'
-    ? (StatusBar.currentHeight || 38)
-    : Platform.OS === 'ios'
-      ? 44
-      : 0;
+/**
+ * Universal parser & formatter for appointment dates & times.
+ */
+const formatBookingDateTime = (str) => {
+  if (!str) return { date: 'Scheduled Visit', time: 'Consultation', full: 'Scheduled Consultation' };
+
+  try {
+    // 1. Try ISO string parse first (e.g. '2026-10-25T14:00:00Z')
+    if (typeof str === 'string' && (str.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(str))) {
+      if (!str.includes(',')) {
+        const d = new Date(str.includes(' ') && !str.includes('T') ? str.replace(' ', 'T') : str);
+        if (!isNaN(d.getTime())) {
+          const date = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          return { date, time, full: `${date} • ${time}` };
+        }
+      }
+    }
+
+    // 2. Handle comma-separated strings like 'Mon, Oct 19, 2026-10-19, 09:00' or 'Mon, Oct 19, 09:00 AM'
+    if (typeof str === 'string' && str.includes(',')) {
+      const parts = str.split(',').map((s) => s.trim());
+      let timePart = parts[parts.length - 1]; // e.g. '09:00' or '9:00 AM'
+
+      // Format 24hr time '09:00' or '14:30' into 12hr format '9:00 AM'
+      const match24 = timePart.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+      if (match24) {
+        let h = parseInt(match24[1], 10);
+        const m = match24[2];
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        timePart = `${h}:${m} ${ampm}`;
+      }
+
+      // Date part: prefer 'Mon, Oct 19' if available
+      let datePart = parts[0];
+      if (
+        parts.length >= 2 &&
+        !/^\d{4}-\d{2}-\d{2}$/.test(parts[1]) &&
+        !/^(\d{1,2}):(\d{2})/.test(parts[1])
+      ) {
+        datePart = `${parts[0]}, ${parts[1]}`;
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) {
+        const d = new Date(parts[0]);
+        if (!isNaN(d.getTime())) {
+          datePart = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+      }
+
+      return { date: datePart, time: timePart, full: `${datePart} • ${timePart}` };
+    }
+  } catch (_) {}
+
+  return { date: str, time: 'Consultation', full: str };
+};
 
 export default function AppointmentsListModal({
   visible,
@@ -34,6 +81,7 @@ export default function AppointmentsListModal({
   onBookNewConsultation,
   onRefreshBookings,
 }) {
+  const { isDarkMode, theme } = useTheme();
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' | 'past'
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [internalBookings, setInternalBookings] = useState(bookings || []);
@@ -41,6 +89,9 @@ export default function AppointmentsListModal({
   // Paystack Telemedicine Payment State
   const [showPaystackModal, setShowPaystackModal] = useState(false);
   const [paystackPaymentData, setPaystackPaymentData] = useState(null);
+
+  // Cancellation Confirmation Modal State
+  const [cancelConfirmBooking, setCancelConfirmBooking] = useState(null);
 
   const handlePayForBooking = async (booking) => {
     try {
@@ -110,26 +161,9 @@ export default function AppointmentsListModal({
   const displayedList = activeTab === 'upcoming' ? upcomingBookings : pastBookings;
 
   const handleCancelPrompt = (booking) => {
-    Alert.alert(
-      'Cancel Consultation?',
-      `Are you sure you want to cancel your consultation with ${booking.doctor_name || 'your specialist'}?`,
-      [
-        { text: 'Keep Appointment', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            if (onCancelBooking) {
-              await onCancelBooking(booking.booking_id);
-            } else {
-              await telemedService.cancelBooking(booking.booking_id);
-            }
-            await fetchLiveBookings();
-          },
-        },
-      ]
-    );
+    setCancelConfirmBooking(booking);
   };
+
 
   if (!visible) return null;
 
@@ -139,13 +173,14 @@ export default function AppointmentsListModal({
       onClose={onClose}
       showHandle={true}
       showCloseChevron={false}
+      height="92%"
       maxHeight="94%"
       noPadding={true}
       scrollable={false}
       headerLeft={
         <TouchableOpacity
           activeOpacity={0.75}
-          style={styles.headerIconBtn}
+          className="w-[42px] h-[42px] rounded-full bg-slate-50 border border-slate-200 items-center justify-center"
           onPress={onClose}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
@@ -155,7 +190,7 @@ export default function AppointmentsListModal({
       headerRight={
         <TouchableOpacity
           activeOpacity={0.75}
-          style={styles.headerIconBtn}
+          className="w-[42px] h-[42px] rounded-full bg-slate-50 border border-slate-200 items-center justify-center"
           onPress={handleRefresh}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
@@ -173,33 +208,50 @@ export default function AppointmentsListModal({
           : `${pastBookings.length} Past Consultation${pastBookings.length === 1 ? '' : 's'}`
       }
     >
-      <View style={styles.modalRoot}>
-        {/* MODERN SEGMENTED TABS */}
-        <View style={styles.tabsWrapper}>
+      <View style={{ flex: 1, width: '100%', backgroundColor: theme.card }}>
+        {/* CATEGORY / SEGMENT PILLS (CENTERED WITH RED ACTIVE ACCENT) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, gap: 10, backgroundColor: theme.card }}>
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[styles.tabBtn, activeTab === 'upcoming' && styles.tabBtnActive]}
             onPress={() => setActiveTab('upcoming')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 18,
+              paddingVertical: 9.5,
+              borderRadius: 9999,
+              backgroundColor: activeTab === 'upcoming' ? '#DC2626' : (isDarkMode ? '#363636' : '#F1F5F9'),
+              gap: 7,
+            }}
           >
             <Ionicons
               name="calendar"
               size={15}
-              color={activeTab === 'upcoming' ? '#DC2626' : '#64748B'}
+              color={activeTab === 'upcoming' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#475569')}
             />
-            <Text style={[styles.tabText, activeTab === 'upcoming' && styles.tabTextActive]}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: activeTab === 'upcoming' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#475569'),
+              }}
+            >
               Upcoming
             </Text>
             <View
-              style={[
-                styles.tabBadge,
-                activeTab === 'upcoming' && styles.tabBadgeActive,
-              ]}
+              style={{
+                paddingHorizontal: 7.5,
+                paddingVertical: 1.5,
+                borderRadius: 9999,
+                backgroundColor: activeTab === 'upcoming' ? 'rgba(255, 255, 255, 0.25)' : (isDarkMode ? '#474747' : '#E2E8F0'),
+              }}
             >
               <Text
-                style={[
-                  styles.tabBadgeText,
-                  activeTab === 'upcoming' && styles.tabBadgeTextActive,
-                ]}
+                style={{
+                  fontSize: 11,
+                  fontWeight: '800',
+                  color: activeTab === 'upcoming' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#475569'),
+                }}
               >
                 {upcomingBookings.length}
               </Text>
@@ -208,28 +260,45 @@ export default function AppointmentsListModal({
 
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[styles.tabBtn, activeTab === 'past' && styles.tabBtnActive]}
             onPress={() => setActiveTab('past')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 18,
+              paddingVertical: 9.5,
+              borderRadius: 9999,
+              backgroundColor: activeTab === 'past' ? '#DC2626' : (isDarkMode ? '#363636' : '#F1F5F9'),
+              gap: 7,
+            }}
           >
             <Ionicons
               name="time-outline"
               size={15}
-              color={activeTab === 'past' ? '#111827' : '#64748B'}
+              color={activeTab === 'past' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#475569')}
             />
-            <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: activeTab === 'past' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#475569'),
+              }}
+            >
               Past History
             </Text>
             <View
-              style={[
-                styles.tabBadge,
-                activeTab === 'past' && styles.tabBadgeActive,
-              ]}
+              style={{
+                paddingHorizontal: 7.5,
+                paddingVertical: 1.5,
+                borderRadius: 9999,
+                backgroundColor: activeTab === 'past' ? 'rgba(255, 255, 255, 0.25)' : (isDarkMode ? '#474747' : '#E2E8F0'),
+              }}
             >
               <Text
-                style={[
-                  styles.tabBadgeText,
-                  activeTab === 'past' && styles.tabBadgeTextActive,
-                ]}
+                style={{
+                  fontSize: 11,
+                  fontWeight: '800',
+                  color: activeTab === 'past' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#475569'),
+                }}
               >
                 {pastBookings.length}
               </Text>
@@ -237,10 +306,16 @@ export default function AppointmentsListModal({
           </TouchableOpacity>
         </View>
 
-        {/* SCROLLABLE CONSULTATIONS FEED */}
+        {/* SCROLLABLE CONSULTATIONS FEED (BORDERLESS LIST) */}
         <ScrollView
-          style={styles.scrollContainer}
-          contentContainerStyle={styles.scrollContent}
+          className="flex-1"
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 4,
+            paddingBottom: 50,
+            flexGrow: 1,
+            justifyContent: displayedList.length === 0 ? 'center' : 'flex-start',
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -248,26 +323,42 @@ export default function AppointmentsListModal({
               onRefresh={handleRefresh}
               tintColor="#DC2626"
               colors={['#DC2626', '#059669']}
-              progressBackgroundColor="#FFFFFF"
+              progressBackgroundColor={theme.card}
             />
           }
         >
           {displayedList.length === 0 ? (
-            /* EMPTY STATE */
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIconCircle}>
+            /* EMPTY STATE: VERTICALLY AND HORIZONTALLY CENTERED */
+            <View className="py-8 items-center justify-center px-6">
+              <View
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 36,
+                  backgroundColor: isDarkMode ? '#3A1E22' : '#FEF2F2',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 16,
+                }}
+              >
                 <Ionicons
                   name={activeTab === 'upcoming' ? 'calendar-outline' : 'folder-open-outline'}
-                  size={36}
+                  size={32}
                   color="#DC2626"
                 />
               </View>
-              <Text style={styles.emptyTitle}>
+              <Text
+                className="text-base font-extrabold mb-1.5 text-center"
+                style={{ color: theme.textPrimary }}
+              >
                 {activeTab === 'upcoming'
                   ? 'No Upcoming Consultations'
                   : 'No Consultation History'}
               </Text>
-              <Text style={styles.emptySub}>
+              <Text
+                className="text-xs text-center leading-relaxed mb-6 max-w-[280px]"
+                style={{ color: theme.textSecondary }}
+              >
                 {activeTab === 'upcoming'
                   ? 'You do not have any scheduled appointments right now. Book a 1-on-1 virtual HD video consultation.'
                   : 'Your completed consultations, doctor notes, and follow-up guidance will be archived here.'}
@@ -276,187 +367,264 @@ export default function AppointmentsListModal({
               {activeTab === 'upcoming' && (
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={styles.emptyBookBtn}
+                  className="flex-row items-center bg-[#DC2626] px-6 h-11 rounded-full gap-2 shadow-xs"
                   onPress={() => {
                     onClose();
                     if (onBookNewConsultation) onBookNewConsultation();
                   }}
                 >
-                  <Ionicons name="calendar" size={16} color="#FFFFFF" />
-                  <Text style={styles.emptyBookBtnText}>Book a Specialist</Text>
+                  <Ionicons name="calendar" size={15} color="#FFFFFF" />
+                  <Text className="text-white text-xs font-bold">Book a Specialist</Text>
                 </TouchableOpacity>
               )}
             </View>
           ) : (
-            /* LIST OF CONSULTATION CARDS */
-            displayedList.map((booking) => {
+            /* BORDERLESS CLEAN LIST MATCHING PARTNER CLINICS DESIGN */
+            displayedList.map((booking, idx) => {
               const isRequested = booking.status === 'requested';
               const isConfirmed = booking.status === 'confirmed';
               const isCancelled = booking.status === 'cancelled';
               const isCompleted = booking.status === 'completed';
+              const formattedTime = formatBookingDateTime(booking.scheduled_time);
 
               return (
-                <View key={booking.booking_id} style={styles.consultationCard}>
-                  {/* CARD HEADER: TIME & STATUS */}
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.timeChip}>
-                      <Ionicons name="time-outline" size={14} color="#DC2626" />
-                      <Text style={styles.timeChipText}>
-                        {booking.scheduled_time || 'Scheduled Today'}
-                      </Text>
-                    </View>
-
+                <View key={booking.booking_id || idx}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 14,
+                      gap: 13,
+                    }}
+                  >
+                    {/* Left: 58x58 Circular Doctor Avatar */}
                     <View
-                      style={[
-                        styles.statusBadge,
-                        isRequested
-                          ? styles.statusBadgeRequested
-                          : isConfirmed
-                            ? styles.statusBadgeConfirmed
-                            : isCancelled
-                              ? styles.statusBadgeCancelled
-                              : styles.statusBadgeCompleted,
-                      ]}
+                      style={{
+                        width: 58,
+                        height: 58,
+                        borderRadius: 29,
+                        backgroundColor: isDarkMode ? '#363636' : '#F1F5F9',
+                        overflow: 'hidden',
+                      }}
                     >
-                      <View
-                        style={[
-                          styles.statusDot,
-                          isRequested
-                            ? { backgroundColor: '#F59E0B' }
-                            : isConfirmed
-                              ? { backgroundColor: '#C81E3A' }
-                              : isCancelled
-                                ? { backgroundColor: '#EF4444' }
-                                : { backgroundColor: '#64748B' },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.statusBadgeText,
-                          isRequested
-                            ? { color: '#B45309' }
-                            : isConfirmed
-                              ? { color: '#047857' }
-                              : isCancelled
-                                ? { color: '#B91C1C' }
-                                : { color: '#475569' },
-                        ]}
-                      >
-                        {isRequested
-                          ? 'Payment Pending'
-                          : isConfirmed
-                            ? 'Confirmed'
-                            : isCancelled
-                              ? 'Cancelled'
-                              : 'Completed'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* DOCTOR BIO ROW */}
-                  <View style={styles.doctorInfoRow}>
-                    <View style={styles.avatarWrapper}>
                       <Image
                         source={{
                           uri:
                             booking.doctor_photo_url ||
+                            booking.doctor_photo ||
                             'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
                         }}
-                        style={styles.doctorAvatarImg}
+                        style={{ width: 58, height: 58 }}
+                        resizeMode="cover"
                       />
-                      <View style={styles.avatarVerifiedBadge}>
-                        <Ionicons name="checkmark-circle" size={14} color="#059669" />
-                      </View>
                     </View>
 
-                    <View style={styles.doctorTextCol}>
-                      <Text style={styles.doctorName}>
-                        {booking.doctor_name || 'Consulting Specialist'}
-                      </Text>
-                      <Text style={styles.doctorSpec}>
-                        {booking.doctor_specialty || 'Obstetrician & Gynecologist'}
-                      </Text>
-                      <View style={styles.credentialsBadge}>
-                        <Text style={styles.credentialsBadgeText}>
-                          {booking.doctor_credentials || 'MBBS, FWACS, FMCOG'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* CONSULTATION DETAILS CHIPS */}
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaChip}>
-                      <Ionicons name="videocam" size={13} color="#059669" />
-                      <Text style={styles.metaChipText}>HD Video (30 mins)</Text>
-                    </View>
-                    <View style={styles.metaChip}>
-                      <Ionicons name="medical-outline" size={13} color="#008080" />
-                      <Text style={styles.metaChipText}>Red Apple Clinic</Text>
-                    </View>
-                  </View>
-
-                  {/* REASON FOR VISIT */}
-                  <View style={styles.reasonContainer}>
-                    <Text style={styles.reasonLabel}>REASON FOR VISIT</Text>
-                    <Text style={styles.reasonValue} numberOfLines={2}>
-                      {booking.reason || 'General Reproductive Health Consultation'}
-                    </Text>
-                  </View>
-
-                  {/* DOCTOR CLINICAL NOTES IF COMPLETED */}
-                  {isCompleted && (
-                    <View style={styles.clinicalNotesBox}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                        <Ionicons name="document-text" size={14} color="#15803D" />
-                        <Text style={styles.clinicalNotesTitle}>Doctor Clinical Summary</Text>
-                      </View>
-                      <Text style={styles.clinicalNotesBody}>
-                        {booking.doctor_notes ||
-                          'Session concluded. Advised continued biomarker tracking and prenatal vitamins. Follow-up consultation in 4 weeks.'}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* ACTION BUTTONS (FOR UPCOMING) */}
-                  {activeTab === 'upcoming' && !isCancelled && (
-                    <View style={styles.cardActionsRow}>
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        style={styles.cancelBtn}
-                        onPress={() => handleCancelPrompt(booking)}
+                    {/* Right: Info & Inline Action */}
+                    <View style={{ flex: 1, justifyContent: 'center' }}>
+                      {/* Name + Status Row */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 6,
+                        }}
                       >
-                        <Text style={styles.cancelBtnText}>Cancel</Text>
-                      </TouchableOpacity>
-
-                      {booking.status === 'requested' ? (
-                        <TouchableOpacity
-                          activeOpacity={0.85}
-                          style={[styles.joinVideoBtn, { backgroundColor: '#059669' }]}
-                          onPress={() => handlePayForBooking(booking)}
-                        >
-                          <Ionicons name="card" size={17} color="#FFFFFF" />
-                          <Text style={styles.joinVideoBtnText}>
-                            Pay Fee {booking.fee_ngn ? `(₦${Number(booking.fee_ngn).toLocaleString()})` : ''}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
+                          <Text
+                            style={{ fontSize: 15, fontWeight: '800', color: theme.textPrimary }}
+                            numberOfLines={1}
+                          >
+                            {booking.doctor_name || 'Consulting Specialist'}
                           </Text>
-                          <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          activeOpacity={0.85}
-                          style={styles.joinVideoBtn}
-                          onPress={() => {
-                            if (onJoinVideoCall) {
-                              onJoinVideoCall(booking);
-                            }
+                          <Ionicons name="checkmark-circle" size={15} color="#059669" />
+                        </View>
+
+                        {/* Status Pill Badge */}
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2.5,
+                            borderRadius: 9999,
+                            backgroundColor: isRequested
+                              ? (isDarkMode ? '#3A2E1A' : '#FEF3C7')
+                              : isConfirmed
+                              ? (isDarkMode ? '#132E22' : '#ECFDF5')
+                              : isCancelled
+                              ? (isDarkMode ? '#3A1E22' : '#FEF2F2')
+                              : (isDarkMode ? '#363636' : '#F1F5F9'),
                           }}
                         >
-                          <Ionicons name="videocam" size={17} color="#FFFFFF" />
-                          <Text style={styles.joinVideoBtnText}>Join Video Consultation</Text>
-                          <Ionicons name="chevron-forward" size={15} color="#FFFFFF" />
-                        </TouchableOpacity>
+                          <View
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: isRequested
+                                ? '#D97706'
+                                : isConfirmed
+                                ? '#059669'
+                                : isCancelled
+                                ? '#DC2626'
+                                : '#64748B',
+                            }}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '800',
+                              color: isRequested
+                                ? '#B45309'
+                                : isConfirmed
+                                ? '#059669'
+                                : isCancelled
+                                ? '#DC2626'
+                                : (isDarkMode ? '#ABABAB' : '#475569'),
+                            }}
+                          >
+                            {isRequested
+                              ? 'Payment Due'
+                              : isConfirmed
+                              ? 'Confirmed'
+                              : isCancelled
+                              ? 'Cancelled'
+                              : 'Completed'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Specialty */}
+                      <Text
+                        style={{ fontSize: 12, fontWeight: '700', color: '#DC2626', marginTop: 2 }}
+                        numberOfLines={1}
+                      >
+                        {booking.doctor_specialty || 'Obstetrician & Gynecologist'}
+                      </Text>
+
+                      {/* Date & Time */}
+                      <Text
+                        style={{ fontSize: 12, fontWeight: '500', color: theme.textSecondary, marginTop: 2 }}
+                        numberOfLines={1}
+                      >
+                        🗓 {formattedTime.date} • {formattedTime.time}
+                      </Text>
+
+                      {/* Bottom Row: Cancel text on Left, Action Pill on Right */}
+                      {activeTab === 'upcoming' && !isCancelled && (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginTop: 8,
+                          }}
+                        >
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            onPress={() => handleCancelPrompt(booking)}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textMuted }}>
+                              Cancel
+                            </Text>
+                          </TouchableOpacity>
+
+                          {booking.status === 'requested' ? (
+                            <TouchableOpacity
+                              activeOpacity={0.88}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#DC2626',
+                                paddingHorizontal: 13,
+                                paddingVertical: 6.5,
+                                borderRadius: 9999,
+                                gap: 4,
+                              }}
+                              onPress={() => handlePayForBooking(booking)}
+                            >
+                              <Ionicons name="card" size={12} color="#FFFFFF" />
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                                Pay ₦{Number(booking.fee_ngn || 15000).toLocaleString()}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              activeOpacity={0.88}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: '#DC2626',
+                                paddingHorizontal: 13,
+                                paddingVertical: 6.5,
+                                borderRadius: 9999,
+                                gap: 4,
+                              }}
+                              onPress={() => {
+                                if (onJoinVideoCall) {
+                                  onJoinVideoCall(booking);
+                                }
+                              }}
+                            >
+                              <Ionicons name="videocam" size={12} color="#FFFFFF" />
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                                Join Video
+                              </Text>
+                              <Ionicons name="arrow-forward" size={11} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+
+                      {/* Past Consultation row */}
+                      {activeTab === 'past' && (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginTop: 8,
+                          }}
+                        >
+                          <Text
+                            style={{ fontSize: 12, color: theme.textSecondary, flex: 1, marginRight: 8 }}
+                            numberOfLines={1}
+                          >
+                            {booking.doctor_notes || (isCancelled ? 'Visit was cancelled' : 'Consultation finished')}
+                          </Text>
+
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: '#DC2626',
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 9999,
+                              gap: 4,
+                            }}
+                            onPress={() => {
+                              onClose();
+                              if (onBookNewConsultation) onBookNewConsultation();
+                            }}
+                          >
+                            <Ionicons name="calendar" size={11} color="#FFFFFF" />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                              {isCompleted ? 'Follow-up' : 'Rebook'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
+                  </View>
+
+                  {/* Clean hairline bottom divider between items (No all-round border) */}
+                  {idx < displayedList.length - 1 && (
+                    <View style={{ height: 1, backgroundColor: theme.cardBorder, marginVertical: 2 }} />
                   )}
                 </View>
               );
@@ -481,418 +649,36 @@ export default function AppointmentsListModal({
             fetchLiveBookings();
           }}
         />
+
+        {/* REUSABLE CONFIRMATION MODAL FOR CANCELLATION */}
+        <ConfirmationModal
+          visible={Boolean(cancelConfirmBooking)}
+          onClose={() => setCancelConfirmBooking(null)}
+          title="Cancel Consultation?"
+          message={`Are you sure you want to cancel your consultation with ${
+            cancelConfirmBooking?.doctor_name || 'your specialist'
+          }? This action cannot be undone.`}
+          confirmText="Yes, Cancel"
+          cancelText="Keep Appointment"
+          isDestructive={true}
+          icon="alert-circle-outline"
+          onConfirm={async () => {
+            if (!cancelConfirmBooking) return;
+            try {
+              if (onCancelBooking) {
+                await onCancelBooking(cancelConfirmBooking.booking_id);
+              } else {
+                await telemedService.cancelBooking(cancelConfirmBooking.booking_id);
+              }
+              await fetchLiveBookings();
+            } catch (err) {
+              console.warn('[AppointmentsListModal] Error cancelling booking:', err);
+            } finally {
+              setCancelConfirmBooking(null);
+            }
+          }}
+        />
       </View>
     </AppBottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-
-  /* HEADER */
-  headerContainer: {
-    paddingTop: STATUSBAR_HEIGHT + 10,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  headerIconBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenterCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.3,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-
-  /* TABS */
-  tabsWrapper: {
-    flexDirection: 'row',
-    backgroundColor: '#EEF2F6',
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginVertical: 14,
-    padding: 4,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 11,
-    gap: 7,
-  },
-  tabBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  tabTextActive: {
-    fontWeight: '800',
-    color: '#111827',
-  },
-  tabBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  tabBadgeActive: {
-    backgroundColor: '#DC2626',
-  },
-  tabBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  tabBadgeTextActive: {
-    color: '#FFFFFF',
-  },
-
-  /* SCROLL CONTENT */
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-  },
-
-  /* EMPTY STATE */
-  emptyCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 44,
-    paddingHorizontal: 24,
-    marginVertical: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FFEBEE',
-    borderWidth: 2,
-    borderColor: '#FFCDD2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySub: {
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  emptyBookBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 22,
-    height: 46,
-    borderRadius: 23,
-    gap: 8,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  emptyBookBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  /* CONSULTATION CARD */
-  consultationCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  timeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  timeChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  statusBadgeRequested: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  statusBadgeConfirmed: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#D1FAE5',
-  },
-  statusBadgeCancelled: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  statusBadgeCompleted: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  /* DOCTOR INFO ROW */
-  doctorInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  avatarWrapper: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  doctorAvatarImg: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: '#E0F2F1',
-  },
-  avatarVerifiedBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-  },
-  doctorTextCol: {
-    flex: 1,
-  },
-  doctorName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  doctorSpec: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#008080',
-    marginTop: 2,
-  },
-  credentialsBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 4,
-  },
-  credentialsBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#475569',
-  },
-
-  /* METADATA CHIPS */
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  metaChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-
-  /* REASON FOR VISIT */
-  reasonContainer: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 14,
-  },
-  reasonLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  reasonValue: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#1E293B',
-  },
-
-  /* CLINICAL NOTES */
-  clinicalNotesBox: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 14,
-  },
-  clinicalNotesTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  clinicalNotesBody: {
-    fontSize: 12,
-    color: '#166534',
-    lineHeight: 18,
-  },
-
-  /* ACTIONS ROW */
-  cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 14,
-  },
-  cancelBtn: {
-    height: 44,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  joinVideoBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#059669',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  joinVideoBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});

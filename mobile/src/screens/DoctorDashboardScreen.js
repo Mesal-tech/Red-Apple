@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   ScrollView,
@@ -28,38 +27,6 @@ import { DoctorDashboardSkeleton } from '../components/DoctorCareSkeleton';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'web' ? 6 : (StatusBar.currentHeight || 40);
 
-// SIGNATURE RED APPLE CLINICAL THEME
-const THEME = {
-  // Brand Reds
-  primary: '#DC2626',            // Signature Apple Red
-  primaryDark: '#B91C1C',        // Deep Apple Crimson
-  primaryDeep: '#880E18',        // Garnet Shade
-  primarySoft: '#FFF1F2',        // Delicate Rose Highlight
-  primaryBlush: '#FFE4E6',       // Rose Border / Tint
-  primaryGlow: 'rgba(220, 38, 38, 0.08)',
-
-  // Surfaces & Backgrounds
-  bg: '#FFFFFF',
-  pageBg: '#FAF7F7',             // Warm Off-White / Sand Canvas
-  cardBg: '#FFFFFF',
-  cardMuted: '#FBF9F9',
-  border: '#F0E8E6',
-  borderSubtle: '#F7EFEF',
-
-  // Typography
-  textPrimary: '#1C1917',        // Rich Warm Obsidian / Charcoal
-  textSecondary: '#78716C',      // Warm Muted Gray
-  textMuted: '#A8A29E',          // Tertiary Gray
-  textLight: '#FFFFFF',
-
-  // Telemedicine & Verification Accents
-  emerald: '#059669',            // Verified Medical Green
-  emeraldLight: '#ECFDF5',
-  emeraldBorder: '#A7F3D0',
-  amber: '#D97706',              // Review Star Amber
-  amberLight: '#FEF3C7',
-};
-
 export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView }) {
   const { user } = useAuth();
   const { width: windowWidth } = useWindowDimensions();
@@ -75,6 +42,7 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
 
   // Appointments & Consultations State
   const [consultations, setConsultations] = useState([]);
+  const [consultationsError, setConsultationsError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -116,84 +84,99 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
   const loadDoctorData = async () => {
     try {
       setIsLoading(true);
-      const bookings = await telemedService.getUserBookings();
+      setConsultationsError('');
+      const bookings = await telemedService.getDoctorBookings();
       setConsultations(bookings || []);
 
       const slots = await telemedService.getDoctorSlots('doc_mesal_okubor');
       setDoctorSlots(slots || []);
     } catch (e) {
-      console.warn('Error loading doctor dashboard data:', e);
+      console.warn('[DoctorDashboard] Load error:', e);
+      setConsultationsError(e.message || 'Could not load consultations. Pull down to try again.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await loadDoctorData();
-  };
-
   useEffect(() => {
     loadDoctorData();
   }, []);
 
-  // Filter queues
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    loadDoctorData();
+  };
+
+  // Active Queue: confirmed bookings that haven't been completed
   const activeQueue = useMemo(() => {
     return consultations.filter(
-      (c) => c.status === 'confirmed' || c.status === 'requested' || c.status === 'in_progress'
+      (c) => c.status === 'requested' || c.status === 'confirmed' || c.status === 'scheduled' || c.status === 'in_progress'
     );
   }, [consultations]);
 
+  // Completed Consultations
   const completedHistory = useMemo(() => {
     return consultations.filter(
-      (c) => c.status === 'completed' || c.status === 'cancelled'
+      (c) => c.status === 'completed' || c.doctor_notes || c.prescription_summary
     );
   }, [consultations]);
 
-  // Handle Starting Video Call
+  // Open Video Call
   const handleStartVideoCall = (booking) => {
     setActiveVideoCallBooking(booking);
     setShowVideoModal(true);
   };
 
-  // Open Notes Drawer
+  // Open Clinical Notes Editor
   const handleOpenNotes = (booking) => {
     setSelectedBookingForNotes(booking);
     setClinicalNotesText(booking.doctor_notes || '');
     setPrescriptionText(booking.prescription_summary || '');
   };
 
-  // Save Clinical Notes & Complete Consult
+  // Save Clinical Notes
   const handleSaveNotes = async () => {
     if (!selectedBookingForNotes) return;
     setIsSavingNotes(true);
     try {
-      await telemedService.completeConsultation(
-        selectedBookingForNotes.booking_id,
-        clinicalNotesText,
-        prescriptionText
+      await telemedService.addClinicalNotes(selectedBookingForNotes.booking_id, {
+        notes: clinicalNotesText,
+        prescription: prescriptionText,
+      });
+
+      // Update local state
+      setConsultations((prev) =>
+        prev.map((c) =>
+          c.booking_id === selectedBookingForNotes.booking_id
+            ? {
+                ...c,
+                doctor_notes: clinicalNotesText,
+                prescription_summary: prescriptionText,
+                status: 'completed',
+              }
+            : c
+        )
       );
-      Alert.alert('Success', 'Clinical consultation notes & prescription saved.');
+
       setSelectedBookingForNotes(null);
-      await loadDoctorData();
+      Alert.alert('Consultation Updated', 'Clinical notes and prescription saved successfully.');
     } catch (e) {
-      Alert.alert('Error', 'Could not save notes. Please try again.');
+      Alert.alert('Error', 'Failed to save clinical notes.');
     } finally {
       setIsSavingNotes(false);
     }
   };
 
-  // Toggle Slot availability
+  // Toggle Slot Availability
   const handleToggleSlot = async (slotId) => {
     try {
-      await telemedService.toggleDoctorSlot(slotId);
-      const updated = doctorSlots.map((s) =>
-        s.slot_id === slotId ? { ...s, is_booked: !s.is_booked } : s
+      const updated = await telemedService.toggleSlotAvailability(slotId);
+      setDoctorSlots((prev) =>
+        prev.map((s) => (s.slot_id === slotId ? { ...s, is_booked: updated.is_booked } : s))
       );
-      setDoctorSlots(updated);
     } catch (e) {
-      Alert.alert('Error', 'Could not update slot status.');
+      Alert.alert('Error', 'Could not update slot.');
     }
   };
 
@@ -225,8 +208,8 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
   }, [doctorSlots, selectedSlotDayIndex, calendarDays]);
 
   return (
-    <View style={[styles.container, isLargeScreen && styles.desktopContainer]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <View className={`flex-1 bg-white ${isLargeScreen ? 'flex-row bg-[#FAF7F7]' : ''}`}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
       {/* WEB SIDEBAR ON LARGER SCREENS (PC / WEB) */}
       {isLargeScreen && (
@@ -242,429 +225,444 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
         />
       )}
 
-      <View style={isLargeScreen ? styles.desktopMainContent : { flex: 1 }}>
+      <View className={isLargeScreen ? 'flex-1 bg-[#FAF7F7]' : 'flex-1'}>
         {/* ========================================================================= */}
         {/* 1. TOP HEADER: DOCTOR IDENTITY & QUICK CONTROLS                           */}
         {/* ========================================================================= */}
-        <View style={styles.topHeader}>
-        <View style={styles.doctorHeaderLeft}>
-          <View style={styles.doctorAvatarRing}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&auto=format&fit=crop&q=80',
-              }}
-              style={styles.doctorAvatar}
-            />
-            <View style={styles.verifiedCheckBadge}>
-              <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+        <View
+          className="px-4 pb-3 flex-row items-center justify-between border-b border-gray-100 bg-white"
+          style={{ paddingTop: STATUSBAR_HEIGHT + 8 }}
+        >
+          <View className="flex-row items-center">
+            <View className="relative">
+              <Image
+                source={{
+                  uri: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&auto=format&fit=crop&q=80',
+                }}
+                className="w-12 h-12 rounded-full border-2 border-red-100"
+              />
+              <View className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 items-center justify-center border border-white">
+                <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+              </View>
+            </View>
+
+            <View className="ml-3">
+              <Text className="text-base font-bold text-gray-900">{doctorName}</Text>
+              <Text className="text-xs text-gray-500 font-medium">OB-GYN · Telemedicine</Text>
             </View>
           </View>
 
-          <View style={styles.doctorHeaderTextCol}>
-            <Text style={styles.doctorNameTitle}>{doctorName}</Text>
-            <Text style={styles.doctorSpecialtySubtitle}>OB-GYN · Telemedicine</Text>
-          </View>
-        </View>
+          {/* Right Header Actions */}
+          <View className="flex-row items-center gap-2">
+            {onPreviewPatientView && (
+              <TouchableOpacity
+                activeOpacity={0.75}
+                className="w-9 h-9 rounded-xl bg-red-50 border border-red-100 items-center justify-center"
+                onPress={onPreviewPatientView}
+                accessibilityLabel="Patient View"
+              >
+                <Ionicons name="eye-outline" size={17} color="#DC2626" />
+              </TouchableOpacity>
+            )}
 
-        {/* Right Header Actions */}
-        <View style={styles.doctorHeaderRightActions}>
-          {onPreviewPatientView && (
             <TouchableOpacity
               activeOpacity={0.75}
-              style={[styles.headerSquareBtn, styles.patientViewBtn]}
-              onPress={onPreviewPatientView}
-              accessibilityLabel="Patient View"
+              className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 items-center justify-center"
+              onPress={loadDoctorData}
+              accessibilityLabel="Refresh"
             >
-              <Ionicons name="eye-outline" size={17} color={THEME.primary} />
+              <Ionicons name="refresh-outline" size={17} color="#1C1917" />
             </TouchableOpacity>
-          )}
 
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.headerSquareBtn}
-            onPress={loadDoctorData}
-            accessibilityLabel="Refresh"
-          >
-            <Ionicons name="refresh-outline" size={17} color={THEME.textPrimary} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              className="w-9 h-9 rounded-xl bg-red-50 border border-red-100 items-center justify-center"
+              onPress={onSignOut}
+              accessibilityLabel="Sign Out"
+            >
+              <Ionicons name="log-out-outline" size={17} color="#DC2626" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
+        {/* ========================================================================= */}
+        {/* 2. ON-DUTY STATUS BAR                                                     */}
+        {/* ========================================================================= */}
+        <View className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
           <TouchableOpacity
-            activeOpacity={0.75}
-            style={[styles.headerSquareBtn, styles.logoutBtn]}
-            onPress={onSignOut}
-            accessibilityLabel="Sign Out"
+            activeOpacity={0.85}
+            className={`flex-row items-center justify-between py-2 px-3.5 rounded-xl border ${
+              isOnDuty ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-100 border-gray-200'
+            }`}
+            onPress={() => setIsOnDuty(!isOnDuty)}
           >
-            <Ionicons name="log-out-outline" size={17} color={THEME.primary} />
+            <View className="flex-row items-center flex-1">
+              <View className="w-2 h-2 rounded-full mr-2 relative items-center justify-center">
+                {isOnDuty && <View className="w-3 h-3 rounded-full bg-emerald-400/40 absolute" />}
+                <View className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+              </View>
+              <Text className={`text-xs font-semibold ml-1 ${isOnDuty ? 'text-emerald-800' : 'text-gray-500'}`}>
+                {isOnDuty ? 'Clinic Online · Accepting Patients' : 'Clinic Offline · Availability Paused'}
+              </Text>
+            </View>
+            <Ionicons
+              name={isOnDuty ? 'toggle' : 'toggle-outline'}
+              size={20}
+              color={isOnDuty ? '#059669' : '#A8A29E'}
+              className="ml-1.5"
+            />
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* ========================================================================= */}
-      {/* 2. ON-DUTY STATUS BAR                                                     */}
-      {/* ========================================================================= */}
-      <View style={styles.dutyStatusBar}>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[styles.dutyTogglePill, isOnDuty ? styles.dutyPillActive : styles.dutyPillInactive]}
-          onPress={() => setIsOnDuty(!isOnDuty)}
+        {/* ========================================================================= */}
+        {/* 3. MAIN DASHBOARD CONTENT SCROLL VIEW                                     */}
+        {/* ========================================================================= */}
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="p-4 pb-28"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor="#DC2626"
+              colors={['#DC2626', '#B91C1C']}
+              progressBackgroundColor="#FFFFFF"
+            />
+          }
         >
-          <View style={[styles.statusDot, isOnDuty ? styles.dotGreen : styles.dotGray]}>
-            {isOnDuty && <View style={styles.statusDotPulse} />}
-          </View>
-          <Text style={[styles.dutyText, isOnDuty ? styles.dutyTextActive : styles.dutyTextInactive]}>
-            {isOnDuty ? 'Clinic Online · Accepting Patients' : 'Clinic Offline · Availability Paused'}
-          </Text>
-          <Ionicons
-            name={isOnDuty ? 'toggle' : 'toggle-outline'}
-            size={20}
-            color={isOnDuty ? THEME.emerald : THEME.textMuted}
-            style={{ marginLeft: 6 }}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* ========================================================================= */}
-      {/* 3. MAIN DASHBOARD CONTENT SCROLL VIEW                                     */}
-      {/* ========================================================================= */}
-
-      {/* ========================================================================= */}
-      {/* 5. TAB CONTENT                                                            */}
-      {/* ========================================================================= */}
-      <ScrollView
-        style={styles.mainContentScroll}
-        contentContainerStyle={styles.mainContentScrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor={THEME.primary}
-            colors={[THEME.primary, THEME.primaryDark]}
-            progressBackgroundColor="#FFFFFF"
-          />
-        }
-      >
-        {isLoading ? (
-          <DoctorDashboardSkeleton />
-        ) : activeTab === 'queue' ? (
-          /* ======================================================================= */
-          /* TAB 1: PATIENT QUEUE & TODAY'S SCHEDULE                                 */
-          /* ======================================================================= */
-          <View>
-            {/* Section Heading */}
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionHeaderTitleRow}>
-                <View style={styles.sectionRedPillIndicator} />
-                <Text style={styles.sectionHeaderTitle}>Today's Appointments</Text>
-              </View>
-            </View>
-
-            {activeQueue.length === 0 ? (
-              <View style={styles.emptyQueueCard}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="checkmark-done-circle" size={42} color={THEME.emerald} />
+          {isLoading ? (
+            <DoctorDashboardSkeleton />
+          ) : activeTab === 'queue' ? (
+            /* ======================================================================= */
+            /* TAB 1: PATIENT QUEUE & TODAY'S SCHEDULE                                 */
+            /* ======================================================================= */
+            <View>
+              {/* Section Heading */}
+              <View className="flex-row items-center justify-between mb-3.5">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-1 h-4 rounded-full bg-red-600" />
+                  <Text className="text-base font-bold text-gray-900">Today's Appointments</Text>
                 </View>
-                <Text style={styles.emptyTitle}>Queue is all clear!</Text>
-                <Text style={styles.emptySubtitle}>
-                  No pending consultations right now. Patients who book your open slots will appear here in real time.
-                </Text>
               </View>
-            ) : (
-              activeQueue.map((item) => (
-                <View key={item.booking_id} style={styles.patientAppointmentCard}>
-                  {/* Card Top: Patient Details & Status */}
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.patientInfoLeft}>
-                      <View style={styles.patientAvatarCircle}>
-                        <Text style={styles.patientAvatarText}>
-                          {(item.user_name || 'Patient')
-                            .split(' ')
-                            .map((w) => w[0])
-                            .join('')
-                            .substring(0, 2)
-                            .toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={{ marginLeft: 12 }}>
-                        <Text style={styles.patientName}>{item.user_name || 'Amara Okonkwo'}</Text>
-                        <View style={styles.patientTimeRow}>
-                          <Ionicons name="time-outline" size={13} color={THEME.textSecondary} />
-                          <Text style={styles.patientTimeSlot}>{item.scheduled_time || 'Today, 2:30 PM'}</Text>
+
+              {activeQueue.length === 0 ? (
+                <View className="bg-white rounded-2xl p-6 border border-gray-100 items-center text-center shadow-sm my-2">
+                  <View className={`w-14 h-14 rounded-full items-center justify-center mb-3 ${consultationsError ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+                    <Ionicons name={consultationsError ? 'alert-circle-outline' : 'checkmark-done-circle'} size={42} color={consultationsError ? '#D97706' : '#059669'} />
+                  </View>
+                  <Text className="text-base font-bold text-gray-900 mb-1 text-center">
+                    {consultationsError ? 'Could not load appointments' : 'Queue is all clear!'}
+                  </Text>
+                  <Text className="text-xs text-gray-500 text-center leading-relaxed max-w-[280px]">
+                    {consultationsError || 'No pending consultations right now. Patients who book your open slots will appear here in real time.'}
+                  </Text>
+                  {consultationsError ? (
+                    <TouchableOpacity activeOpacity={0.8} onPress={loadDoctorData} className="mt-3 px-4 py-2 rounded-full bg-red-600">
+                      <Text className="text-xs font-bold text-white">Try again</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : (
+                activeQueue.map((item) => (
+                  <View key={item.booking_id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-3.5">
+                    {/* Card Top: Patient Details & Status */}
+                    <View className="flex-row items-center justify-between mb-3">
+                      <View className="flex-row items-center flex-1">
+                        <View className="w-10 h-10 rounded-full bg-red-50 border border-red-100 items-center justify-center">
+                          <Text className="text-sm font-bold text-red-600">
+                            {(item.user_name || 'Patient')
+                              .split(' ')
+                              .map((w) => w[0])
+                              .join('')
+                              .substring(0, 2)
+                              .toUpperCase()}
+                          </Text>
+                        </View>
+                        <View className="ml-3">
+                          <Text className="text-sm font-bold text-gray-900">{item.user_name || 'Amara Okonkwo'}</Text>
+                          <View className="flex-row items-center gap-1 mt-0.5">
+                            <Ionicons name="time-outline" size={13} color="#78716C" />
+                            <Text className="text-xs text-gray-500 font-medium">{item.scheduled_time || 'Today, 2:30 PM'}</Text>
+                          </View>
                         </View>
                       </View>
-                    </View>
 
-                    <View style={styles.confirmedPill}>
-                      <View style={styles.confirmedDot} />
-                      <Text style={styles.confirmedPillText}>Confirmed</Text>
-                    </View>
-                  </View>
-
-                  {/* Consultation Reason & Details Box */}
-                  <View style={styles.reasonBox}>
-                    <Text style={styles.reasonBodyText}>
-                      <Text style={{ color: THEME.textPrimary, fontWeight: '600' }}>Reason: </Text>
-                      {item.reason || 'Routine consultation and check-in'}
-                    </Text>
-                    {item.symptoms_notes ? (
-                      <View style={styles.symptomsRow}>
-                        <Ionicons name="information-circle-outline" size={13} color={THEME.textSecondary} />
-                        <Text style={styles.symptomsText}>Symptoms: {item.symptoms_notes}</Text>
+                      <View className={`flex-row items-center gap-1.5 px-2.5 py-1 rounded-full border ${item.status === 'requested' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                        <View className={`w-1.5 h-1.5 rounded-full ${item.status === 'requested' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                        <Text className={`text-xs font-bold ${item.status === 'requested' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                          {item.status === 'requested' ? 'Payment pending' : 'Confirmed'}
+                        </Text>
                       </View>
-                    ) : null}
-                  </View>
+                    </View>
 
-                  {/* Doctor Actions: Start Video Call & Notes/Rx */}
-                  <View style={styles.cardActionsRow}>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={styles.startCallTouchWrapper}
-                      onPress={() => handleStartVideoCall(item)}
-                    >
-                      <LinearGradient
-                        colors={['#DC2626', '#B91C1C']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.startCallBtn}
+                    {/* Consultation Reason & Details Box */}
+                    <View className="bg-gray-50/80 rounded-xl p-3 border border-gray-100 mb-3">
+                      <Text className="text-xs text-gray-600 leading-relaxed">
+                        <Text className="text-gray-900 font-semibold">Reason: </Text>
+                        {item.reason || 'Routine consultation and check-in'}
+                      </Text>
+                      {item.symptoms_notes ? (
+                        <View className="flex-row items-center gap-1.5 mt-1.5 pt-1.5 border-t border-gray-200/60">
+                          <Ionicons name="information-circle-outline" size={13} color="#78716C" />
+                          <Text className="text-xs text-gray-500">Symptoms: {item.symptoms_notes}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Doctor Actions: Start Video Call & Notes/Rx */}
+                    <View className="flex-row items-center gap-2.5">
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        className="flex-1 rounded-xl overflow-hidden shadow-sm"
+                        onPress={() => handleStartVideoCall(item)}
                       >
-                        <Ionicons name="videocam" size={16} color="#FFFFFF" />
-                        <Text style={styles.startCallBtnText}>Start Video Call</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
+                        <LinearGradient
+                          colors={['#DC2626', '#B91C1C']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          className="py-2.5 px-3 flex-row items-center justify-center gap-2"
+                        >
+                          <Ionicons name="videocam" size={16} color="#FFFFFF" />
+                          <Text className="text-xs font-bold text-white">Start Video Call</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
 
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.addNotesBtn}
-                      onPress={() => handleOpenNotes(item)}
-                    >
-                      <Ionicons name="create-outline" size={16} color={THEME.primary} />
-                      <Text style={styles.addNotesBtnText}>Notes / Rx</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        className="py-2.5 px-3.5 rounded-xl border border-red-200 bg-red-50 flex-row items-center justify-center gap-1.5"
+                        onPress={() => handleOpenNotes(item)}
+                      >
+                        <Ionicons name="create-outline" size={16} color="#DC2626" />
+                        <Text className="text-xs font-bold text-red-600">Notes / Rx</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              ))
-            )}
-          </View>
-        ) : activeTab === 'slots' ? (
-          /* ======================================================================= */
-          /* TAB 2: AVAILABILITY & SLOTS MANAGER                                     */
-          /* ======================================================================= */
-          <View>
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionHeaderTitleRow}>
-                <View style={styles.sectionRedPillIndicator} />
-                <Text style={styles.sectionHeaderTitle}>Manage Consultation Slots</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.addNewSlotBtn}
-                activeOpacity={0.85}
-                onPress={() => setShowAddSlotModal(true)}
-              >
-                <Ionicons name="add" size={16} color="#FFFFFF" />
-                <Text style={styles.addNewSlotBtnText}>Add Slot</Text>
-              </TouchableOpacity>
+                ))
+              )}
             </View>
-
-            {/* Day Selector Pills */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.slotsDaysScroll}
-            >
-              {calendarDays.map((day) => {
-                const isSelected = selectedSlotDayIndex === day.index;
-                return (
-                  <TouchableOpacity
-                    key={day.index}
-                    activeOpacity={0.85}
-                    style={[styles.slotDayPill, isSelected && styles.slotDayPillActive]}
-                    onPress={() => setSelectedSlotDayIndex(day.index)}
-                  >
-                    <Text style={[styles.slotDayPillName, isSelected && styles.slotDayTextActive]}>
-                      {day.dayName}
-                    </Text>
-                    <Text style={[styles.slotDayPillNum, isSelected && styles.slotDayTextActive]}>
-                      {day.dayNum}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Slots List for Selected Day */}
-            <View style={styles.slotsGridContainer}>
-              <View style={styles.slotsHeaderRow}>
-                <Text style={styles.slotsSubheaderTitle}>
-                  Open Hours for {calendarDays[selectedSlotDayIndex]?.dayName} {calendarDays[selectedSlotDayIndex]?.dayNum}
-                </Text>
-                <Text style={styles.slotsSubheaderCount}>{selectedDaySlots.length} Slots</Text>
+          ) : activeTab === 'slots' ? (
+            /* ======================================================================= */
+            /* TAB 2: AVAILABILITY & SLOTS MANAGER                                     */
+            /* ======================================================================= */
+            <View>
+              <View className="flex-row items-center justify-between mb-3.5">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-1 h-4 rounded-full bg-red-600" />
+                  <Text className="text-base font-bold text-gray-900">Manage Consultation Slots</Text>
+                </View>
+                <TouchableOpacity
+                  className="flex-row items-center gap-1 bg-red-600 py-1.5 px-3 rounded-xl"
+                  activeOpacity={0.85}
+                  onPress={() => setShowAddSlotModal(true)}
+                >
+                  <Ionicons name="add" size={16} color="#FFFFFF" />
+                  <Text className="text-xs font-bold text-white">Add Slot</Text>
+                </TouchableOpacity>
               </View>
 
-              {selectedDaySlots.length === 0 ? (
-                <View style={styles.emptySlotsCard}>
-                  <Ionicons name="calendar-outline" size={32} color={THEME.textMuted} />
-                  <Text style={styles.emptyTitle}>No slots open for this date</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Tap "+ Add Slot" above to configure patient booking availability.
+              {/* Day Selector Pills */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerClassName="gap-2 py-1 mb-4"
+              >
+                {calendarDays.map((day) => {
+                  const isSelected = selectedSlotDayIndex === day.index;
+                  return (
+                    <TouchableOpacity
+                      key={day.index}
+                      activeOpacity={0.85}
+                      className={`w-14 py-2.5 rounded-2xl items-center justify-center shadow-sm ${
+                        isSelected ? 'bg-red-600 border border-red-600' : 'bg-white border border-gray-200'
+                      }`}
+                      onPress={() => setSelectedSlotDayIndex(day.index)}
+                    >
+                      <Text className={`text-xs font-semibold mb-0.5 ${isSelected ? 'text-white' : 'text-gray-500'}`}>
+                        {day.dayName}
+                      </Text>
+                      <Text className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                        {day.dayNum}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Slots List for Selected Day */}
+              <View className="gap-2">
+                <View className="flex-row items-center justify-between mb-2 px-1">
+                  <Text className="text-xs font-bold text-gray-700">
+                    Open Hours for {calendarDays[selectedSlotDayIndex]?.dayName} {calendarDays[selectedSlotDayIndex]?.dayNum}
+                  </Text>
+                  <Text className="text-xs font-semibold text-gray-400">{selectedDaySlots.length} Slots</Text>
+                </View>
+
+                {selectedDaySlots.length === 0 ? (
+                  <View className="bg-white rounded-2xl p-6 border border-gray-100 items-center text-center shadow-sm my-2">
+                    <Ionicons name="calendar-outline" size={32} color="#A8A29E" />
+                    <Text className="text-base font-bold text-gray-900 mb-1 text-center mt-2">No slots open for this date</Text>
+                    <Text className="text-xs text-gray-500 text-center leading-relaxed">
+                      Tap "+ Add Slot" above to configure patient booking availability.
+                    </Text>
+                  </View>
+                ) : (
+                  selectedDaySlots.map((slot) => (
+                    <View key={slot.slot_id} className="flex-row items-center justify-between bg-white rounded-xl p-3 border border-gray-100 shadow-sm mb-2">
+                      <View className="flex-row items-center gap-3">
+                        <View className={`w-9 h-9 rounded-xl items-center justify-center ${
+                          slot.is_booked ? 'bg-gray-100 border border-gray-200' : 'bg-emerald-50 border border-emerald-100'
+                        }`}>
+                          <Ionicons
+                            name="time"
+                            size={15}
+                            color={slot.is_booked ? '#78716C' : '#059669'}
+                          />
+                        </View>
+                        <View>
+                          <Text className="text-xs font-bold text-gray-900">
+                            {slot.start_time} - {slot.end_time || '30 min'}
+                          </Text>
+                          <Text className="text-[11px] text-gray-400">Telehealth Video Session</Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        className={`flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-full border ${
+                          slot.is_booked ? 'bg-gray-100 border-gray-200' : 'bg-emerald-50 border-emerald-200'
+                        }`}
+                        onPress={() => handleToggleSlot(slot.slot_id)}
+                      >
+                        <View className={`w-1.5 h-1.5 rounded-full ${slot.is_booked ? 'bg-gray-400' : 'bg-emerald-500'}`} />
+                        <Text
+                          className={`text-xs font-bold ${
+                            slot.is_booked ? 'text-gray-500' : 'text-emerald-700'
+                          }`}
+                        >
+                          {slot.is_booked ? 'Blocked / Booked' : 'Available'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+              </View>
+            </View>
+          ) : (
+            /* ======================================================================= */
+            /* TAB 3: COMPLETED CONSULTATION RECORDS                                   */
+            /* ======================================================================= */
+            <View>
+              <View className="flex-row items-center justify-between mb-3.5">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-1 h-4 rounded-full bg-red-600" />
+                  <Text className="text-base font-bold text-gray-900">Completed Consultations</Text>
+                </View>
+              </View>
+
+              {completedHistory.length === 0 ? (
+                <View className="bg-white rounded-2xl p-6 border border-gray-100 items-center text-center shadow-sm my-2">
+                  <View className="w-14 h-14 rounded-full bg-gray-100 items-center justify-center mb-3">
+                    <Ionicons name="folder-open-outline" size={38} color="#A8A29E" />
+                  </View>
+                  <Text className="text-base font-bold text-gray-900 mb-1 text-center">No archived consultations yet</Text>
+                  <Text className="text-xs text-gray-500 text-center leading-relaxed">
+                    Completed telemedicine sessions and patient clinical summaries will appear here for follow-up reference.
                   </Text>
                 </View>
               ) : (
-                selectedDaySlots.map((slot) => (
-                  <View key={slot.slot_id} style={styles.slotRowItem}>
-                    <View style={styles.slotTimeInfo}>
-                      <View style={[styles.slotClockCircle, slot.is_booked ? styles.slotClockBlocked : styles.slotClockOpen]}>
-                        <Ionicons
-                          name="time"
-                          size={15}
-                          color={slot.is_booked ? THEME.textSecondary : THEME.emerald}
-                        />
+                completedHistory.map((item) => (
+                  <View key={item.booking_id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-3.5">
+                    <View className="flex-row items-center justify-between mb-3">
+                      <View className="flex-row items-center flex-1">
+                        <View className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center">
+                          <Text className="text-xs font-bold text-gray-600">
+                            {(item.user_name || 'Patient')
+                              .split(' ')
+                              .map((w) => w[0])
+                              .join('')
+                              .substring(0, 2)
+                              .toUpperCase()}
+                          </Text>
+                        </View>
+                        <View className="ml-2.5">
+                          <Text className="text-sm font-bold text-gray-900">{item.user_name || 'Patient'}</Text>
+                          <Text className="text-xs text-gray-400 mt-0.5">{item.scheduled_time}</Text>
+                        </View>
                       </View>
-                      <View>
-                        <Text style={styles.slotTimeLabel}>
-                          {slot.start_time} - {slot.end_time || '30 min'}
-                        </Text>
-                        <Text style={styles.slotTimeSub}>Telehealth Video Session</Text>
+                      <View className="flex-row items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                        <Ionicons name="checkmark-done" size={12} color="#059669" />
+                        <Text className="text-[11px] font-bold text-emerald-700">Archived</Text>
                       </View>
                     </View>
 
+                    <Text className="text-xs text-gray-500 mb-2.5">
+                      Clinical Scope: <Text className="text-gray-900 font-semibold">{item.reason}</Text>
+                    </Text>
+
+                    {item.doctor_notes ? (
+                      <View className="bg-emerald-50/50 rounded-xl p-2.5 border border-emerald-100 mb-2">
+                        <View className="flex-row items-center gap-1.5 mb-1">
+                          <Ionicons name="document-text" size={13} color="#166534" />
+                          <Text className="text-[11px] font-bold text-emerald-800">Clinical Findings:</Text>
+                        </View>
+                        <Text className="text-xs text-gray-700 leading-relaxed">{item.doctor_notes}</Text>
+                      </View>
+                    ) : null}
+
+                    {item.prescription_summary ? (
+                      <View className="bg-red-50/50 rounded-xl p-2.5 border border-red-100 mb-2">
+                        <View className="flex-row items-center gap-1.5 mb-1">
+                          <Ionicons name="medkit" size={13} color="#DC2626" />
+                          <Text className="text-[11px] font-bold text-red-800">Prescription Summary (Rx):</Text>
+                        </View>
+                        <Text className="text-xs text-gray-700 leading-relaxed">{item.prescription_summary}</Text>
+                      </View>
+                    ) : null}
+
                     <TouchableOpacity
+                      className="flex-row items-center justify-center gap-1 py-2 rounded-xl bg-gray-50 border border-gray-200 mt-1"
+                      onPress={() => handleOpenNotes(item)}
                       activeOpacity={0.8}
-                      style={[
-                        styles.slotStatusBadge,
-                        slot.is_booked ? styles.slotBadgeBlocked : styles.slotBadgeOpen,
-                      ]}
-                      onPress={() => handleToggleSlot(slot.slot_id)}
                     >
-                      <View style={[styles.slotStatusDot, slot.is_booked ? styles.dotGray : styles.dotGreen]} />
-                      <Text
-                        style={[
-                          styles.slotStatusText,
-                          slot.is_booked ? styles.slotTextBlocked : styles.slotTextOpen,
-                        ]}
-                      >
-                        {slot.is_booked ? 'Blocked / Booked' : 'Available'}
+                      <Ionicons name="create-outline" size={14} color="#DC2626" />
+                      <Text className="text-xs font-semibold text-red-600">
+                        {item.doctor_notes ? 'Update Clinical Notes' : 'Add Clinical Notes'}
                       </Text>
                     </TouchableOpacity>
                   </View>
                 ))
               )}
             </View>
-          </View>
-        ) : (
-          /* ======================================================================= */
-          /* TAB 3: COMPLETED CONSULTATION RECORDS                                   */
-          /* ======================================================================= */
-          <View>
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionHeaderTitleRow}>
-                <View style={styles.sectionRedPillIndicator} />
-                <Text style={styles.sectionHeaderTitle}>Completed Consultations</Text>
-              </View>
-            </View>
-
-            {completedHistory.length === 0 ? (
-              <View style={styles.emptyQueueCard}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="folder-open-outline" size={38} color={THEME.textMuted} />
-                </View>
-                <Text style={styles.emptyTitle}>No archived consultations yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  Completed telemedicine sessions and patient clinical summaries will appear here for follow-up reference.
-                </Text>
-              </View>
-            ) : (
-              completedHistory.map((item) => (
-                <View key={item.booking_id} style={styles.completedRecordCard}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.patientInfoLeft}>
-                      <View style={styles.recordAvatarCircle}>
-                        <Text style={styles.recordAvatarText}>
-                          {(item.user_name || 'Patient')
-                            .split(' ')
-                            .map((w) => w[0])
-                            .join('')
-                            .substring(0, 2)
-                            .toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={{ marginLeft: 10 }}>
-                        <Text style={styles.patientName}>{item.user_name || 'Patient'}</Text>
-                        <Text style={styles.recordDateText}>{item.scheduled_time}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.completedPill}>
-                      <Ionicons name="checkmark-done" size={12} color={THEME.emerald} />
-                      <Text style={styles.completedPillText}>Archived</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.recordReasonText}>
-                    Clinical Scope: <Text style={{ color: THEME.textPrimary, fontWeight: '600' }}>{item.reason}</Text>
-                  </Text>
-
-                  {item.doctor_notes ? (
-                    <View style={styles.notesBox}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                        <Ionicons name="document-text" size={13} color="#166534" />
-                        <Text style={styles.notesLabel}>Clinical Findings:</Text>
-                      </View>
-                      <Text style={styles.notesContent}>{item.doctor_notes}</Text>
-                    </View>
-                  ) : null}
-
-                  {item.prescription_summary ? (
-                    <View style={styles.rxBox}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                        <Ionicons name="medkit" size={13} color={THEME.primary} />
-                        <Text style={styles.rxLabel}>Prescription Summary (Rx):</Text>
-                      </View>
-                      <Text style={styles.rxContent}>{item.prescription_summary}</Text>
-                    </View>
-                  ) : null}
-
-                  <TouchableOpacity
-                    style={styles.editNotesBtn}
-                    onPress={() => handleOpenNotes(item)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="create-outline" size={14} color={THEME.primary} />
-                    <Text style={styles.editNotesBtnText}>
-                      {item.doctor_notes ? 'Update Clinical Notes' : 'Add Clinical Notes'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
       </View>
 
       {/* ========================================================================= */}
       {/* 4. FLOATING BOTTOM NAVIGATION BAR (MOBILE ONLY)                           */}
       {/* ========================================================================= */}
       {!isLargeScreen && (
-        <View style={styles.floatingBottomBarContainer}>
-          <View style={styles.floatingBottomBar}>
+        <View className="absolute bottom-6 left-4 right-4 items-center">
+          <View className="flex-row items-center justify-around bg-white/95 rounded-2xl border border-gray-100 py-2.5 px-4 shadow-lg w-full max-w-[380px]">
             {/* Tab 1: Queue */}
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.floatingTabItem, activeTab === 'queue' && styles.floatingTabItemActive]}
+              className={`items-center py-1 px-3 rounded-xl ${activeTab === 'queue' ? 'bg-red-50' : ''}`}
               onPress={() => setActiveTab('queue')}
             >
-              <View style={styles.floatingTabIconWrapper}>
+              <View className="relative items-center justify-center">
                 <Ionicons
                   name={activeTab === 'queue' ? 'videocam' : 'videocam-outline'}
                   size={22}
-                  color={activeTab === 'queue' ? THEME.primary : THEME.textSecondary}
+                  color={activeTab === 'queue' ? '#DC2626' : '#78716C'}
                 />
                 {activeQueue.length > 0 && (
-                  <View style={styles.floatingBadge}>
-                    <Text style={styles.floatingBadgeText}>{activeQueue.length}</Text>
+                  <View className="absolute -top-1.5 -right-2 bg-red-600 rounded-full w-4 h-4 items-center justify-center">
+                    <Text className="text-[9px] font-black text-white">{activeQueue.length}</Text>
                   </View>
                 )}
               </View>
-              <Text style={[styles.floatingTabLabel, activeTab === 'queue' && styles.floatingTabLabelActive]}>
+              <Text className={`text-[10px] font-medium mt-0.5 ${activeTab === 'queue' ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                 Queue
               </Text>
             </TouchableOpacity>
@@ -672,17 +670,17 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
             {/* Tab 2: Availability */}
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.floatingTabItem, activeTab === 'slots' && styles.floatingTabItemActive]}
+              className={`items-center py-1 px-3 rounded-xl ${activeTab === 'slots' ? 'bg-red-50' : ''}`}
               onPress={() => setActiveTab('slots')}
             >
-              <View style={styles.floatingTabIconWrapper}>
+              <View className="relative items-center justify-center">
                 <Ionicons
                   name={activeTab === 'slots' ? 'calendar' : 'calendar-outline'}
                   size={22}
-                  color={activeTab === 'slots' ? THEME.primary : THEME.textSecondary}
+                  color={activeTab === 'slots' ? '#DC2626' : '#78716C'}
                 />
               </View>
-              <Text style={[styles.floatingTabLabel, activeTab === 'slots' && styles.floatingTabLabelActive]}>
+              <Text className={`text-[10px] font-medium mt-0.5 ${activeTab === 'slots' ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                 Availability
               </Text>
             </TouchableOpacity>
@@ -690,17 +688,17 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
             {/* Tab 3: Records */}
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.floatingTabItem, activeTab === 'records' && styles.floatingTabItemActive]}
+              className={`items-center py-1 px-3 rounded-xl ${activeTab === 'records' ? 'bg-red-50' : ''}`}
               onPress={() => setActiveTab('records')}
             >
-              <View style={styles.floatingTabIconWrapper}>
+              <View className="relative items-center justify-center">
                 <Ionicons
                   name={activeTab === 'records' ? 'document-text' : 'document-text-outline'}
                   size={22}
-                  color={activeTab === 'records' ? THEME.primary : THEME.textSecondary}
+                  color={activeTab === 'records' ? '#DC2626' : '#78716C'}
                 />
               </View>
-              <Text style={[styles.floatingTabLabel, activeTab === 'records' && styles.floatingTabLabelActive]}>
+              <Text className={`text-[10px] font-medium mt-0.5 ${activeTab === 'records' ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
                 Records
               </Text>
             </TouchableOpacity>
@@ -722,7 +720,7 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
         footer={
           <TouchableOpacity
             activeOpacity={0.88}
-            style={styles.saveNotesTouchWrapper}
+            className="w-full rounded-2xl overflow-hidden shadow-sm"
             onPress={handleSaveNotes}
             disabled={isSavingNotes}
           >
@@ -730,37 +728,37 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
               colors={['#DC2626', '#B91C1C']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.saveNotesBtn}
+              className="py-3.5 px-4 flex-row items-center justify-center gap-2"
             >
               {isSavingNotes ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={17} color="#FFFFFF" />
-                  <Text style={styles.saveNotesBtnText}>Save & Finalize Consultation</Text>
+                  <Text className="text-sm font-bold text-white">Save & Finalize Consultation</Text>
                 </>
               )}
             </LinearGradient>
           </TouchableOpacity>
         }
       >
-        <View style={{ paddingBottom: 16 }}>
-          <Text style={styles.inputLabel}>Clinical Observations & Recommendations</Text>
+        <View className="pb-4">
+          <Text className="text-xs font-bold text-gray-700 mb-2 mt-1">Clinical Observations & Recommendations</Text>
           <TextInput
-            style={styles.textArea}
+            className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs text-gray-800 leading-relaxed mb-3"
             placeholder="Record clinical assessment, ultrasound notes, and medical guidance..."
-            placeholderTextColor={THEME.textMuted}
+            placeholderTextColor="#A8A29E"
             multiline
             numberOfLines={4}
             value={clinicalNotesText}
             onChangeText={setClinicalNotesText}
           />
 
-          <Text style={styles.inputLabel}>Prescription Summary (Optional)</Text>
+          <Text className="text-xs font-bold text-gray-700 mb-2 mt-1">Prescription Summary (Optional)</Text>
           <TextInput
-            style={styles.textArea}
+            className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs text-gray-800 leading-relaxed mb-3"
             placeholder="e.g. Folate 5mg daily, Prenatal Multivitamins 1 tab..."
-            placeholderTextColor={THEME.textMuted}
+            placeholderTextColor="#A8A29E"
             multiline
             numberOfLines={3}
             value={prescriptionText}
@@ -781,32 +779,32 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
         showCloseChevron={true}
         scrollable={false}
       >
-        <View style={{ paddingBottom: 16 }}>
-          <Text style={styles.inputLabel}>Start Time (e.g. 10:00, 14:30)</Text>
+        <View className="pb-4">
+          <Text className="text-xs font-bold text-gray-700 mb-2 mt-1">Start Time (e.g. 10:00, 14:30)</Text>
           <TextInput
-            style={styles.singleLineInput}
+            className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-sm text-gray-800 font-semibold mb-4"
             placeholder="10:00"
-            placeholderTextColor={THEME.textMuted}
+            placeholderTextColor="#A8A29E"
             value={newSlotTime}
             onChangeText={setNewSlotTime}
           />
 
-          <View style={styles.modalActionsRow}>
+          <View className="flex-row justify-end gap-3 mt-2">
             <TouchableOpacity
-              style={styles.cancelModalBtn}
+              className="py-2.5 px-4 rounded-xl"
               onPress={() => setShowAddSlotModal(false)}
             >
-              <Text style={styles.cancelModalBtnText}>Cancel</Text>
+              <Text className="text-xs font-semibold text-gray-500">Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.confirmSlotBtn}
+              className="bg-red-600 py-2.5 px-5 rounded-xl shadow-sm"
               onPress={handleAddCustomSlot}
               disabled={isAddingSlot}
             >
               {isAddingSlot ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.confirmSlotBtnText}>Create Slot</Text>
+                <Text className="text-xs font-bold text-white">Create Slot</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -830,896 +828,3 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: THEME.bg,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* 1. TOP HEADER                                                              */
-  /* -------------------------------------------------------------------------- */
-  topHeader: {
-    paddingTop: STATUSBAR_HEIGHT + 8,
-    paddingHorizontal: 18,
-    paddingBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.borderSubtle,
-  },
-  doctorHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  doctorAvatarRing: {
-    position: 'relative',
-    padding: 2,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: THEME.primaryBlush,
-  },
-  doctorAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F3ECE7',
-  },
-  verifiedCheckBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: THEME.emerald,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  doctorHeaderTextCol: {
-    marginLeft: 10,
-    flex: 1,
-  },
-  doctorNameTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    letterSpacing: -0.3,
-  },
-  doctorSpecialtySubtitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  doctorHeaderRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  patientViewBtn: {
-    backgroundColor: THEME.primarySoft,
-    borderColor: THEME.primaryBlush,
-    borderRadius: 18,
-  },
-  headerSquareBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FAF7F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: THEME.border,
-  },
-  logoutBtn: {
-    backgroundColor: THEME.primarySoft,
-    borderColor: THEME.primaryBlush,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* 2. DUTY STATUS BAR                                                         */
-  /* -------------------------------------------------------------------------- */
-  dutyStatusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.borderSubtle,
-  },
-  dutyTogglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  dutyPillActive: {
-    backgroundColor: THEME.emeraldLight,
-    borderWidth: 1,
-    borderColor: THEME.emeraldBorder,
-  },
-  dutyPillInactive: {
-    backgroundColor: '#F5EBE8',
-    borderWidth: 1,
-    borderColor: '#E7DDD8',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusDotPulse: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: 'rgba(5, 150, 105, 0.25)',
-  },
-  dotGreen: {
-    backgroundColor: THEME.emerald,
-  },
-  dotGray: {
-    backgroundColor: THEME.textMuted,
-  },
-  dutyText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  dutyTextActive: {
-    color: THEME.emerald,
-  },
-  dutyTextInactive: {
-    color: THEME.textSecondary,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* 3. MAIN CONTENT SCROLL CANVAS                                              */
-  /* -------------------------------------------------------------------------- */
-  mainContentScroll: {
-    flex: 1,
-    backgroundColor: THEME.pageBg,
-  },
-  mainContentScrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 110,
-  },
-
-  /* Section Header */
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionRedPillIndicator: {
-    width: 4,
-    height: 16,
-    borderRadius: 2,
-    backgroundColor: THEME.primary,
-  },
-  sectionHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    letterSpacing: -0.3,
-  },
-  activeQueueCountChip: {
-    backgroundColor: THEME.primarySoft,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: THEME.primaryBlush,
-  },
-  activeQueueCountChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: THEME.primary,
-  },
-  loadingBox: {
-    paddingVertical: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    marginTop: 10,
-    fontWeight: '500',
-  },
-
-  /* Patient Card */
-  patientAppointmentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  patientInfoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  patientAvatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: THEME.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: THEME.primaryBlush,
-  },
-  patientAvatarText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: THEME.primary,
-  },
-  patientName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-  },
-  patientTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  patientTimeSlot: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-  confirmedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: THEME.emeraldLight,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: THEME.emeraldBorder,
-  },
-  confirmedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: THEME.emerald,
-  },
-  confirmedPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: THEME.emerald,
-  },
-
-  /* Reason Box */
-  reasonBox: {
-    backgroundColor: '#FAF7F7',
-    borderRadius: 14,
-    padding: 12,
-    marginVertical: 12,
-    borderWidth: 1,
-    borderColor: THEME.borderSubtle,
-  },
-  reasonBodyText: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: THEME.textSecondary,
-    lineHeight: 18,
-  },
-  symptomsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#EFE6E4',
-  },
-  symptomsText: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-
-  /* Card Action Buttons */
-  cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  startCallTouchWrapper: {
-    flex: 1,
-  },
-  startCallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 44,
-    borderRadius: 22,
-    gap: 6,
-    shadowColor: THEME.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  startCallBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  addNotesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    height: 44,
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    gap: 6,
-  },
-  addNotesBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-
-  /* Empty State */
-  emptyQueueCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: THEME.border,
-    marginTop: 6,
-  },
-  emptyIconCircle: {
-    marginBottom: 10,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 12,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* TAB 2: SLOTS STYLES                                                        */
-  /* -------------------------------------------------------------------------- */
-  addNewSlotBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    gap: 4,
-    shadowColor: THEME.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  addNewSlotBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  slotsDaysScroll: {
-    gap: 8,
-    paddingBottom: 14,
-  },
-  slotDayPill: {
-    width: 60,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: THEME.border,
-    alignItems: 'center',
-  },
-  slotDayPillActive: {
-    backgroundColor: THEME.primary,
-    borderColor: THEME.primary,
-    shadowColor: THEME.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  slotDayPillName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: THEME.textSecondary,
-  },
-  slotDayPillNum: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    marginTop: 2,
-  },
-  slotDayTextActive: {
-    color: '#FFFFFF',
-  },
-  slotsGridContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: THEME.border,
-  },
-  slotsHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.borderSubtle,
-    marginBottom: 4,
-  },
-  slotsSubheaderTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  slotsSubheaderCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: THEME.textSecondary,
-  },
-  slotRowItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.borderSubtle,
-  },
-  slotTimeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  slotClockCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  slotClockOpen: {
-    backgroundColor: THEME.emeraldLight,
-  },
-  slotClockBlocked: {
-    backgroundColor: '#F3ECE7',
-  },
-  slotTimeLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  slotTimeSub: {
-    fontSize: 11,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  slotStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  slotStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  slotBadgeOpen: {
-    backgroundColor: THEME.emeraldLight,
-    borderWidth: 1,
-    borderColor: THEME.emeraldBorder,
-  },
-  slotBadgeBlocked: {
-    backgroundColor: '#F5EBE8',
-    borderWidth: 1,
-    borderColor: '#E7DDD8',
-  },
-  slotStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  slotTextOpen: {
-    color: THEME.emerald,
-  },
-  slotTextBlocked: {
-    color: THEME.textSecondary,
-  },
-  emptySlotsCard: {
-    paddingVertical: 28,
-    alignItems: 'center',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* TAB 3: RECORDS STYLES                                                      */
-  /* -------------------------------------------------------------------------- */
-  completedRecordCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 1,
-  },
-  recordAvatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: THEME.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: THEME.primaryBlush,
-  },
-  recordAvatarText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.primary,
-  },
-  recordDateText: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-    fontWeight: '500',
-  },
-  completedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: THEME.emeraldLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  completedPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: THEME.emerald,
-  },
-  recordReasonText: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    marginTop: 10,
-  },
-  notesBox: {
-    backgroundColor: '#F0FDF4',
-    padding: 10,
-    borderRadius: 12,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  notesLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#166534',
-  },
-  notesContent: {
-    fontSize: 13,
-    color: '#166534',
-    lineHeight: 18,
-  },
-  rxBox: {
-    backgroundColor: THEME.primarySoft,
-    padding: 10,
-    borderRadius: 12,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: THEME.primaryBlush,
-  },
-  rxLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: THEME.primaryDeep,
-  },
-  rxContent: {
-    fontSize: 13,
-    color: THEME.primaryDeep,
-    lineHeight: 18,
-  },
-  editNotesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-  },
-  editNotesBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.primary,
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* MODALS                                                                     */
-  /* -------------------------------------------------------------------------- */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(28, 25, 23, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalOverlayCenter: {
-    flex: 1,
-    backgroundColor: 'rgba(28, 25, 23, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  notesDrawerCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 36,
-  },
-  sheetHandleBar: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E7DDD8',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: THEME.textPrimary,
-    letterSpacing: -0.3,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  closeCircleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FAF7F7',
-    borderWidth: 1,
-    borderColor: THEME.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  textArea: {
-    backgroundColor: '#FAF7F7',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    fontSize: 13,
-    color: THEME.textPrimary,
-    textAlignVertical: 'top',
-  },
-  saveNotesTouchWrapper: {
-    marginTop: 20,
-  },
-  saveNotesBtn: {
-    height: 48,
-    borderRadius: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    shadowColor: THEME.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  saveNotesBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  addSlotCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: THEME.border,
-  },
-  singleLineInput: {
-    backgroundColor: '#FAF7F7',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: THEME.textPrimary,
-  },
-  modalActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 20,
-  },
-  cancelModalBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  cancelModalBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.textSecondary,
-  },
-  confirmSlotBtn: {
-    backgroundColor: THEME.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  confirmSlotBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* DESKTOP SIDEBAR & LAYOUT STYLES                                            */
-  /* -------------------------------------------------------------------------- */
-  desktopContainer: {
-    flexDirection: 'row',
-    height: '100%',
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-  },
-  desktopMainContent: {
-    flex: 1,
-    height: '100%',
-    backgroundColor: THEME.pageBg,
-    overflow: 'hidden',
-  },
-
-  /* -------------------------------------------------------------------------- */
-  /* FLOATING BOTTOM NAVIGATION BAR                                             */
-  /* -------------------------------------------------------------------------- */
-  floatingBottomBarContainer: {
-    position: 'absolute',
-    bottom: 24,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-  },
-  floatingBottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    width: '100%',
-    height: 64,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    shadowColor: '#1C1917',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  floatingTabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 24,
-    marginHorizontal: 4,
-  },
-  floatingTabItemActive: {
-    backgroundColor: THEME.primarySoft,
-  },
-  floatingTabIconWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  floatingTabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: THEME.textSecondary,
-    marginTop: 2,
-  },
-  floatingTabLabelActive: {
-    color: THEME.primary,
-    fontWeight: '800',
-  },
-  floatingBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -10,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: THEME.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  floatingBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-});

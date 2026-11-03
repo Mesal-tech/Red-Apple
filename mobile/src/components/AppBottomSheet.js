@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   Platform,
   StatusBar,
@@ -11,12 +12,11 @@ import {
   KeyboardAvoidingView,
   Animated,
   PanResponder,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * Reusable App Bottom Sheet Component
@@ -38,6 +38,7 @@ export default function AppBottomSheet({
   headerLeft = null,
   headerRight = null,
   scrollable = true, // Default to true so user can drag and scroll content freely
+  height = null,
   maxHeight = '92%',
   dismissOnBackdropPress = true,
   avoidKeyboard = true,
@@ -51,13 +52,47 @@ export default function AppBottomSheet({
   showsVerticalScrollIndicator = false,
   children,
 }) {
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
   let insets = { bottom: 0, top: 0 };
   try {
     insets = useSafeAreaInsets();
   } catch (_) {}
 
+  let isDarkMode = false;
+  let theme = {
+    background: '#FFFFFF',
+    card: '#FFFFFF',
+    cardBorder: '#E5E7EB',
+    textPrimary: '#111827',
+    textSecondary: '#6B7280',
+    statusBar: 'dark-content',
+  };
+  try {
+    const themeContext = useTheme();
+    if (themeContext) {
+      isDarkMode = themeContext.isDarkMode;
+      theme = themeContext.theme;
+    }
+  } catch (_) {}
+
   // Calculate safe bottom padding ensuring bottom content sits above Android navigation bar and iOS home indicator
-  const safeBottomPadding = Math.max(insets?.bottom || 0, Platform.OS === 'ios' ? 34 : 28) + 16;
+  const safeBottomPadding = insets?.bottom > 0
+    ? insets.bottom + 12
+    : (Platform.OS === 'ios' ? 28 : 16);
+
+  // Resolve percentage string to concrete numeric pixels
+  const resolveDimension = (val, fallback = null) => {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string' && val.endsWith('%')) {
+      const pct = parseFloat(val) / 100;
+      if (!isNaN(pct)) return Math.round(SCREEN_HEIGHT * pct);
+    }
+    return fallback;
+  };
+
+  const resolvedMaxHeight = resolveDimension(maxHeight, Math.round(SCREEN_HEIGHT * 0.94));
+  const hasFixedHeight = height !== null && height !== undefined;
+  const resolvedHeight = hasFixedHeight ? resolveDimension(height, null) : null;
 
   // Pan animation for drag-to-dismiss gesture on header / drag handle
   const translateY = useRef(new Animated.Value(0)).current;
@@ -104,41 +139,61 @@ export default function AppBottomSheet({
     const hasHeaderRow = showCloseChevron || headerLeft || headerRight;
 
     return (
-      <View style={[styles.headerContainer, noPadding && { paddingHorizontal: 20 }]} {...panResponder.panHandlers}>
+      <View
+        className={`w-full mb-1 ${noPadding ? 'px-5' : ''}`}
+        {...panResponder.panHandlers}
+      >
         {/* Top Centered Pill Drag Handle */}
         {showHandle && (
-          <View style={styles.dragHandleTouchArea}>
-            <View style={styles.dragHandle} />
+          <View className="w-full py-1.5 items-center justify-center">
+            <View
+              className="w-11 h-[5px] rounded-[3px]"
+              style={{ backgroundColor: isDarkMode ? '#525252' : '#D1D5DB' }}
+            />
           </View>
         )}
 
         {/* Optional Action Bar Row (Chevron left, custom actions right) */}
         {hasHeaderRow && (
-          <View style={styles.headerActionsRow}>
-            <View style={styles.headerLeftCol}>
+          <View className="flex-row items-center justify-between h-10 mb-1">
+            <View className="flex-row items-center">
               {headerLeft ? (
                 headerLeft
               ) : showCloseChevron ? (
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={onClose}
-                  style={styles.chevronTouch}
+                  className="py-1 px-1"
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <Ionicons name="chevron-down" size={26} color="#374151" />
+                  <Ionicons name="chevron-down" size={26} color={isDarkMode ? '#FFFFFF' : '#374151'} />
                 </TouchableOpacity>
               ) : null}
             </View>
 
-            <View style={styles.headerRightCol}>
+            <View className="flex-row items-center space-x-3">
               {headerRight || null}
             </View>
           </View>
         )}
 
         {/* Optional Title & Subtitle */}
-        {title && <Text style={styles.sheetTitle}>{title}</Text>}
-        {subtitle && <Text style={styles.sheetSubtitle}>{subtitle}</Text>}
+        {title && (
+          <Text
+            className="text-[22px] font-extrabold leading-7 text-center mt-1 mb-1.5 px-2 tracking-tight"
+            style={{ color: theme.textPrimary }}
+          >
+            {title}
+          </Text>
+        )}
+        {subtitle && (
+          <Text
+            className="text-sm font-medium leading-5 text-center mb-3 px-3.5"
+            style={{ color: theme.textSecondary }}
+          >
+            {subtitle}
+          </Text>
+        )}
       </View>
     );
   };
@@ -151,37 +206,56 @@ export default function AppBottomSheet({
       statusBarTranslucent={true}
       onRequestClose={onClose}
     >
-      {/* Ensure Android status bar blends with the translucent dark scrim */}
+      {/* Ensure Android status bar is completely transparent */}
       {visible && (
         <StatusBar
-          barStyle="light-content"
-          backgroundColor="rgba(15, 23, 42, 0.45)"
+          barStyle={theme.statusBar}
+          backgroundColor="transparent"
           translucent={true}
         />
       )}
 
-      <TouchableOpacity
-        style={[styles.sheetOverlay, overlayStyle]}
-        activeOpacity={1}
-        onPress={dismissOnBackdropPress ? onClose : undefined}
+      <View
+        className="flex-1 bg-slate-900/60 justify-end"
+        style={overlayStyle}
       >
+        <TouchableWithoutFeedback
+          onPress={dismissOnBackdropPress ? onClose : undefined}
+          accessible={false}
+        >
+          <View style={StyleSheet.absoluteFillObject} />
+        </TouchableWithoutFeedback>
+
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           enabled={avoidKeyboard}
-          style={styles.keyboardAvoid}
+          className="w-full justify-end"
+          pointerEvents="box-none"
         >
           <Animated.View
+            className={`rounded-t-[32px] border-t border-l border-r shadow-2xl overflow-hidden ${
+              noPadding ? '' : 'px-[22px] pt-2.5'
+            }`}
             style={[
-              styles.sheetCard,
-              { maxHeight },
-              noPadding && { paddingHorizontal: 0 },
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
+              { maxHeight: resolvedMaxHeight },
+              resolvedHeight ? { height: resolvedHeight } : null,
               { transform: [{ translateY }] },
+              noPadding ? { paddingHorizontal: 0 } : null,
               cardStyle,
             ]}
           >
             <View
-              style={styles.cardInnerTouch}
-              onStartShouldSetResponder={() => true}
+              className="w-full"
+              style={{
+                width: '100%',
+                flex: hasFixedHeight ? 1 : undefined,
+                flexShrink: 1,
+                maxHeight: resolvedMaxHeight,
+              }}
             >
               {renderHeader()}
 
@@ -192,10 +266,15 @@ export default function AppBottomSheet({
                   overScrollMode="always"
                   keyboardShouldPersistTaps="handled"
                   nestedScrollEnabled={true}
-                  style={styles.scrollViewFlex}
+                  style={{
+                    width: '100%',
+                    flex: hasFixedHeight ? 1 : undefined,
+                    flexGrow: hasFixedHeight ? 1 : 0,
+                    flexShrink: 1,
+                    maxHeight: resolvedMaxHeight,
+                  }}
                   contentContainerStyle={[
-                    styles.scrollContent,
-                    { paddingBottom: footer ? 16 : safeBottomPadding },
+                    { width: '100%', flexGrow: 1, paddingBottom: footer ? 0 : safeBottomPadding },
                     contentStyle,
                   ]}
                 >
@@ -203,9 +282,15 @@ export default function AppBottomSheet({
                 </ScrollView>
               ) : (
                 <View
+                  className="w-full"
                   style={[
-                    styles.staticContent,
-                    { paddingBottom: footer ? 16 : safeBottomPadding },
+                    {
+                      width: '100%',
+                      flex: hasFixedHeight ? 1 : undefined,
+                      flexShrink: 1,
+                      paddingBottom: footer ? 0 : safeBottomPadding,
+                      maxHeight: resolvedMaxHeight,
+                    },
                     contentStyle,
                   ]}
                 >
@@ -215,10 +300,9 @@ export default function AppBottomSheet({
 
               {footer && (
                 <View
+                  className={`w-full bg-white border-t border-gray-100 pt-3 ${noPadding ? 'px-5' : ''}`}
                   style={[
-                    styles.sheetFooter,
                     { paddingBottom: safeBottomPadding },
-                    noPadding && { paddingHorizontal: 20 },
                     footerStyle,
                   ]}
                 >
@@ -228,115 +312,9 @@ export default function AppBottomSheet({
             </View>
           </Animated.View>
         </KeyboardAvoidingView>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)', // Semi-transparent dark scrim extending over the status bar
-    justifyContent: 'flex-end',
-  },
-  keyboardAvoid: {
-    width: '100%',
-    justifyContent: 'flex-end',
-  },
-  sheetCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 22,
-    paddingTop: 10,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 16,
-    overflow: 'hidden',
-  },
-  cardInnerTouch: {
-    width: '100%',
-    maxHeight: '100%',
-  },
-  scrollViewFlex: {
-    flexShrink: 1,
-  },
-  sheetFooter: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  headerContainer: {
-    width: '100%',
-    marginBottom: 4,
-  },
-  dragHandleTouchArea: {
-    width: '100%',
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dragHandle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#D1D5DB',
-  },
-  headerActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 40,
-    marginBottom: 4,
-  },
-  headerLeftCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerRightCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  chevronTouch: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-  },
-  sheetTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    lineHeight: 28,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 6,
-    paddingHorizontal: 8,
-    letterSpacing: -0.3,
-  },
-  sheetSubtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 14,
-  },
-  staticContent: {
-    width: '100%',
-  },
-  scrollContent: {
-    width: '100%',
-    flexGrow: 1,
-  },
-});
 
 export { AppBottomSheet };

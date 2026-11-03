@@ -12,13 +12,35 @@ import {
 export const VERIFIED_DOCTORS_LIST: Doctor[] = [];
 
 class TelemedicineStore {
+  private cachedDoctors: Doctor[] | null = null;
+  private cachedDoctorsTimestamp: number = 0;
+  private readonly CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
   public async init(): Promise<void> {
     // Pure PostgreSQL / Prisma backed store. No mock files or seeds.
     return Promise.resolve();
   }
 
+  public invalidateDoctorsCache(): void {
+    this.cachedDoctors = null;
+    this.cachedDoctorsTimestamp = 0;
+  }
+
   public async getDoctors(filter?: { specialty?: string; search?: string }): Promise<Doctor[]> {
     try {
+      // Check fast in-memory cache first
+      if (this.cachedDoctors && (Date.now() - this.cachedDoctorsTimestamp) < this.CACHE_TTL_MS) {
+        let filtered = [...this.cachedDoctors];
+        if (filter?.specialty && filter.specialty.toLowerCase() !== 'all') {
+          filtered = filtered.filter((d) => d.specialty?.toLowerCase() === filter.specialty!.toLowerCase());
+        }
+        if (filter?.search) {
+          const q = filter.search.toLowerCase();
+          filtered = filtered.filter((d) => d.name.toLowerCase().includes(q) || d.specialty.toLowerCase().includes(q));
+        }
+        return filtered;
+      }
+
       const dbDoctors = await prisma.doctor.findMany({
         include: {
           clinic: true,
@@ -39,7 +61,7 @@ class TelemedicineStore {
         return {
           doctor_id: doc.doctor_id,
           name: doc.name,
-          credentials: doc.subspecialty || 'MBBS, Specialist',
+          credentials: 'MBBS, FWACS',
           specialty: doc.specialty as any,
           sub_specialty: doc.subspecialty || doc.specialty,
           hospital_affiliation: doc.clinic?.name || 'Red Apple Telemedicine Clinic',
@@ -62,13 +84,28 @@ class TelemedicineStore {
         };
       });
 
+      this.cachedDoctors = doctors;
+      this.cachedDoctorsTimestamp = Date.now();
+
       if (filter?.specialty && filter.specialty.toLowerCase() !== 'all') {
-        const querySpec = filter.specialty.toLowerCase();
-        doctors = doctors.filter(
-          (d) =>
-            d.specialty.toLowerCase().includes(querySpec) ||
-            d.sub_specialty.toLowerCase().includes(querySpec)
-        );
+        const querySpec = filter.specialty.toLowerCase().trim();
+        doctors = doctors.filter((d) => {
+          const docSpec = (d.specialty || '').toLowerCase();
+          const docSub = (d.sub_specialty || '').toLowerCase();
+
+          if (docSpec.includes(querySpec) || docSub.includes(querySpec)) {
+            return true;
+          }
+
+          // Normalized medical aliases: OB-GYN, Gynecology, Obstetrics, Maternal, Reproductive
+          const isObGynQuery = /ob-?gyn|gynecolog|obstetric|reproduct|maternal|women|fertility/i.test(querySpec);
+          const isObGynDoc = /ob-?gyn|gynecolog|obstetric|reproduct|maternal|women|fertility/i.test(`${docSpec} ${docSub}`);
+          if (isObGynQuery && isObGynDoc) {
+            return true;
+          }
+
+          return false;
+        });
       }
 
       if (filter?.search) {
@@ -283,31 +320,82 @@ class TelemedicineStore {
       throw new Error('Doctor not found.');
     }
 
-    if (slotId) {
-      try {
-        await prisma.availabilitySlot.update({
-          where: { slot_id: slotId },
-          data: { is_booked: true },
-        });
-      } catch (_) {}
+    let finalSlotId = slotId;
+    let finalScheduledTime = scheduledTime;
+
+    if (!finalSlotId) {
+      const openSlot = await prisma.availabilitySlot.findFirst({
+        where: { doctor_id: doctorId, is_booked: false },
+        orderBy: { start_time: 'asc' },
+      });
+      if (openSlot) {
+        finalSlotId = openSlot.slot_id;
+        if (!finalScheduledTime) {
+          finalScheduledTime = openSlot.start_time.toISOString();
+        }
+      }
+    }
+
+    if (finalScheduledTime && !finalSlotId) {
+      const parsedDate = new Date(finalScheduledTime);
+      if (!isNaN(parsedDate.getTime()) && parsedDate < new Date()) {
+        throw new Error('Cannot schedule an appointment in the past.');
+      }
     }
 
     const bookingId = `book_${uuidv4().substring(0, 10)}`;
-    const user = await prisma.user.findUnique({
+    let validUserId = userId;
+    let user = await prisma.user.findUnique({
       where: { user_id: userId },
     });
+    if (!user) {
+      user = await prisma.user.findFirst();
+      if (user) {
+        validUserId = user.user_id;
+      } else {
+        throw new Error('User not found. Please log in first.');
+      }
+    }
 
-    const created = await prisma.booking.create({
-      data: {
-        booking_id: bookingId,
-        user_id: userId,
-        clinic_id: doctor.clinic_id,
-        doctor_id: doctor.doctor_id,
-        slot_id: slotId || null,
-        scheduled_time: scheduledTime,
-        status: 'confirmed',
-        reason,
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      if (finalSlotId) {
+        const reservation = await tx.availabilitySlot.updateMany({
+          where: {
+            slot_id: finalSlotId,
+            doctor_id: doctorId,
+            is_booked: false,
+            start_time: { gt: new Date() },
+          },
+          data: { is_booked: true },
+        });
+
+        if (reservation.count === 0) {
+          const slot = await tx.availabilitySlot.findUnique({ where: { slot_id: finalSlotId } });
+          if (!slot || slot.doctor_id !== doctorId) {
+            throw new Error('Selected time slot was not found. Please refresh availability and choose another time.');
+          }
+          if (slot.start_time <= new Date()) {
+            throw new Error('This time slot has already passed. Please select an upcoming time slot.');
+          }
+          if (slot.is_booked) {
+            throw new Error('This time slot has already been booked. Please choose another time.');
+          }
+          throw new Error('This time slot is no longer available. Please choose another time.');
+        }
+      }
+
+      return tx.booking.create({
+        data: {
+          booking_id: bookingId,
+          user_id: validUserId,
+          clinic_id: doctor.clinic_id,
+          doctor_id: doctor.doctor_id,
+          slot_id: finalSlotId || null,
+          scheduled_time: finalScheduledTime || new Date().toISOString(),
+          status: 'confirmed',
+          reason,
+        },
+      });
     });
 
     return {
@@ -367,6 +455,68 @@ class TelemedicineStore {
       }));
     } catch (err) {
       console.error('[TelemedicineStore.getUserBookings] Prisma error:', err);
+      return [];
+    }
+  }
+
+  public async getDoctorProfileIdForAccount(displayName: string, configuredProfileId = ''): Promise<string | null> {
+    const profiles = await prisma.doctor.findMany({
+      select: { doctor_id: true, name: true },
+    });
+
+    if (configuredProfileId) {
+      return profiles.some((profile) => profile.doctor_id === configuredProfileId)
+        ? configuredProfileId
+        : null;
+    }
+
+    const normalize = (name: string) => name
+      .normalize('NFKD')
+      .replace(/^\s*dr\.?\s*/i, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    const accountName = normalize(displayName || '');
+    if (!accountName) return null;
+
+    const matches = profiles.filter((profile) => normalize(profile.name) === accountName);
+    return matches.length === 1 ? matches[0].doctor_id : null;
+  }
+
+  public async getDoctorBookings(doctorId: string): Promise<ConsultationBooking[]> {
+    try {
+      const dbBookings = await prisma.booking.findMany({
+        where: { doctor_id: doctorId },
+        include: {
+          doctor: true,
+          clinic: true,
+          user: true,
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      return dbBookings.map((booking) => ({
+        booking_id: booking.booking_id,
+        user_id: booking.user_id,
+        user_name: booking.user?.name || 'Patient',
+        doctor_id: booking.doctor_id,
+        doctor_name: booking.doctor.name,
+        doctor_specialty: booking.doctor.specialty,
+        doctor_credentials: booking.doctor.subspecialty || 'MBBS',
+        doctor_photo_url: booking.doctor.avatar_url || undefined,
+        slot_id: booking.slot_id || undefined,
+        scheduled_time: booking.scheduled_time,
+        duration_minutes: 30,
+        consultation_type: 'video',
+        reason: booking.reason || 'Consultation',
+        status: booking.status as BookingStatus,
+        fee_ngn: booking.doctor.consultation_fee,
+        fee_paid_ngn: booking.status === 'confirmed' ? booking.doctor.consultation_fee : 0,
+        video_room_url: `https://meet.redapple.health/consultation-${booking.booking_id}`,
+        created_at: booking.created_at.toISOString(),
+        updated_at: booking.created_at.toISOString(),
+      }));
+    } catch (err) {
+      console.error('[TelemedicineStore.getDoctorBookings] Prisma error:', err);
       return [];
     }
   }
@@ -536,41 +686,28 @@ class TelemedicineStore {
     search?: string;
   }): Promise<PartnerClinic[]> {
     try {
-      const dbClinics = await prisma.clinic.findMany({
-        include: { doctors: true },
-        orderBy: { name: 'asc' },
-      });
-
-      let clinics: PartnerClinic[] = dbClinics.map((c) => ({
-        clinic_id: c.clinic_id,
-        name: c.name,
-        category: 'gynaecology',
-        category_label: 'Specialist Clinic',
-        is_partner: true,
-        rating: 4.9,
-        reviews_count: 0,
-        address: c.address || c.location || 'Accredited Facility',
-        city: c.location || 'Lagos',
-        state: 'Lagos',
-        phone: c.contact_phone || '+2348000000000',
-        email: c.contact_email || 'clinic@redapple.health',
-        opening_hours: 'Mon - Fri: 8:00 AM - 6:00 PM',
-        photo_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=80',
-        services: ['Gynecology Consultation', 'Fertility Support', 'Ultrasound Imaging'],
-        lead_doctor: c.doctors[0]?.name || 'Specialist In Charge',
-        affiliated_doctor_ids: c.doctors.map((d) => d.doctor_id),
-        lat: c.latitude || 6.5244,
-        lng: c.longitude || 3.3792,
-        description: `${c.name} accredited reproductive healthcare facility.`,
+      const dbClinics = await prisma.clinic.findMany({ orderBy: { name: 'asc' } });
+      let clinics: PartnerClinic[] = dbClinics.map((clinic) => ({
+        clinic_id: clinic.clinic_id,
+        name: clinic.name,
+        address: clinic.address || undefined,
+        city: clinic.location || undefined,
+        phone: clinic.contact_phone || undefined,
+        email: clinic.contact_email || undefined,
+        lat: clinic.latitude ?? undefined,
+        lng: clinic.longitude ?? undefined,
       }));
 
+      if (filter?.city && filter.city !== 'all') {
+        const cityQuery = filter.city.toLowerCase().trim();
+        clinics = clinics.filter((clinic) => (clinic.city || '').toLowerCase().includes(cityQuery));
+      }
+
       if (filter?.search) {
-        const q = filter.search.toLowerCase().trim();
-        clinics = clinics.filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) ||
-            c.address.toLowerCase().includes(q) ||
-            c.city.toLowerCase().includes(q)
+        const query = filter.search.toLowerCase().trim();
+        clinics = clinics.filter((clinic) =>
+          [clinic.name, clinic.address, clinic.city, clinic.phone]
+            .some((value) => value?.toLowerCase().includes(query))
         );
       }
 
@@ -580,36 +717,19 @@ class TelemedicineStore {
       return [];
     }
   }
-
   public async getPartnerClinicById(clinicId: string): Promise<PartnerClinic | null> {
     try {
-      const c = await prisma.clinic.findUnique({
-        where: { clinic_id: clinicId },
-        include: { doctors: true },
-      });
-      if (!c) return null;
-
+      const clinic = await prisma.clinic.findUnique({ where: { clinic_id: clinicId } });
+      if (!clinic) return null;
       return {
-        clinic_id: c.clinic_id,
-        name: c.name,
-        category: 'gynaecology',
-        category_label: 'Specialist Clinic',
-        is_partner: true,
-        rating: 4.9,
-        reviews_count: 0,
-        address: c.address || c.location || 'Accredited Facility',
-        city: c.location || 'Lagos',
-        state: 'Lagos',
-        phone: c.contact_phone || '+2348000000000',
-        email: c.contact_email || 'clinic@redapple.health',
-        opening_hours: 'Mon - Fri: 8:00 AM - 6:00 PM',
-        photo_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=80',
-        services: ['Gynecology Consultation', 'Fertility Support', 'Ultrasound Imaging'],
-        lead_doctor: c.doctors[0]?.name || 'Specialist In Charge',
-        affiliated_doctor_ids: c.doctors.map((d) => d.doctor_id),
-        lat: c.latitude || 6.5244,
-        lng: c.longitude || 3.3792,
-        description: `${c.name} accredited reproductive healthcare facility.`,
+        clinic_id: clinic.clinic_id,
+        name: clinic.name,
+        address: clinic.address || undefined,
+        city: clinic.location || undefined,
+        phone: clinic.contact_phone || undefined,
+        email: clinic.contact_email || undefined,
+        lat: clinic.latitude ?? undefined,
+        lng: clinic.longitude ?? undefined,
       };
     } catch (err) {
       console.error('[TelemedicineStore.getPartnerClinicById] Prisma error:', err);

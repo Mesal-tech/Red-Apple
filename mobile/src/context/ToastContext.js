@@ -1,11 +1,9 @@
-import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   Animated,
   TouchableOpacity,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -145,36 +143,35 @@ export function ToastProvider({ children }) {
 
       {toast && (
         <Animated.View
-          style={[
-            styles.toastWrapper,
-            {
-              top: topOffset,
-              opacity,
-              transform: [{ translateY }, { scale }],
-            },
-          ]}
+          className="absolute left-4 right-4 items-center justify-center z-[999999]"
+          style={{
+            top: topOffset,
+            opacity,
+            transform: [{ translateY }, { scale }],
+          }}
           pointerEvents="box-none"
         >
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={hideToast}
-            style={[
-              styles.toastPill,
-              {
-                borderColor: config.borderColor,
-                shadowColor: config.glowColor,
-              },
-            ]}
+            className="flex-row items-center w-full max-w-[440px] bg-[#180407] border-[1.2px] rounded-[26px] py-2.5 px-3.5 shadow-2xl"
+            style={{
+              borderColor: config.borderColor,
+              shadowColor: config.glowColor,
+            }}
           >
-            <View style={[styles.iconBadge, { backgroundColor: config.badgeBg }]}>
+            <View
+              className="w-8 h-8 rounded-full items-center justify-center mr-2.5"
+              style={{ backgroundColor: config.badgeBg }}
+            >
               <Ionicons name={config.icon} size={20} color={config.iconColor} />
             </View>
 
-            <View style={{ flex: 1, justifyContent: 'center' }}>
+            <View className="flex-1 justify-center">
               {toast.title ? (
-                <Text style={styles.toastTitle}>{toast.title}</Text>
+                <Text className="text-[13px] font-bold text-white tracking-tight mb-0.5">{toast.title}</Text>
               ) : null}
-              <Text style={styles.toastMessage} numberOfLines={3}>
+              <Text className="text-[12.5px] font-medium text-slate-300 leading-[17px] tracking-tight" numberOfLines={3}>
                 {toast.message}
               </Text>
             </View>
@@ -182,7 +179,7 @@ export function ToastProvider({ children }) {
             <TouchableOpacity
               onPress={hideToast}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={styles.closeBtn}
+              className="p-1 ml-1.5"
             >
               <Ionicons name="close" size={16} color="rgba(255, 255, 255, 0.5)" />
             </TouchableOpacity>
@@ -200,56 +197,3 @@ export function useToast() {
   }
   return context;
 }
-
-const styles = StyleSheet.create({
-  toastWrapper: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 999999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 999,
-  },
-  toastPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 440,
-    backgroundColor: '#180407',
-    borderWidth: 1.2,
-    borderRadius: 26,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  iconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  toastTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-    marginBottom: 2,
-  },
-  toastMessage: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: '#CBD5E1',
-    lineHeight: 17,
-    letterSpacing: -0.2,
-  },
-  closeBtn: {
-    padding: 4,
-    marginLeft: 6,
-  },
-});

@@ -5,13 +5,65 @@ node_modules/
 dist/
 **/dist/
 web-build/
+coverage/
+**/coverage/
+*.tsbuildinfo
 *.log
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
 .DS_Store
+Thumbs.db
+Desktop.ini
 .env
 *.env
 .env*
 !.env.example
 backend/data/
+
+# Local editor and operating-system state
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local caches and generated build output
+.cache/
+**/.cache/
+.turbo/
+**/.turbo/
+.gradle/
+**/.gradle/
+mobile/.gradle-cache/
+**/.gradle-cache/
+android/.gradle/
+android/**/build/
+mobile/android/**/build/
+ios/Pods/
+ios/build/
+ios/DerivedData/
+**/DerivedData/
+
+# Machine-specific Android and iOS signing/build files
+local.properties
+**/local.properties
+*.keystore
+*.jks
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.cer
+*.p8
+*.key
+*.pem
+
+# Local databases and temporary files
+*.sqlite
+*.sqlite3
+*.tmp
+*.temp
+*.bak
 
 # Mobile binaries & builds
 *.apk

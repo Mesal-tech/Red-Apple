@@ -70,7 +70,6 @@ class NotificationService {
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FA4A14',
-          sound: 'default',
           enableVibrate: true,
           enableLights: true,
           showBadge: true,
@@ -83,7 +82,6 @@ class NotificationService {
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 300, 200, 300],
           lightColor: '#FA4A14',
-          sound: 'default',
           enableVibrate: true,
           enableLights: true,
           showBadge: true,
@@ -96,7 +94,6 @@ class NotificationService {
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 500, 250, 500],
           lightColor: '#059669',
-          sound: 'default',
           enableVibrate: true,
           enableLights: true,
           showBadge: true,
@@ -109,7 +106,6 @@ class NotificationService {
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250],
           lightColor: '#2563EB',
-          sound: 'default',
           enableVibrate: true,
           enableLights: true,
           showBadge: true,
@@ -264,57 +260,81 @@ class NotificationService {
     }
   }
 
+  async updateSetting(key, val) {
+    return this.updateSettings({ [key]: val });
+  }
+
   /**
    * Schedules a local notification with proper SDK 52/57 typed triggers
    */
   async scheduleLocalNotification({
     identifier,
+    id,
     title,
     body,
     trigger,
+    seconds,
     data = {},
     channelId = 'default',
   }) {
-    if (!Notifications) return null;
+    const finalId = identifier || id || `notif_${Date.now()}`;
+    const finalTrigger = trigger || (seconds !== undefined ? { seconds } : null);
+
+    // Record to local in-app notifications store so in-app listeners receive it
+    try {
+      await this.addInAppNotification({
+        id: finalId,
+        title: title || 'Red Apple Notification',
+        body: body || '',
+        time: 'Just now',
+        type: data?.type || 'general',
+        icon: 'notifications',
+        iconBg: '#FFEBEF',
+        iconColor: '#FA4A14',
+      });
+      this.notifyListeners();
+    } catch (_) {}
+
+    if (!Notifications) return finalId;
     await this.init();
 
     try {
-      if (identifier) {
-        await this.cancelNotification(identifier).catch(() => {});
+      if (finalId) {
+        await this.cancelNotification(finalId).catch(() => {});
       }
 
       // Format trigger to be strictly compliant with Expo SDK 52/57 SchedulableNotificationTriggerInput
       let formattedTrigger = null;
-      if (trigger) {
-        if (trigger instanceof Date || typeof trigger === 'number') {
+      if (finalTrigger) {
+        if (finalTrigger instanceof Date || typeof finalTrigger === 'number') {
           formattedTrigger = {
             type: Notifications.SchedulableTriggerInputTypes?.DATE || 'date',
-            date: trigger,
+            date: finalTrigger,
             channelId: channelId || 'default',
           };
-        } else if (trigger.seconds !== undefined) {
+        } else if (finalTrigger.seconds !== undefined) {
           formattedTrigger = {
             type: Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL || 'timeInterval',
-            seconds: Math.max(1, Math.round(trigger.seconds)),
-            repeats: !!trigger.repeats,
+            seconds: Math.max(1, Math.round(finalTrigger.seconds)),
+            repeats: !!finalTrigger.repeats,
             channelId: channelId || 'default',
           };
-        } else if (trigger.hour !== undefined) {
+        } else if (finalTrigger.hour !== undefined) {
           formattedTrigger = {
             type: Notifications.SchedulableTriggerInputTypes?.DAILY || 'daily',
-            hour: trigger.hour,
-            minute: trigger.minute ?? 0,
+            hour: finalTrigger.hour,
+            minute: finalTrigger.minute ?? 0,
             channelId: channelId || 'default',
           };
-        } else if (trigger.type) {
-          formattedTrigger = { ...trigger, channelId: channelId || 'default' };
+        } else if (finalTrigger.type) {
+          formattedTrigger = { ...finalTrigger, channelId: channelId || 'default' };
         } else {
-          formattedTrigger = trigger;
+          formattedTrigger = finalTrigger;
         }
       }
 
-      const id = await Notifications.scheduleNotificationAsync({
-        identifier: identifier || undefined,
+      const scheduledId = await Notifications.scheduleNotificationAsync({
+        identifier: finalId,
         content: {
           title,
           body,
@@ -326,10 +346,10 @@ class NotificationService {
         trigger: formattedTrigger,
       });
 
-      return id;
+      return scheduledId || finalId;
     } catch (err) {
       console.warn('[NotificationService] Schedule local notification error:', err?.message);
-      return null;
+      return finalId;
     }
   }
 
@@ -360,10 +380,14 @@ class NotificationService {
     await this.init();
     await this.requestPermissionsAndToken();
 
+    const title = 'Red Apple Health Alert 🌸';
+    const body = 'Notifications are active! You will receive timely alerts for your cycle, medication & appointments.';
+
     // 1. Fire immediate local notification on device
-    await this.scheduleLocalNotification({
-      title: 'Red Apple Health Alert 🍎',
-      body: 'Notifications are active! You will receive timely alerts for your cycle, medication & appointments.',
+    const id = await this.scheduleLocalNotification({
+      identifier: `test_${Date.now()}`,
+      title,
+      body,
       trigger: { seconds: 1 },
       channelId: 'default',
       data: { type: 'test' },
@@ -376,19 +400,7 @@ class NotificationService {
       // Backend test ping is optional
     }
 
-    // 3. Add to in-app notification center list
-    await this.addInAppNotification({
-      id: `test_${Date.now()}`,
-      title: 'Red Apple Health Alert 🍎',
-      body: 'Notifications are active! You will receive timely alerts for your cycle, medication & appointments.',
-      time: 'Just now',
-      type: 'test',
-      icon: 'notifications',
-      iconBg: '#FFEBEF',
-      iconColor: '#FA4A14',
-    });
-
-    this.notifyListeners();
+    return { success: true, id, title, body };
   }
 
   /**

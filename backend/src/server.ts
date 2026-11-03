@@ -1,6 +1,6 @@
 import express, { Application } from 'express';
 import cors from 'cors';
-// Telemedicine real verified doctors sync
+// Telemedicine real verified doctors and partner clinics sync
 
 import authRoutes from './routes/auth.routes';
 import cycleRoutes from './routes/cycle.routes';
@@ -12,6 +12,7 @@ import campaignRoutes from './routes/campaign.routes';
 import emailRoutes from './routes/email.routes';
 import paymentRoutes from './routes/payment.routes';
 import aiRoutes from './routes/ai.routes';
+import partnerRoutes from './routes/partner.routes';
 import { errorHandler } from './middleware/error.middleware';
 
 export function createExpressApp(): Application {
@@ -41,6 +42,7 @@ export function createExpressApp(): Application {
   app.use('/api/emails', emailRoutes);
   app.use('/api/payments', paymentRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api/partner', partnerRoutes);
 
   // Centralized Error Handling Middleware
   app.use(errorHandler);

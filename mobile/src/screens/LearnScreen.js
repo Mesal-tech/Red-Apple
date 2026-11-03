@@ -1,23 +1,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  Dimensions,
   TextInput,
   Modal,
   Image,
   ImageBackground,
+  StatusBar,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import { getEducationArticles } from '../services/educationService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const STATUSBAR_HEIGHT =
+  Platform.OS === 'android'
+    ? (StatusBar.currentHeight || 28)
+    : 44;
+const CARD_WIDTH = Math.floor((SCREEN_WIDTH - 40 - 12) / 2);
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.35);
 
 const ALL_ARTICLES = [
   {
@@ -98,57 +106,91 @@ const ALL_ARTICLES = [
   },
   {
     id: '6',
-    title: 'Period Pain Relief Yoga',
-    category: 'CRAMP RELIEF',
-    readTime: '8 min video',
-    readers: '16.7k',
-    author: 'Aria Ross • Prenatal & Pelvic Yoga Instructor',
-    summary: 'Gentle stretches and relaxing poses to ease period cramps and calm lower belly muscles.',
+    title: 'Cycle Syncing: Nutrition & Exercise',
+    category: 'CYCLE',
+    readTime: '4 min read',
+    readers: '13.4k',
+    author: 'Dr. Sarah Mitchell • OB-GYN',
+    summary: 'Aligning your workouts and meals with your 4 cycle phases.',
     bullets: [
-      'Child Pose: Eases lower back tightness and belly pressure.',
-      'Cat-Cow Stretch: Gently loosens your spine and relieves cramp aches.',
-      'Reclining Stretch: Deeply relaxes tight pelvic and lower belly muscles.',
+      'Follicular Phase: Higher energy, great for cardio & fresh salads.',
+      'Ovulatory Phase: Peak strength, HIIT & antioxidant-rich foods.',
+      'Luteal Phase: Magnesium-rich seeds & restorative pilates.',
     ],
-    thumbnail: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80',
   },
 ];
 
-export default function LearnScreen({ openArticleDetails }) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+export default function LearnScreen({ navigation }) {
+  const { isDarkMode, theme } = useTheme();
   const [articles, setArticles] = useState(ALL_ARTICLES);
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  const [selectedArticle, setSelectedArticle] = useState(null);
+  const [isFullReadingMode, setIsFullReadingMode] = useState(false);
 
   useEffect(() => {
-    loadArticles();
-  }, []);
-
-  const loadArticles = async () => {
-    try {
-      const res = await getEducationArticles();
-      if (res?.articles && res.articles.length > 0) {
-        const enriched = res.articles.map((art, idx) => ({
-          ...art,
-          thumbnail:
-            art.thumbnail ||
-            ALL_ARTICLES[idx % ALL_ARTICLES.length]?.thumbnail ||
-            ALL_ARTICLES[0].thumbnail,
-        }));
-        setArticles(enriched);
-      }
-    } catch (e) {
-      console.warn('[LearnScreen] Could not fetch live articles:', e?.message);
+    let isMounted = true;
+    async function loadArticles() {
+      try {
+        const live = await getEducationArticles();
+        if (isMounted && Array.isArray(live) && live.length > 0) {
+          const formatted = live.map((art, idx) => ({
+            id: art.id || `live_${idx}`,
+            title: art.title,
+            category: art.category ? art.category.toUpperCase() : 'GENERAL',
+            readTime: art.read_time_minutes ? `${art.read_time_minutes} min read` : '4 min read',
+            readers: `${(10 + (idx % 8)).toFixed(1)}k`,
+            author: art.author_role || 'Medical Review Board',
+            summary: art.summary,
+            bullets: [
+              'Evidence-based clinical insights.',
+              'Verified by licensed healthcare specialists.',
+            ],
+            thumbnail: art.cover_image_url || ALL_ARTICLES[idx % ALL_ARTICLES.length].thumbnail,
+            content: art.content,
+            featured: idx === 0,
+          }));
+          setArticles(formatted);
+        }
+      } catch (_) {}
     }
-  };
+    loadArticles();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadArticles();
+    try {
+      const live = await getEducationArticles();
+      if (Array.isArray(live) && live.length > 0) {
+        const formatted = live.map((art, idx) => ({
+          id: art.id || `live_${idx}`,
+          title: art.title,
+          category: art.category ? art.category.toUpperCase() : 'GENERAL',
+          readTime: art.read_time_minutes ? `${art.read_time_minutes} min read` : '4 min read',
+          readers: `${(10 + (idx % 8)).toFixed(1)}k`,
+          author: art.author_role || 'Medical Review Board',
+          summary: art.summary,
+          bullets: [
+            'Evidence-based clinical insights.',
+            'Verified by licensed healthcare specialists.',
+          ],
+          thumbnail: art.cover_image_url || ALL_ARTICLES[idx % ALL_ARTICLES.length].thumbnail,
+          content: art.content,
+          featured: idx === 0,
+        }));
+        setArticles(formatted);
+      }
+    } catch (_) {}
     setIsRefreshing(false);
   };
 
-  // Derive unique categories from articles
   const allCategories = useMemo(() => {
     const set = new Set();
     articles.forEach((a) => {
@@ -157,7 +199,6 @@ export default function LearnScreen({ openArticleDetails }) {
     return ['ALL', ...Array.from(set)];
   }, [articles]);
 
-  // Filter articles based on search query and category
   const filteredArticles = useMemo(() => {
     return articles.filter((a) => {
       const matchCat =
@@ -180,211 +221,330 @@ export default function LearnScreen({ openArticleDetails }) {
   const featured = !isFiltering ? (filteredArticles.find((a) => a.featured) || filteredArticles[0]) : null;
   const gridArticles = !isFiltering ? filteredArticles.filter((a) => a.id !== featured?.id) : filteredArticles;
 
+  const handleOpenArticle = (item) => {
+    setSelectedArticle({
+      title: item.title,
+      category: item.category,
+      readTime: item.readTime,
+      author: item.author,
+      summary: item.summary,
+      bulletPoints: item.bullets,
+      fullText: item.content || item.summary,
+      thumbnail: item.thumbnail,
+    });
+    setIsFullReadingMode(false);
+  };
+
   return (
-    <View style={styles.screenContainer}>
-      {/* TOP SEARCH BAR & FILTER BUTTON */}
-      <View style={styles.topSearchFilterWrapper}>
-        <View style={styles.topSearchFilterRow}>
-          <View style={styles.searchBarGlass}>
-            <Ionicons name="search" size={19} color="#9CA3AF" style={{ marginRight: 8 }} />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
+
+      {/* Top Header: Search Bar & Filter Button */}
+      <View style={{ paddingTop: STATUSBAR_HEIGHT + 8, paddingHorizontal: 20, paddingBottom: 6, backgroundColor: theme.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isDarkMode ? '#2B2B2B' : '#F8FAFC',
+              borderRadius: 24,
+              height: 48,
+              paddingHorizontal: 16,
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+            }}
+          >
+            <Ionicons name="search" size={18} color={theme.textMuted} />
             <TextInput
-              style={styles.searchInput}
+              style={{
+                flex: 1,
+                fontSize: 13.5,
+                color: theme.textPrimary,
+                marginLeft: 10,
+                fontWeight: '500',
+                paddingVertical: 0,
+              }}
               placeholder="Search articles, guides..."
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={theme.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
-              clearButtonMode="while-editing"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setSearchQuery('')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+              <TouchableOpacity activeOpacity={0.7} onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color={theme.textMuted} />
               </TouchableOpacity>
             )}
           </View>
 
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[
-              styles.filterButton,
-              selectedCategory !== 'ALL' && styles.filterButtonActive,
-            ]}
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: selectedCategory !== 'ALL' ? '#DC2626' : (isDarkMode ? '#2B2B2B' : '#F8FAFC'),
+              borderWidth: 1,
+              borderColor: selectedCategory !== 'ALL' ? '#DC2626' : theme.cardBorder,
+            }}
             onPress={() => setShowFilterModal(true)}
           >
             <Ionicons
               name="options-outline"
               size={20}
-              color={selectedCategory !== 'ALL' ? '#FFFFFF' : '#374151'}
+              color={selectedCategory !== 'ALL' ? '#FFFFFF' : (isDarkMode ? '#ABABAB' : '#334155')}
             />
-            {selectedCategory !== 'ALL' && <View style={styles.filterActiveDot} />}
           </TouchableOpacity>
         </View>
 
-        {/* ACTIVE FILTER CHIP (IF FILTERED) */}
-        {selectedCategory !== 'ALL' && (
-          <View style={styles.activeFilterPillRow}>
-            <View style={styles.activeFilterPill}>
-              <Text style={styles.activeFilterPillText}>{selectedCategory}</Text>
+        {/* Horizontal Category Filter Strip */}
+        <ScrollView
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 6, gap: 8 }}
+        >
+          {allCategories.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            return (
               <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setSelectedCategory('ALL')}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                key={cat}
+                activeOpacity={0.75}
+                onPress={() => setSelectedCategory(cat)}
+                style={{
+                  paddingHorizontal: 15,
+                  paddingVertical: 7,
+                  borderRadius: 20,
+                  backgroundColor: isSelected ? (isDarkMode ? '#FFFFFF' : '#111827') : (isDarkMode ? '#2B2B2B' : '#F1F5F9'),
+                  borderWidth: 1,
+                  borderColor: isSelected ? (isDarkMode ? '#FFFFFF' : '#111827') : theme.cardBorder,
+                }}
               >
-                <Ionicons name="close-circle" size={15} color={colors.primary} style={{ marginLeft: 5 }} />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: isSelected ? '800' : '600',
+                    color: isSelected ? (isDarkMode ? '#161616' : '#FFFFFF') : (isDarkMode ? '#ABABAB' : '#475569'),
+                  }}
+                >
+                  {cat === 'ALL' ? 'All' : cat}
+                </Text>
               </TouchableOpacity>
-            </View>
-            <TouchableOpacity activeOpacity={0.7} onPress={() => setSelectedCategory('ALL')}>
-              <Text style={styles.clearAllFilterText}>Clear Filter</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            );
+          })}
+        </ScrollView>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={colors.primary}
+            tintColor={theme.textPrimary}
             colors={[colors.primary, '#E11D48']}
-            progressBackgroundColor="#FFFFFF"
+            progressBackgroundColor={theme.card}
           />
         }
       >
-        {/* HERO FEATURED IMMERSIVE CARD (WHEN BROWSING ALL) */}
+        {/* Hero Featured Card */}
         {featured && (
           <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.heroFeaturedCard}
-            onPress={() =>
-              openArticleDetails(
-                featured.title,
-                featured.category,
-                featured.readTime,
-                featured.author,
-                featured.summary,
-                featured.bullets,
-                featured.content,
-                featured.thumbnail
-              )
-            }
+            activeOpacity={0.92}
+            style={{
+              marginHorizontal: 20,
+              marginBottom: 20,
+              height: 240,
+              borderRadius: 26,
+              overflow: 'hidden',
+              backgroundColor: '#E2E8F0',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 4,
+              position: 'relative',
+            }}
+            onPress={() => handleOpenArticle(featured)}
           >
-            <ImageBackground
+            <Image
               source={{ uri: featured.thumbnail }}
-              style={styles.heroImageBackground}
-              imageStyle={styles.heroCardImageStyle}
+              style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
               resizeMode="cover"
+            />
+            {/* Category Pill Top Left */}
+            <View
+              style={{
+                position: 'absolute',
+                top: 18,
+                left: 18,
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: 14,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.15,
+                shadowRadius: 3,
+                elevation: 3,
+              }}
             >
-              <LinearGradient
-                colors={['rgba(0,0,0,0.12)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
-                locations={[0, 0.45, 1]}
-                style={styles.heroGradientContent}
-              >
-                <View style={styles.heroCategoryBadge}>
-                  <Text style={styles.heroCategoryBadgeText}>{featured.category}</Text>
-                </View>
+              <Text style={{ fontSize: 10, fontWeight: '900', color: '#0F172A', letterSpacing: 0.7 }}>
+                {featured.category}
+              </Text>
+            </View>
 
-                <View>
-                  <Text style={styles.heroCardTitle}>{featured.title}</Text>
-                  <View style={styles.heroCardMetaRow}>
-                    <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.88)" style={{ marginRight: 6 }} />
-                    <Text style={styles.heroCardMetaText}>
-                      {featured.readers} readers • {featured.readTime}
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
-            </ImageBackground>
+            {/* Title & Metadata Bottom Left over Gradient */}
+            <LinearGradient
+              colors={['transparent', 'rgba(0, 0, 0, 0.45)', 'rgba(0, 0, 0, 0.9)']}
+              locations={[0, 0.4, 1]}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                padding: 18,
+                paddingTop: 44,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: '900',
+                  color: '#FFFFFF',
+                  lineHeight: 26,
+                  letterSpacing: -0.3,
+                  marginBottom: 6,
+                }}
+              >
+                {featured.title}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="people-outline" size={13} color="rgba(255, 255, 255, 0.9)" />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: 'rgba(255, 255, 255, 0.9)', marginLeft: 4 }}>
+                  {featured.readers} readers • {featured.readTime}
+                </Text>
+              </View>
+            </LinearGradient>
           </TouchableOpacity>
         )}
 
-        {/* 2-COLUMN BENTO GRID OF IMMERSIVE CARDS */}
+        {/* 2-Column Bento Grid */}
         {gridArticles.length > 0 ? (
-          <View style={styles.bentoGrid}>
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              paddingHorizontal: 20,
+            }}
+          >
             {gridArticles.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.88}
-                style={styles.bentoCard}
-                onPress={() =>
-                  openArticleDetails(
-                    item.title,
-                    item.category,
-                    item.readTime,
-                    item.author,
-                    item.summary,
-                    item.bullets,
-                    item.content,
-                    item.thumbnail
-                  )
-                }
+                style={{
+                  width: CARD_WIDTH,
+                  marginBottom: 18,
+                }}
+                onPress={() => handleOpenArticle(item)}
               >
-                <ImageBackground
-                  source={{ uri: item.thumbnail }}
-                  style={styles.bentoImageBackground}
-                  imageStyle={styles.bentoCardImageStyle}
-                  resizeMode="cover"
+                {/* Thumbnail Image Container */}
+                <View
+                  style={{
+                    width: CARD_WIDTH,
+                    height: Math.round(CARD_WIDTH * 0.82),
+                    borderRadius: 20,
+                    overflow: 'hidden',
+                    backgroundColor: '#F1F5F9',
+                    position: 'relative',
+                    shadowColor: '#000000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }}
                 >
-                  <LinearGradient
-                    colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.38)', 'rgba(0,0,0,0.88)']}
-                    locations={[0, 0.4, 1]}
-                    style={styles.bentoGradientContent}
+                  <Image
+                    source={{ uri: item.thumbnail }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                  {/* Floating Category Pill on Thumbnail */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      left: 10,
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3.5,
+                      borderRadius: 10,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.12,
+                      shadowRadius: 2,
+                      elevation: 2,
+                    }}
                   >
-                    <View style={styles.bentoCategoryBadge}>
-                      <Text style={styles.bentoCategoryBadgeText}>{item.category}</Text>
-                    </View>
+                    <Text style={{ fontSize: 9, fontWeight: '900', color: '#0F172A', letterSpacing: 0.5 }}>
+                      {item.category}
+                    </Text>
+                  </View>
+                </View>
 
-                    <View>
-                      <Text style={styles.bentoCardTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-
-                      <View style={styles.bentoCardMetaRow}>
-                        <Ionicons name="people-outline" size={12} color="rgba(255,255,255,0.8)" style={{ marginRight: 4 }} />
-                        <Text style={styles.bentoCardMetaText}>{item.readers}</Text>
-                        <Text style={styles.bentoCardMetaText}> • {item.readTime}</Text>
-                      </View>
-                    </View>
-                  </LinearGradient>
-                </ImageBackground>
+                {/* Title & Metadata (Below Thumbnail, matching HomeScreen) */}
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: theme.textPrimary,
+                    lineHeight: 19,
+                    marginTop: 8,
+                  }}
+                >
+                  {item.title}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                  <Ionicons name="people-outline" size={12} color={theme.textSecondary} />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary, marginLeft: 3 }}>
+                    {item.readers} • {item.readTime}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         ) : (
-          /* EMPTY STATE */
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="search-outline" size={32} color="#9CA3AF" />
+          /* Empty State */
+          <View className="items-center py-16 px-6">
+            <View className="w-16 h-16 rounded-full bg-gray-100 items-center justify-center mb-4">
+              <Ionicons name="search-outline" size={30} color="#9CA3AF" />
             </View>
-            <Text style={styles.emptyTitle}>No articles found</Text>
-            <Text style={styles.emptySubtitle}>
+            <Text className="text-base font-extrabold text-gray-800 mb-1">No articles found</Text>
+            <Text className="text-xs text-gray-500 text-center mb-5">
               {searchQuery
                 ? `We couldn't find any articles matching "${searchQuery}".`
                 : 'No articles in this category.'}
             </Text>
             <TouchableOpacity
               activeOpacity={0.8}
-              style={styles.resetButton}
+              className="bg-primary px-5 py-2.5 rounded-full"
               onPress={() => {
                 setSearchQuery('');
                 setSelectedCategory('ALL');
               }}
             >
-              <Text style={styles.resetButtonText}>Reset Filters</Text>
+              <Text className="text-xs font-bold text-white">Reset Filters</Text>
             </TouchableOpacity>
           </View>
         )}
-
-        <View style={{ height: 90 }} />
       </ScrollView>
 
-      {/* CATEGORY FILTER MODAL */}
+      {/* Category Filter Modal */}
       <Modal
         visible={showFilterModal}
         transparent
@@ -394,44 +554,40 @@ export default function LearnScreen({ openArticleDetails }) {
       >
         <TouchableOpacity
           activeOpacity={1}
-          style={styles.modalOverlay}
+          className="flex-1 bg-black/40 justify-center p-5"
           onPress={() => setShowFilterModal(false)}
         >
           <TouchableOpacity
             activeOpacity={1}
-            style={styles.modalContent}
+            className="bg-white rounded-3xl p-5 border border-gray-100 shadow-2xl"
             onPress={(e) => e.stopPropagation()}
           >
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Filter Articles</Text>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-extrabold text-gray-900">Filter Articles</Text>
               <TouchableOpacity activeOpacity={0.7} onPress={() => setShowFilterModal(false)}>
-                <Ionicons name="close" size={22} color="#374151" />
+                <Ionicons name="close" size={20} color="#374151" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.filterSectionLabel}>CATEGORY</Text>
-            <View style={styles.categoriesWrap}>
+            <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">CATEGORY</Text>
+            <View className="flex-row flex-wrap gap-2">
               {allCategories.map((cat) => {
                 const isSelected = selectedCategory === cat;
                 return (
                   <TouchableOpacity
                     key={cat}
                     activeOpacity={0.75}
-                    style={[
-                      styles.categoryChip,
-                      isSelected && styles.categoryChipActive,
-                    ]}
+                    className={`px-3.5 py-2 rounded-2xl border ${
+                      isSelected
+                        ? 'bg-primary border-primary'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}
                     onPress={() => {
                       setSelectedCategory(cat);
                       setShowFilterModal(false);
                     }}
                   >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        isSelected && styles.categoryChipTextActive,
-                      ]}
-                    >
+                    <Text className={`text-xs ${isSelected ? 'font-black text-white' : 'font-semibold text-gray-700'}`}>
                       {cat === 'ALL' ? 'All Articles' : cat}
                     </Text>
                   </TouchableOpacity>
@@ -441,354 +597,216 @@ export default function LearnScreen({ openArticleDetails }) {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Article Preview Bottom Sheet (Matching HomeScreen) */}
+      <Modal
+        visible={!!selectedArticle && !isFullReadingMode}
+        transparent
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setSelectedArticle(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}
+          onPress={() => setSelectedArticle(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: theme.modalBg,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              overflow: 'hidden',
+              maxHeight: '85%',
+            }}
+          >
+            {selectedArticle?.thumbnail ? (
+              <View style={{ width: '100%', height: 190, position: 'relative' }}>
+                <Image
+                  source={{ uri: selectedArticle.thumbnail }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={{
+                    position: 'absolute',
+                    top: 14,
+                    right: 16,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => setSelectedArticle(null)}
+                >
+                  <Ionicons name="close" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.cardBorder }}>
+                <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                    {selectedArticle?.category}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: isDarkMode ? '#363636' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+                  onPress={() => setSelectedArticle(null)}
+                >
+                  <Ionicons name="close" size={18} color={theme.textPrimary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 36 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: theme.textPrimary, lineHeight: 26, marginBottom: 6 }}>
+                {selectedArticle?.title}
+              </Text>
+              <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginBottom: 12 }}>
+                {selectedArticle?.readTime} • {selectedArticle?.author}
+              </Text>
+
+              <View style={{ height: 1, backgroundColor: theme.divider, marginVertical: 8 }} />
+
+              <Text style={{ fontSize: 13, color: theme.textPrimary, lineHeight: 20, marginBottom: 16 }}>
+                {selectedArticle?.summary}
+              </Text>
+
+              {selectedArticle?.bulletPoints && selectedArticle.bulletPoints.length > 0 && (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '900', color: theme.textPrimary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                    Key Takeaways
+                  </Text>
+                  {selectedArticle.bulletPoints.map((point, index) => (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={{ marginRight: 8, marginTop: 1 }} />
+                      <Text style={{ fontSize: 13, color: theme.textSecondary, flex: 1, lineHeight: 18, fontWeight: '500' }}>
+                        {point}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Read Full Article Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.primary,
+                  paddingVertical: 13,
+                  borderRadius: 50,
+                  marginTop: 16,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 5,
+                  elevation: 2,
+                }}
+                onPress={() => setIsFullReadingMode(true)}
+              >
+                <Ionicons name="book" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Read Full Article</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Full Article Reader Page Modal (Matching HomeScreen) */}
+      <Modal
+        visible={!!selectedArticle && isFullReadingMode}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setIsFullReadingMode(false)}
+      >
+        {selectedArticle && (
+          <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: STATUSBAR_HEIGHT + 4 }}>
+            {/* Header with Back Button */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.cardBorder }}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDarkMode ? '#2B2B2B' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.cardBorder }}
+                onPress={() => setIsFullReadingMode(false)}
+              >
+                <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 14, fontWeight: '900', color: theme.textPrimary }}>Clinical Education</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+              {selectedArticle.thumbnail && (
+                <View style={{ width: '100%', height: 210, borderRadius: 20, overflow: 'hidden', marginBottom: 18 }}>
+                  <Image
+                    source={{ uri: selectedArticle.thumbnail }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+
+              <Text style={{ fontSize: 22, fontWeight: '900', color: theme.textPrimary, lineHeight: 28, marginBottom: 6 }}>
+                {selectedArticle.title}
+              </Text>
+              <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginBottom: 12 }}>
+                {selectedArticle.readTime} • {selectedArticle.author}
+              </Text>
+
+              <View style={{ height: 1, backgroundColor: theme.divider, marginVertical: 12 }} />
+
+              <Text style={{ fontSize: 14, color: theme.textPrimary, lineHeight: 22, marginBottom: 16 }}>
+                {selectedArticle.fullText}
+              </Text>
+
+              <Text style={{ fontSize: 14, color: theme.textSecondary, lineHeight: 22, marginBottom: 24 }}>
+                Consistency in learning about your reproductive wellness empowers informed health decisions and personalized care throughout each phase of life.
+              </Text>
+
+              {/* Ask Dr. Red AI about this article */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#584988',
+                  paddingVertical: 14,
+                  borderRadius: 18,
+                  shadowColor: '#584988',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 5,
+                  elevation: 2,
+                }}
+                onPress={() => {
+                  const title = selectedArticle.title;
+                  setIsFullReadingMode(false);
+                  setSelectedArticle(null);
+                  if (navigation?.navigate) {
+                    navigation.navigate('AICompanion', {
+                      initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my health?`,
+                      autoSend: true,
+                      timestamp: Date.now(),
+                    });
+                  }
+                }}
+              >
+                <Ionicons name="sparkles" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Ask Dr. Red about this</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
+      </Modal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF', // Pure white theme
-  },
-  scrollContent: {
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  topSearchFilterWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
-  },
-  topSearchFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  searchBarGlass: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    padding: 0,
-  },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F9FAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  filterButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterActiveDot: {
-    position: 'absolute',
-    top: 7,
-    right: 7,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  activeFilterPillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    paddingHorizontal: 2,
-  },
-  activeFilterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  activeFilterPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  clearAllFilterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  heroFeaturedCard: {
-    height: 230,
-    borderRadius: 26,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    backgroundColor: '#374151',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  heroImageBackground: {
-    width: '100%',
-    height: '100%',
-  },
-  heroCardImageStyle: {
-    borderRadius: 26,
-  },
-  heroGradientContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 20,
-  },
-  heroCategoryBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  heroCategoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.6,
-  },
-  heroCardTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.4,
-    marginBottom: 6,
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  heroCardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  heroCardMetaText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.92)',
-  },
-  bentoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 12,
-    gap: 12,
-  },
-  bentoCard: {
-    width: '48%',
-    flexGrow: 1,
-    minWidth: 155,
-    height: 205,
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#374151',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  bentoImageBackground: {
-    width: '100%',
-    height: '100%',
-  },
-  bentoCardImageStyle: {
-    borderRadius: 22,
-  },
-  bentoGradientContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 14,
-  },
-  bentoCategoryBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  bentoCategoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  bentoCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-    marginBottom: 6,
-    lineHeight: 19,
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  bentoCardMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bentoCardMetaText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.88)',
-  },
-  floatingActionStack: {
-    position: 'absolute',
-    right: 16,
-    bottom: 24,
-    alignItems: 'center',
-    gap: 10,
-  },
-  floatingActionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#111827', // Crisp dark floating buttons for high contrast matching mockup
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  floatingBtnBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#DC2626',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  floatingBtnBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  /* Empty State */
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 32,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  resetButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  resetButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  /* Filter Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 22,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  filterSectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#9CA3AF',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  categoriesWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-  },
-  categoryChipActive: {
-    backgroundColor: colors.primary,
-  },
-  categoryChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
-  },
-});

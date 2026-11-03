@@ -1,117 +1,261 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   StatusBar,
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  Dimensions,
-  useWindowDimensions,
-  Modal,
   Image,
-  Platform,
+  Alert,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path, Circle, Line, Polygon, Rect, G, Defs, LinearGradient, Stop, Ellipse, Text as SvgText } from 'react-native-svg';
 import { colors } from '../theme/colors';
-import DoctorCareScreen from './DoctorCareScreen';
-import LearnScreen from './LearnScreen';
 import PregnancyScreen from './PregnancyScreen';
 import PostmenopauseScreen from './PostmenopauseScreen';
-import ProfileScreen from './ProfileScreen';
-import SettingsScreen from './SettingsScreen';
-import PrivacyPolicyDetailScreen from './PrivacyPolicyDetailScreen';
-import TermsOfUseDetailScreen from './TermsOfUseDetailScreen';
-import OnboardingSetupScreen from './OnboardingSetupScreen';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import {
   saveActiveHealthModeSafe,
   getCachedActiveHealthMode,
   saveHealthProfileSafe,
   getHealthProfileSafe,
-  getCycleLogsSafe,
 } from '../utils/storage';
 import cycleService, {
   computeLocalFertilityPrediction,
-  computeLocalCycleStats,
 } from '../services/cycleService';
 import streakService from '../services/streakService';
-import FunctionalCycleRing from '../components/FunctionalCycleRing';
-import CycleLengthChart from '../components/CycleLengthChart';
-import AdditionalAnalyticsMetrics from '../components/AdditionalAnalyticsMetrics';
-import MiniCalendarDatePicker from '../components/MiniCalendarDatePicker';
-import AIAssistantDrawer from '../components/AIAssistantDrawer';
+import partnerService from '../services/partnerService';
+import AppBottomSheet from '../components/AppBottomSheet';
+import StreakModal from '../components/StreakModal';
+import PartnerSyncModal from '../components/PartnerSyncModal';
 import { getUserBookings } from '../services/telemedicineService';
 import notificationService from '../services/notificationService';
-import WebSidebar from '../components/WebSidebar';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const STATUSBAR_HEIGHT = Platform.OS === 'web' ? 6 : (StatusBar.currentHeight || 38);
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function TopProfileHeader({
+/**
+ * Curated Clinical Articles for Cycle & Period Insights
+ */
+const CYCLE_ARTICLES_DATA = [
+  {
+    id: 'art_perimenopause',
+    title: 'Perimenopause periods',
+    category: 'CYCLE SHIFTS',
+    readTime: '6 min read',
+    author: 'Clinical Review Board • Hormone Health',
+    summary: 'How shifting hormone levels affect cycle length, flow patterns, and period timing during perimenopause.',
+    bullets: [
+      'Understand new cycle shifts and estrogen fluctuations.',
+      'Rethink period products for variable flow (menstrual cups, heavy pads).',
+      'Know when to consult an OB-GYN for unexpected bleeding.',
+    ],
+    fullContent: `Perimenopause is the natural transitional phase leading up to menopause. During this time, estrogen and progesterone levels fluctuate unpredictably, leading to noticeable changes in your menstrual rhythm.\n\nKey Cycle Shifts:\n1. Irregular Cycle Length: Your period may arrive weeks early or significantly late.\n2. Flow Variations: Periods can range from very light spotting to unusually heavy flow.\n3. Skipped Cycles: Anovulatory cycles (cycles where no egg is released) become frequent.\n\nWhen to Seek Specialist Care:\n- Bleeding that lasts more than 7 consecutive days.\n- Needing to change pads or tampons every hour for multiple hours.\n- Spotting after intercourse or between regular periods.`,
+    thumbnail: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'art_late_period',
+    title: 'What counts as a late period?',
+    category: 'PERIOD CLARITY',
+    readTime: '7 min read',
+    author: 'Dr. Mesal Okubor • Senior OB-GYN',
+    bgColor: '#EDE6F5',
+    borderColor: '#DDD6FE',
+    summary: 'Clinical definitions of late vs delayed periods and the top physical and emotional causes.',
+    bullets: [
+      'A period is clinically late when it is 5 or more days past expected start.',
+      'Cycles between 21 and 35 days are considered medically normal.',
+      'Acute stress, rapid travel across time zones, and illness can delay ovulation.',
+    ],
+    fullContent: `In clinical gynecology, a menstrual cycle typically ranges from 21 to 35 days.\n\nA period is considered "late" if it has not started within 5 days of your projected date. If 6 weeks or more elapse without bleeding, it is medically classified as a missed period (amenorrhea).\n\nPrimary Triggers for Period Delay:\n1. Delayed Ovulation: If ovulation occurred later than usual due to illness or acute stress, your luteal phase shifts accordingly.\n2. Hormonal Fluctuations: Thyroid irregularities, PCOS, or hyperprolactinemia can interrupt ovulation.\n3. Pregnancy: A home urine hCG test is recommended if you are sexually active and your period is 5+ days late.\n4. Significant Weight or Exercise Shifts: Sudden intense athletic training or severe caloric restriction can suppress hypothalamic signals.`,
+    thumbnail: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'art_cramps_no_period',
+    title: 'Cramps but no period? This could ...',
+    category: 'SYMPTOM ANALYSIS',
+    readTime: '5 min read',
+    author: 'Obstetrics & Gynecology Editorial Team',
+    bgColor: '#EDE6F5',
+    borderColor: '#DDD6FE',
+    summary: 'Why pelvic cramping occurs even when bleeding has not yet arrived.',
+    bullets: [
+      'Prostaglandin surges can trigger uterine contractions 24–48 hours before bleeding starts.',
+      'Implantation cramping can occur 6–12 days post-conception.',
+      'Gastrointestinal shifts like trapped gas or IBS often mimic period cramps.',
+    ],
+    fullContent: `Experiencing lower abdominal cramping without bleeding is very common and usually points to one of several physiological events:\n\n1. Upcoming Menstruation: Uterine muscle contractions are stimulated by local prostaglandins up to 48 hours before the first flow appears.\n2. Anovulatory Cycle: If ovulation did not occur, estrogen builds the uterine lining without progesterone stabilization, causing cramp-like sensations.\n3. Early Pregnancy Implantation: Mild uterine cramping often occurs as the fertilized blastocyst implants into the endometrium.\n4. Ovulation Pain (Mittelschmerz): Sharp or dull pelvic twinges mid-cycle when the ovarian follicle ruptures.\n5. Pelvic or Digestive Causes: Constipation, bowel spasms, or ovarian cysts can refer pain to the lower pelvic area.`,
+    thumbnail: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'art_remedies',
+    title: '5 late period "remedies" to know',
+    category: 'WELLNESS & NUTRITION',
+    readTime: '11 min read',
+    author: 'Maya Lin • Holistic Women\'s Health',
+    bgColor: '#EDE6F5',
+    borderColor: '#DDD6FE',
+    summary: 'Evidence-based holistic methods to support hormonal balance and encourage natural cycle regulation.',
+    bullets: [
+      'Warm baths and gentle heat therapy relax pelvic muscles and reduce cortisol.',
+      'Herbal infusions like ginger and chamomile soothe uterine tension.',
+      'Nutritional balance with vitamin C, magnesium, and hydration stabilizes hormones.',
+    ],
+    fullContent: `While no miracle herb instantly induces menstruation, supporting your nervous and endocrine system helps restore regular rhythm:\n\n1. Cortisol Reduction: High cortisol directly suppresses GnRH and luteinizing hormone. Gentle restorative yoga, breathwork, and deep sleep help signal safety to your ovaries.\n2. Warm Compresses & Heat: Applying a warm heating pad to the lower abdomen encourages healthy pelvic blood circulation.\n3. Magnesium & Electrolytes: Magnesium glycinate reduces smooth muscle spasms and supports nervous system balance.\n4. Hydration & Anti-Inflammatory Nutrition: Dark leafy greens, warm ginger teas, and citrus foods support liver clearance of metabolized estrogen.`,
+    thumbnail: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    id: 'art_stress_cycles',
+    title: 'How stress delays ovulation & cycle',
+    category: 'HORMONAL HEALTH',
+    readTime: '4 min read',
+    author: 'Reproductive Endocrinology Advisory',
+    bgColor: '#EDE6F5',
+    borderColor: '#DDD6FE',
+    summary: 'The hypothalamic-pituitary-ovarian axis and how cortisol temporarily halts ovulation.',
+    bullets: [
+      'Cortisol inhibits GnRH release from the hypothalamus.',
+      'Ovulation pauses until the sympathetic nervous system settles.',
+      'Restorative sleep and electrolyte hydration accelerate hormonal reset.',
+    ],
+    fullContent: `The reproductive system is tightly linked to your body’s stress response via the Hypothalamic-Pituitary-Adrenal (HPA) axis.\n\nWhen you undergo severe emotional, mental, or physical strain (such as intense sickness, jetlag, or major life changes), your adrenal glands produce elevated cortisol and adrenaline. The brain perceives stress as an unsafe environment for pregnancy, signaling the ovaries to delay or suspend follicular maturation.\n\nOnce the stressful event passes, the hypothalamus resumes pulsing GnRH, and ovulation proceeds normally.`,
+    thumbnail: 'https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&w=800&q=80',
+  },
+];
+
+/**
+ * Top Header matching the aesthetic reference:
+ * Circular profile avatar, user name & age, streak badge and Bell button with unread count.
+ */
+function AestheticTopHeader({
   user,
-  isDoctorAccount,
-  userName,
-  userSubtitle,
   onOpenProfile,
-  onOpenSettings,
   onOpenNotifications,
-  unreadNotificationsCount,
+  onOpenStreak,
+  streakCount = 1,
+  unreadNotificationsCount = 0,
 }) {
+  const { isDarkMode, theme } = useTheme();
+  const userName = user?.name || 'Alison Barry';
+  const userAge = useMemo(() => {
+    if (user?.date_of_birth) {
+      try {
+        const birthDate = new Date(user.date_of_birth);
+        const ageDiffMs = Date.now() - birthDate.getTime();
+        const ageDate = new Date(ageDiffMs);
+        const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
+        if (!isNaN(calculatedAge) && calculatedAge > 10 && calculatedAge < 100) {
+          return `${calculatedAge} years`;
+        }
+      } catch { }
+    }
+    if (user?.health_profile?.age) {
+      return `${user.health_profile.age} years`;
+    }
+    return '27 years';
+  }, [user?.date_of_birth, user?.health_profile?.age]);
+
   return (
-    <View style={styles.headerRow}>
-      {/* User Profile Avatar & Name - Opens Profile Screen */}
+    <View className="flex-row items-center justify-between px-6 pt-2 pb-3">
+      {/* Left: User Avatar & Name/Age */}
       <TouchableOpacity
         activeOpacity={0.8}
-        style={styles.userInfoRow}
-        onPress={onOpenProfile || onOpenSettings}
+        className="flex-row items-center gap-3"
+        onPress={onOpenProfile}
       >
-        <Image
-          source={{
-            uri: user?.avatar_url || (isDoctorAccount
-              ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80'
-              : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'),
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            overflow: 'hidden',
+            borderWidth: 2,
+            borderColor: isDarkMode ? '#363636' : '#FFFFFF',
+            backgroundColor: isDarkMode ? '#2B2B2B' : '#F3F4F6',
           }}
-          style={styles.userAvatarImage}
-        />
-        <View style={styles.userTextCol}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.userNameText}>{userName}</Text>
-            {isDoctorAccount && (
-              <View style={styles.verifiedDoctorBadge}>
-                <Ionicons name="checkmark-circle" size={14} color="#059669" />
-              </View>
-            )}
-          </View>
-          <Text style={styles.userSubtitleText}>{userSubtitle}</Text>
+        >
+          <Image
+            source={{
+              uri:
+                user?.avatar_url ||
+                'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+            }}
+            style={{ width: '100%', height: '100%', borderRadius: 24 }}
+            resizeMode="cover"
+          />
+        </View>
+        <View>
+          <Text style={{ fontSize: 16, fontWeight: '900', color: theme.textPrimary, letterSpacing: -0.3 }}>{userName}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 2 }}>{userAge}</Text>
         </View>
       </TouchableOpacity>
 
-      {/* Right Action Icons: Settings Gear & Notifications */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {onOpenSettings && (
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.bellBtnDark}
-            onPress={onOpenSettings}
-          >
-            <Ionicons name="settings-outline" size={19} color="#111827" />
-          </TouchableOpacity>
-        )}
+      {/* Right: Streak Badge & Notifications Circular Action Buttons */}
+      <View className="flex-row items-center gap-2">
+        {/* Streak Badge Button (matching Profile Screen) */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={{
+            height: 44,
+            paddingHorizontal: 14,
+            borderRadius: 22,
+            backgroundColor: isDarkMode ? '#2B2B2B' : '#FFFFFF',
+            borderWidth: 1,
+            borderColor: isDarkMode ? '#363636' : 'rgba(229, 231, 235, 0.6)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onPress={onOpenStreak}
+          accessibilityLabel="Current Streak"
+        >
+          <Ionicons name="flash" size={16} color={isDarkMode ? '#FCD34D' : '#111827'} />
+          <Text style={{ fontSize: 12, fontWeight: '900', color: theme.textPrimary, marginLeft: 6 }}>{streakCount}</Text>
+        </TouchableOpacity>
 
-        {/* Standard App Notification Button */}
+        {/* Notifications Bell Button */}
         <TouchableOpacity
           activeOpacity={0.75}
-          style={styles.bellBtnDark}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: isDarkMode ? '#2B2B2B' : '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: isDarkMode ? '#363636' : 'rgba(229, 231, 235, 0.6)',
+            position: 'relative',
+          }}
           onPress={onOpenNotifications}
+          accessibilityLabel="Notifications"
         >
-          <Ionicons name="notifications-outline" size={22} color="#111827" />
+          <Ionicons name="notifications-outline" size={20} color={isDarkMode ? '#FFFFFF' : '#1E293B'} />
           {unreadNotificationsCount > 0 && (
-            <View style={styles.bellBadgeGlow}>
-              <Text style={styles.bellBadgeGlowText}>{unreadNotificationsCount}</Text>
+            <View
+              style={{
+                position: 'absolute',
+                top: 2,
+                right: 2,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 8,
+                backgroundColor: '#DC2626',
+                borderWidth: 1.5,
+                borderColor: theme.card,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 2,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800', lineHeight: 11 }}>
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -121,56 +265,122 @@ function TopProfileHeader({
 }
 
 export default function HomeScreen({
-  onSignOut,
+  navigation,
   initialMode = 'cycle',
   healthProfile = null,
-  onRedoSetup,
+  onOpenAIAssistant,
 }) {
   const { user, updateProfile } = useAuth();
-  const { width: windowWidth } = useWindowDimensions();
-  const isLargeScreen = (Platform.OS === 'web' && windowWidth >= 768) || windowWidth >= 1024;
-  const screenWidth = Platform.OS === 'web' ? Math.min(windowWidth, 880) : windowWidth;
+  const { isDarkMode, theme } = useTheme();
+  let showToastSuccess = null;
+  try {
+    const toast = useToast();
+    showToastSuccess = toast?.showSuccess;
+  } catch (e) { }
 
-  const isDoctorAccount =
-    user?.role === 'doctor' ||
-    user?.email?.toLowerCase() === 'mesalokubor63@gmail.com';
+  const [activeHealthMode, setActiveHealthMode] = useState(() => {
+    const cached = typeof getCachedActiveHealthMode === 'function' ? getCachedActiveHealthMode() : null;
+    if (cached) return cached;
+    if (initialMode) return initialMode;
+    if (healthProfile?.stage) return healthProfile.stage;
+    if (user?.health_profile?.stage) return user.health_profile.stage;
+    if (user?.pregnancy_mode) return 'pregnancy';
+    return 'cycle';
+  });
 
-  const userName = isDoctorAccount
-    ? (user?.name || 'Consulting Doctor')
-    : (user?.name || 'Amara Okonkwo');
+  useEffect(() => {
+    if (initialMode) setActiveHealthMode(initialMode);
+  }, [initialMode]);
 
-  const greetingDisplayName = isDoctorAccount
-    ? (userName.startsWith('Dr.') ? userName : `Dr. ${userName}`)
-    : (user?.name ? user.name.split(' ')[0] : (userName ? userName.split(' ')[0] : 'Amara'));
+  const isPregnancyMode = activeHealthMode === 'pregnancy';
+  const isPostmenopauseMode =
+    activeHealthMode === 'postmenopause' || activeHealthMode === 'perimenopause';
 
-  const userSubtitle = isDoctorAccount
-    ? 'Doctor / Telemedicine Specialist'
-    : 'Patient';
-
-  const effectiveMode =
-    initialMode ||
-    healthProfile?.stage ||
-    user?.health_profile?.stage ||
-    (user?.pregnancy_mode ? 'pregnancy' : 'cycle');
-
-  const [currentPage, setCurrentPage] = useState(0); // 0: Homepage | 1: Cycle / Center | 2: Learn | 3: Telemed
-  const [showLegendModal, setShowLegendModal] = useState(false);
-  const [showExpandedCycleModal, setShowExpandedCycleModal] = useState(false);
-  const [showCycleCalendarModal, setShowCycleCalendarModal] = useState(false);
-  const [showDailyLogDrawer, setShowDailyLogDrawer] = useState(false);
-
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showStreakModal, setShowStreakModal] = useState(false);
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [partnerStatus, setPartnerStatus] = useState(null);
+  const [isPartnerCardDismissed, setIsPartnerCardDismissed] = useState(false);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [notificationsList, setNotificationsList] = useState([]);
-  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+
+  // Educational insights state (matching Learn page pattern)
+  const [selectedEduArticle, setSelectedEduArticle] = useState(null);
+  const [isFullReadingMode, setIsFullReadingMode] = useState(false);
+
+  const handleOpenEduArticle = (item) => {
+    setSelectedEduArticle({
+      title: item.title,
+      category: item.category,
+      readTime: item.readTime,
+      author: item.author || 'Clinical Review Board • Women\'s Health',
+      summary: item.summary,
+      bulletPoints: item.bullets || [],
+      fullText: item.fullContent || item.summary,
+      thumbnail: item.thumbnail,
+    });
+    setIsFullReadingMode(false);
+  };
+
+  // Streak state
+  const [streakCount, setStreakCount] = useState(1);
+
+  // Partner Sync state
+  const reloadPartnerStatus = async () => {
+    try {
+      const status = await partnerService.getPartnerStatus();
+      if (status) {
+        setPartnerStatus(status);
+      }
+    } catch (e) { }
+  };
+
+  useEffect(() => {
+    reloadPartnerStatus();
+  }, [user?.id, isRefreshing]);
+
+  const handleDismissPartnerCard = async () => {
+    setIsPartnerCardDismissed(true);
+    await partnerService.dismissPartnerCard(true);
+    showToastSuccess && showToastSuccess('Partner card hidden');
+  };
+
+  const handleTalkWithDrRed = () => {
+    const prompt = `Hi Dr. Red, I'd like to check in on how my body is feeling today (Cycle Day ${displayCurrentDay}, ${cyclePrediction.currentPhase || 'reproductive phase'}). Can you analyze my symptoms and guide me through today's wellness check?`;
+    if (typeof onOpenAIAssistant === 'function') {
+      onOpenAIAssistant(prompt);
+    } else if (navigation?.navigate) {
+      navigation.navigate('AICompanion', {
+        initialQuery: prompt,
+        autoSend: true,
+        timestamp: Date.now(),
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (typeof streakService?.getStreakData === 'function') {
+      streakService
+        .getStreakData()
+        .then((data) => {
+          if (data?.appStreak != null) {
+            setStreakCount(data.appStreak);
+          }
+        })
+        .catch(() => { });
+    }
+  }, [isRefreshing]);
 
   const reloadNotifications = async () => {
     try {
-      const items = await notificationService.getInAppNotifications();
-      if (Array.isArray(items)) {
-        setNotificationsList(items);
-        const unread = items.filter((n) => !n.isRead).length;
-        setUnreadNotificationsCount(unread);
+      if (typeof notificationService?.getInAppNotifications === 'function') {
+        const items = await notificationService.getInAppNotifications();
+        if (Array.isArray(items)) {
+          setNotificationsList(items);
+          const unread = items.filter((n) => !n.isRead).length;
+          setUnreadNotificationsCount(unread);
+        }
       }
     } catch (e) {
       console.warn('[HomeScreen] Reload notifications error:', e);
@@ -179,172 +389,29 @@ export default function HomeScreen({
 
   useEffect(() => {
     reloadNotifications();
-    const unsub = notificationService.subscribe(() => {
-      reloadNotifications();
-    });
-    return () => unsub();
-  }, []);
-
-  const [activeHealthMode, setActiveHealthMode] = useState(() => {
-    // 1. Check in-memory / local storage cache first (immediate user switch)
-    const cached = getCachedActiveHealthMode();
-    if (cached) return cached;
-    // 2. Prop from AppNavigator
-    if (initialMode) return initialMode;
-    // 3. Health profile stage
-    if (healthProfile?.stage) return healthProfile.stage;
-    if (user?.health_profile?.stage) return user.health_profile.stage;
-    if (user?.pregnancy_mode) return 'pregnancy';
-    return 'cycle';
-  });
-
-  const isPregnancyMode = activeHealthMode === 'pregnancy';
-  const isPostmenopauseMode =
-    activeHealthMode === 'postmenopause' || activeHealthMode === 'perimenopause';
-
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      const cached = getCachedActiveHealthMode();
-      if (cached) setActiveHealthMode(cached);
-      await getHealthProfileSafe();
-      await new Promise((res) => setTimeout(res, 600));
-    } catch (e) {
-      console.warn('Error refreshing HomeScreen:', e);
-    } finally {
-      setIsRefreshing(false);
+    let unsub;
+    if (typeof notificationService?.subscribe === 'function') {
+      unsub = notificationService.subscribe(() => {
+        reloadNotifications();
+      });
     }
-  };
-
-  const [userBookingsList, setUserBookingsList] = useState([]);
-
-  useEffect(() => {
-    let isMounted = true;
-    getUserBookings()
-      .then((res) => {
-        if (isMounted && Array.isArray(res)) {
-          setUserBookingsList(res);
-        }
-      })
-      .catch(() => { });
     return () => {
-      isMounted = false;
+      if (typeof unsub === 'function') unsub();
     };
-  }, [showDailyLogDrawer, isRefreshing]);
-
-  /**
-   * Persistently switch health modes both locally and to the backend.
-   * Ensures exiting or entering pregnancy mode sticks across app restarts with zero flashing.
-   */
-  const switchHealthMode = async (targetMode) => {
-    setActiveHealthMode(targetMode);
-
-    // 1. Persist locally to storage
-    await saveActiveHealthModeSafe(targetMode);
-
-    // 2. Sync to backend and update in-memory AuthContext user
-    try {
-      if (updateProfile) {
-        await updateProfile({
-          pregnancy_mode: targetMode === 'pregnancy',
-          health_profile: {
-            ...(user?.health_profile || {}),
-            stage: targetMode,
-          },
-        });
-      }
-    } catch (err) {
-      console.warn('[HomeScreen] Failed to sync health mode to backend:', err.message);
-    }
-  };
-
-  useEffect(() => {
-    if (initialMode && initialMode !== activeHealthMode) {
-      setActiveHealthMode(initialMode);
-    }
-  }, [initialMode]);
-  const toast = useToast();
-  const showToastSuccess = toast?.showSuccess;
-
-  const [showModeChangeModal, setShowModeChangeModal] = useState(false);
-  const [modeChangeTarget, setModeChangeTarget] = useState(null);
-
-  // Welcome Back Check-in Drawer (When switching back to Cycle Mode)
-  const [showWelcomeBackDrawer, setShowWelcomeBackDrawer] = useState(false);
-  const [welcomeBackFromMode, setWelcomeBackFromMode] = useState(null);
-  const [welcomePeriodStatus, setWelcomePeriodStatus] = useState('started'); // 'started' | 'not_yet'
-  const [welcomePeriodDate, setWelcomePeriodDate] = useState(() => new Date());
-
-  const openModeChangeOnboarding = async (targetStage) => {
-    if (targetStage === 'cycle') {
-      const prevMode = activeHealthMode;
-      await switchHealthMode('cycle');
-      // If returning from pregnancy or postmenopause, prompt the Welcome Back check-in drawer
-      if (prevMode === 'pregnancy' || prevMode === 'postmenopause') {
-        setWelcomeBackFromMode(prevMode);
-        setWelcomePeriodStatus('started');
-        setWelcomePeriodDate(new Date());
-        setShowWelcomeBackDrawer(true);
-      }
-      return;
-    }
-    setModeChangeTarget(targetStage);
-    setShowModeChangeModal(true);
-  };
-
-  const handleSaveWelcomeBackCycle = async () => {
-    try {
-      const existingProfile = (await getHealthProfileSafe()) || {};
-      let updatedProfile = { ...existingProfile, stage: 'cycle' };
-
-      if (welcomePeriodStatus === 'started') {
-        const year = welcomePeriodDate.getFullYear();
-        const month = String(welcomePeriodDate.getMonth() + 1).padStart(2, '0');
-        const day = String(welcomePeriodDate.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        updatedProfile.lastPeriodDate = dateStr;
-        updatedProfile.postpartumTransition = false;
-        showToastSuccess && showToastSuccess(`Cycle updated to ${dateStr}!`);
-      } else {
-        updatedProfile.postpartumTransition = true;
-        showToastSuccess && showToastSuccess('Transition mode active.');
-      }
-
-      await saveHealthProfileSafe(updatedProfile);
-
-      if (updateProfile) {
-        await updateProfile({
-          pregnancy_mode: false,
-          health_profile: updatedProfile,
-        });
-      }
-    } catch (err) {
-      console.warn('[HomeScreen] Failed to save welcome back profile:', err.message);
-    } finally {
-      setShowWelcomeBackDrawer(false);
-    }
-  };
-
-  const handleCompleteModeChange = async (newProfile, newStage) => {
-    setShowModeChangeModal(false);
-    setModeChangeTarget(null);
-    if (newStage) {
-      await switchHealthMode(newStage);
-    }
-  };
-
-  const [pregnancyDueDate, setPregnancyDueDate] = useState('Dec 24, 2026');
-  const [pregnancyConceptionDate, setPregnancyConceptionDate] = useState('Apr 2, 2026');
+  }, []);
 
   // Real cycle data states
   const [cachedProfile, setCachedProfile] = useState(healthProfile || user?.health_profile || null);
   const activeCycleProfile = useMemo(() => {
     return {
-      cycleLength: Number(cachedProfile?.cycleLength || healthProfile?.cycleLength || user?.health_profile?.cycleLength || 28),
-      periodDuration: Number(cachedProfile?.periodDuration || healthProfile?.periodDuration || user?.health_profile?.periodDuration || 5),
-      lastPeriodDate: cachedProfile?.lastPeriodDate || healthProfile?.lastPeriodDate || user?.health_profile?.lastPeriodDate || null,
+      cycleLength: Number(
+        cachedProfile?.cycleLength || healthProfile?.cycleLength || user?.health_profile?.cycleLength || 28
+      ),
+      periodDuration: Number(
+        cachedProfile?.periodDuration || healthProfile?.periodDuration || user?.health_profile?.periodDuration || 5
+      ),
+      lastPeriodDate:
+        cachedProfile?.lastPeriodDate || healthProfile?.lastPeriodDate || user?.health_profile?.lastPeriodDate || null,
     };
   }, [cachedProfile, healthProfile, user?.health_profile]);
 
@@ -357,21 +424,22 @@ export default function HomeScreen({
       );
     }
     return {
-      currentCycleDay: 1,
-      currentPhase: 'follicular',
+      currentCycleDay: 14,
+      currentPhase: 'ovulatory',
       estimatedOvulationDate: '',
       fertileWindowStart: '',
       fertileWindowEnd: '',
       nextPeriodStartDate: '',
-      chanceOfGettingPregnant: 'Low',
+      chanceOfGettingPregnant: 'High',
     };
   });
-  const [cycleHistory, setCycleHistory] = useState({ logs: [], stats: {} });
-  const [cycleLogs, setCycleLogs] = useState([]);
 
   const loadCycleData = async () => {
     try {
-      const storedProfile = await getHealthProfileSafe();
+      let storedProfile = null;
+      if (typeof getHealthProfileSafe === 'function') {
+        storedProfile = await getHealthProfileSafe();
+      }
       if (storedProfile) {
         setCachedProfile(storedProfile);
       }
@@ -380,20 +448,13 @@ export default function HomeScreen({
       const periodDur = Number(storedProfile?.periodDuration || activeCycleProfile.periodDuration || 5);
       const lastPeriod = storedProfile?.lastPeriodDate || activeCycleProfile.lastPeriodDate;
 
-      const [pred, hist] = await Promise.all([
-        cycleService.getFertilityPrediction({
+      if (typeof cycleService?.getFertilityPrediction === 'function') {
+        const pred = await cycleService.getFertilityPrediction({
           cycleLength: cycleLen,
           periodDuration: periodDur,
           lastPeriodDate: lastPeriod,
-        }),
-        cycleService.getCycleHistory(),
-      ]);
-
-      if (pred) setCyclePrediction(pred);
-      if (hist) {
-        setCycleHistory(hist);
-        const logs = hist.logs || [];
-        setCycleLogs(logs);
+        });
+        if (pred) setCyclePrediction(pred);
       }
     } catch (err) {
       console.warn('[HomeScreen] Error loading cycle data:', err);
@@ -402,12 +463,27 @@ export default function HomeScreen({
 
   useEffect(() => {
     loadCycleData();
-    streakService.recordStreakActivity({ activityType: 'app_open' }).catch(() => {});
+    if (typeof streakService?.recordStreakActivity === 'function') {
+      streakService.recordStreakActivity({ activityType: 'app_open' }).catch(() => { });
+    }
   }, [user?.id, healthProfile?.lastPeriodDate, user?.health_profile?.lastPeriodDate]);
 
-  const displayCurrentDay = cyclePrediction.currentCycleDay || 1;
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadCycleData();
+      await reloadNotifications();
+    } catch (e) {
+      console.warn('Error refreshing HomeScreen:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const displayCurrentDay = cyclePrediction.currentCycleDay || 14;
   const displayCycleLength = activeCycleProfile.cycleLength || 28;
-  const displayPeriodDuration = activeCycleProfile.periodDuration || 5;
+  const cycleProgress = Math.min(Math.max(displayCurrentDay / displayCycleLength, 0), 1);
+  const cycleProgressCircumference = 2 * Math.PI * 36;
 
   const parseDateSafe = (dateStr) => {
     if (!dateStr) return null;
@@ -435,5321 +511,1354 @@ export default function HomeScreen({
     }
   };
 
-  const formatDateRange = (d1, d2) => {
-    if (!d1 || !d2) return '';
-    const date1 = parseDateSafe(d1);
-    const date2 = parseDateSafe(d2);
-    if (!date1 || !date2) return '';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    if (date1.getMonth() === date2.getMonth()) {
-      return `${months[date1.getMonth()]} ${date1.getDate()}–${date2.getDate()}`;
-    }
-    return `${months[date1.getMonth()]} ${date1.getDate()} – ${months[date2.getMonth()]} ${date2.getDate()}`;
-  };
-
-  // Detailed dynamic upcoming predictions calculation
-  const upcomingPredictions = useMemo(() => {
-    const now = new Date();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const cycleLen = displayCycleLength;
-    const periodDur = displayPeriodDuration;
-
-    // 1. Next Period Prediction
-    let nextPeriodDate = parseDateSafe(cyclePrediction.nextPeriodStartDate);
-    if (!nextPeriodDate) {
-      const remainingDays = Math.max(cycleLen - displayCurrentDay + 1, 1);
-      nextPeriodDate = new Date(todayMidnight.getTime() + remainingDays * 24 * 60 * 60 * 1000);
-    }
-
-    const diffPeriodMs = nextPeriodDate.getTime() - todayMidnight.getTime();
-    const daysUntilPeriod = Math.round(diffPeriodMs / (1000 * 60 * 60 * 24));
-
-    let periodPill = `${daysUntilPeriod} days`;
-    let periodSubTitle = `${daysUntilPeriod} days from today • Cycle Day ${displayCurrentDay}`;
-
-    if (daysUntilPeriod === 0) {
-      periodPill = 'Today';
-      periodSubTitle = `Expected today • Cycle Day ${displayCurrentDay}`;
-    } else if (daysUntilPeriod === 1) {
-      periodPill = 'Tomorrow';
-      periodSubTitle = `Expected tomorrow • Cycle Day ${displayCurrentDay}`;
-    } else if (daysUntilPeriod < 0) {
-      const lateDays = Math.abs(daysUntilPeriod);
-      periodPill = `${lateDays}d late`;
-      periodSubTitle = `${lateDays} day${lateDays > 1 ? 's' : ''} past expected • Cycle Day ${displayCurrentDay}`;
-    }
-
-    const periodMainTitle = `Period expected ${formatShortDateStr(nextPeriodDate)}`;
-
-    // 2. Fertile Window Prediction
-    let fStart = parseDateSafe(cyclePrediction.fertileWindowStart);
-    let fEnd = parseDateSafe(cyclePrediction.fertileWindowEnd);
-
-    const ovDay = Math.max(cycleLen - 14, 1);
-    const fStartDay = Math.max(ovDay - 5, 1);
-    const fEndDay = ovDay + 1;
-
-    if (!fStart || !fEnd) {
-      const cycleStart = new Date(todayMidnight.getTime() - (displayCurrentDay - 1) * 24 * 60 * 60 * 1000);
-      fStart = new Date(cycleStart.getTime() + (fStartDay - 1) * 24 * 60 * 60 * 1000);
-      fEnd = new Date(cycleStart.getTime() + (fEndDay - 1) * 24 * 60 * 60 * 1000);
-    }
-
-    let fertileMainTitle = '';
-    let fertileSubTitle = '';
-    let fertilePill = '';
-    let isFertileActiveNow = false;
-
-    if (todayMidnight > fEnd) {
-      // Current cycle's fertile window is in the past -> show next cycle's fertile window
-      const nextCycleStart = nextPeriodDate;
-      const nextFStart = new Date(nextCycleStart.getTime() + (fStartDay - 1) * 24 * 60 * 60 * 1000);
-      const nextFEnd = new Date(nextCycleStart.getTime() + (fEndDay - 1) * 24 * 60 * 60 * 1000);
-
-      const diffMs = nextFStart.getTime() - todayMidnight.getTime();
-      const daysUntilNextFertile = Math.max(Math.round(diffMs / (1000 * 60 * 60 * 24)), 1);
-
-      fertileMainTitle = `Fertile window ${formatDateRange(nextFStart, nextFEnd)}`;
-      fertileSubTitle = `${daysUntilNextFertile} day${daysUntilNextFertile === 1 ? '' : 's'} away • Next cycle`;
-      fertilePill = `${daysUntilNextFertile} days`;
-    } else if (todayMidnight >= fStart && todayMidnight <= fEnd) {
-      isFertileActiveNow = true;
-      fertileMainTitle = `Fertile window ${formatDateRange(fStart, fEnd)}`;
-      fertileSubTitle = cyclePrediction.currentPhase === 'ovulatory'
-        ? 'Peak fertility today • Ovulation'
-        : 'High chance of conception today';
-      fertilePill = 'Active now';
-    } else {
-      const diffMs = fStart.getTime() - todayMidnight.getTime();
-      const daysUntilFertile = Math.max(Math.round(diffMs / (1000 * 60 * 60 * 24)), 1);
-      fertileMainTitle = `Fertile window ${formatDateRange(fStart, fEnd)}`;
-      fertileSubTitle = `${daysUntilFertile} day${daysUntilFertile === 1 ? '' : 's'} away • High chance`;
-      fertilePill = `${daysUntilFertile} days`;
-    }
-
-    return {
-      nextPeriodDate,
-      daysUntilPeriod,
-      periodPill,
-      periodMainTitle,
-      periodSubTitle,
-      fertileMainTitle,
-      fertileSubTitle,
-      fertilePill,
-      isFertileActiveNow,
-    };
-  }, [cyclePrediction, displayCycleLength, displayPeriodDuration, displayCurrentDay]);
-
-  const nextPeriodFormatted = formatShortDateStr(cyclePrediction.nextPeriodStartDate) || formatShortDateStr(upcomingPredictions.nextPeriodDate);
-  const ovulationFormatted = formatShortDateStr(cyclePrediction.estimatedOvulationDate) || formatShortDateStr(new Date(Date.now() + (Math.max(displayCycleLength - 14, 1) - displayCurrentDay) * 24 * 60 * 60 * 1000));
-  const isOvulationPast = cyclePrediction.estimatedOvulationDate && parseDateSafe(cyclePrediction.estimatedOvulationDate) < new Date();
-  const ovulationLabel = `${isOvulationPast ? 'Ovulation was' : 'Ovulation is'} ${ovulationFormatted}`;
-
-  const displayNotifications = useMemo(() => {
-    if (!Array.isArray(notificationsList) || notificationsList.length === 0) {
-      return [];
-    }
-    return notificationsList.map((item) => {
-      if (item.type === 'period_alert' && upcomingPredictions) {
-        const periodDetail = upcomingPredictions.daysUntilPeriod === 0
-          ? 'today'
-          : upcomingPredictions.daysUntilPeriod === 1
-            ? 'tomorrow'
-            : upcomingPredictions.daysUntilPeriod < 0
-              ? `${Math.abs(upcomingPredictions.daysUntilPeriod)} days ago`
-              : `in ${upcomingPredictions.daysUntilPeriod} days`;
-        return {
-          ...item,
-          body: item.body || `Your period is expected ${periodDetail} (${nextPeriodFormatted}). Tap to review predictions.`,
-        };
-      }
-      return item;
-    });
-  }, [notificationsList, upcomingPredictions, nextPeriodFormatted]);
-
-  const [selectedArticle, setSelectedArticle] = useState(null);
-  const [isFullReadingMode, setIsFullReadingMode] = useState(false);
-
-  const [selectedDoctorForBooking, setSelectedDoctorForBooking] = useState(null);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
-
-  const scrollViewRef = useRef(null);
-
-  const handleScroll = (event) => {
-    if (isLargeScreen) return;
-    const xOffset = event.nativeEvent.contentOffset.x;
-    const pageIndex = Math.round(xOffset / screenWidth);
-    if (pageIndex >= 0 && pageIndex <= 2 && pageIndex !== currentPage) {
-      setCurrentPage(pageIndex);
-    }
-  };
-
-  const scrollToPage = (pageIndex) => {
-    setCurrentPage(pageIndex);
-    if (!isLargeScreen) {
-      scrollViewRef.current?.scrollTo({ x: pageIndex * screenWidth, animated: true });
-    }
-  };
-
-  const handleBookDoctorFromHome = () => {
-    scrollToPage(2);
-  };
-
-  const handleOpenNotifications = async () => {
-    setShowNotificationsModal(true);
-    await reloadNotifications();
-  };
-
-  const handleMarkAllNotificationsRead = async () => {
-    try {
-      await notificationService.markAllAsRead();
-      setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      setUnreadNotificationsCount(0);
-      showToastSuccess && showToastSuccess('All notifications marked as read.');
-    } catch (e) {
-      console.warn('[HomeScreen] Mark all read error:', e);
-    }
-  };
-
-  const handlePressNotificationItem = async (item) => {
-    try {
-      await notificationService.markAsRead(item.id);
-      setNotificationsList((prev) =>
-        prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
-      );
-      setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
-      setShowNotificationsModal(false);
-
-      if (item.data?.screen === 'DoctorCareScreen' || item.type === 'appointment') {
-        scrollToPage(2);
-      } else if (item.data?.screen === 'PregnancyScreen' || item.type === 'pregnancy_milestone') {
-        if (!isPregnancyMode) {
-          await switchHealthMode('pregnancy');
-        }
-      } else if (item.data?.screen === 'PostmenopauseScreen' || item.type === 'menopause_wellness') {
-        if (!isPostmenopauseMode) {
-          await switchHealthMode('postmenopause');
-        }
-      } else if (item.type === 'daily_log') {
-        setShowDailyLogDrawer(true);
-      } else {
-        scrollToPage(0);
-      }
-    } catch (err) {
-      console.warn('[HomeScreen] Press notification error:', err);
-    }
-  };
-
-  const [selectedDateKey, setSelectedDateKey] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  });
-
-  // Dynamically calculate the accurate 7 days of the current week based on real cycle data
-  const { weekDays } = useMemo(() => {
-    const now = new Date();
-    // Monday-based week: distanceToMonday is 0 on Mon, 1 on Tue, 2 on Wed, 3 on Thu, 4 on Fri, 5 on Sat, 6 on Sun
-    const distanceToMonday = (now.getDay() + 6) % 7;
-    const baseMonday = new Date(now);
-    baseMonday.setDate(now.getDate() - distanceToMonday);
-    baseMonday.setHours(0, 0, 0, 0);
-
-    const singleLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    const days = [];
-
-    const cycleLength = activeCycleProfile.cycleLength || 28;
-    const periodDuration = activeCycleProfile.periodDuration || 5;
-    const lastPeriodDate = activeCycleProfile.lastPeriodDate ? new Date(activeCycleProfile.lastPeriodDate) : null;
-    const ovulationCycleDay = Math.max(cycleLength - 14, 1);
-    const fertileStartCycleDay = Math.max(ovulationCycleDay - 5, 1);
-    const fertileEndCycleDay = ovulationCycleDay + 1;
-
-    const todayZero = new Date(now);
-    todayZero.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(baseMonday);
-      d.setDate(baseMonday.getDate() + i);
-      const isToday = d.toDateString() === now.toDateString();
-      const dateKey = d.toISOString().split('T')[0];
-
-      let cycleDay = 1;
-      if (lastPeriodDate && !isNaN(lastPeriodDate.getTime())) {
-        const lastZero = new Date(lastPeriodDate.getFullYear(), lastPeriodDate.getMonth(), lastPeriodDate.getDate());
-        const diffFromStart = Math.floor((d.getTime() - lastZero.getTime()) / (1000 * 60 * 60 * 24));
-        cycleDay = ((((diffFromStart) % cycleLength) + cycleLength) % cycleLength) + 1;
-      } else {
-        const diffDays = Math.round((d - todayZero) / (1000 * 60 * 60 * 24));
-        const currentDay = cyclePrediction.currentCycleDay || 1;
-        cycleDay = ((((currentDay - 1 + diffDays) % cycleLength) + cycleLength) % cycleLength) + 1;
-      }
-
-      // Check if logged as period
-      const isLoggedPeriod = cycleLogs.some((l) => {
-        const lDate = l.date || (l.logged_at ? l.logged_at.split('T')[0] : null);
-        return lDate === dateKey && (l.isPeriodDay || l.flow);
-      });
-
-      let type = 'normal';
-      if (isLoggedPeriod || (cycleDay >= 1 && cycleDay <= periodDuration)) {
-        type = 'period';
-      } else if (cycleDay === ovulationCycleDay) {
-        type = 'ovulation';
-      } else if (cycleDay >= fertileStartCycleDay && cycleDay <= fertileEndCycleDay) {
-        type = 'fertile';
-      }
-
-      days.push({
-        singleLetter: singleLetters[i],
-        dayNum: d.getDate(),
-        dateKey,
-        isToday,
-        type,
-        cycleDay,
-      });
-    }
-
-    return { weekDays: days };
-  }, [activeCycleProfile, cycleLogs, cyclePrediction.currentCycleDay]);
-
-  const handleJumpToToday = () => {
-    const d = new Date();
-    setSelectedDateKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-  };
-
-  useEffect(() => {
-    if (showCycleCalendarModal) {
-      const now = new Date();
-      const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      if (!selectedDateKey || !selectedDateKey.startsWith(currentMonthPrefix)) {
-        setSelectedDateKey(`${currentMonthPrefix}-${String(now.getDate()).padStart(2, '0')}`);
-      }
-    }
-  }, [showCycleCalendarModal]);
-
-  const currentMonthData = useMemo(() => {
-    const now = new Date();
-    const todayZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-
-    const cycleLength = activeCycleProfile.cycleLength || 28;
-    const periodDuration = activeCycleProfile.periodDuration || 5;
-    const lastPeriodDate = activeCycleProfile.lastPeriodDate ? new Date(activeCycleProfile.lastPeriodDate) : null;
-    const ovulationCycleDay = Math.max(cycleLength - 14, 1);
-    const fertileStartCycleDay = Math.max(ovulationCycleDay - 5, 1);
-    const fertileEndCycleDay = ovulationCycleDay + 1;
-
-    // Fast O(1) set lookup for logged period days
-    const loggedPeriodDatesSet = new Set();
-    cycleLogs.forEach((l) => {
-      if (l.isPeriodDay) {
-        const lDate = l.date || (l.logged_at ? l.logged_at.split('T')[0] : null);
-        if (lDate) loggedPeriodDatesSet.add(lDate);
-      }
-    });
-
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const monthTitle = `${monthNames[month]} ${year}`;
-    const monthKey = `${year}-${month}`;
-
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    // Monday-based week: Monday is 0, Sunday is 6
-    const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7;
-
-    const cells = [];
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      cells.push({ key: `pad-${year}-${month}-${i}`, empty: true });
-    }
-
-    let periodDaysCount = 0;
-    let fertileDaysCount = 0;
-    let ovulationDayNum = null;
-
-    for (let d = 1; d <= daysInMonth; d++) {
-      const cellDate = new Date(year, month, d);
-      const isToday = cellDate.toDateString() === now.toDateString();
-      const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-
-      let cycleDay = 1;
-      if (lastPeriodDate && !isNaN(lastPeriodDate.getTime())) {
-        const lastZero = new Date(lastPeriodDate.getFullYear(), lastPeriodDate.getMonth(), lastPeriodDate.getDate());
-        const cellZero = new Date(year, month, d);
-        const diffFromStart = Math.floor((cellZero.getTime() - lastZero.getTime()) / (1000 * 60 * 60 * 24));
-        cycleDay = ((((diffFromStart) % cycleLength) + cycleLength) % cycleLength) + 1;
-      } else {
-        const cellZero = new Date(year, month, d);
-        const diffDays = Math.round((cellZero - todayZero) / (1000 * 60 * 60 * 24));
-        const currentDay = cyclePrediction.currentCycleDay || 1;
-        cycleDay = ((((currentDay - 1 + diffDays) % cycleLength) + cycleLength) % cycleLength) + 1;
-      }
-
-      const isLoggedPeriod = loggedPeriodDatesSet.has(dateKey);
-
-      let type = 'normal';
-      if (isLoggedPeriod || (cycleDay >= 1 && cycleDay <= periodDuration)) {
-        type = 'period';
-        periodDaysCount++;
-      } else if (cycleDay === ovulationCycleDay) {
-        type = 'ovulation';
-        ovulationDayNum = d;
-      } else if (cycleDay >= fertileStartCycleDay && cycleDay <= fertileEndCycleDay) {
-        type = 'fertile';
-        fertileDaysCount++;
-      }
-
-      cells.push({
-        key: `day-${year}-${month}-${d}`,
-        empty: false,
-        dayNum: d,
-        dateKey,
-        isToday,
-        type,
-        cycleDay,
-      });
-    }
-
-    return {
-      monthKey,
-      monthTitle,
-      year,
-      month,
-      isCurrentMonth: true,
-      cells,
-      stats: {
-        periodDaysCount,
-        fertileDaysCount,
-        ovulationDayNum,
-      },
-    };
-  }, [activeCycleProfile, cycleLogs, cyclePrediction.currentCycleDay]);
-
-  const selectedDateCellInfo = useMemo(() => {
-    if (!currentMonthData?.cells) return null;
-    const found = currentMonthData.cells.find((c) => !c.empty && c.dateKey === selectedDateKey);
-    if (found) return found;
-
-    const todayCell = currentMonthData.cells.find((c) => !c.empty && c.isToday);
-    if (todayCell) return todayCell;
-
-    return currentMonthData.cells.find((c) => !c.empty) || null;
-  }, [currentMonthData, selectedDateKey]);
-
-
-  const handleSaveDailyLog = async (logData) => {
-    try {
-      await cycleService.logCycleSymptom(logData);
-      await loadCycleData();
-      setShowDailyLogDrawer(false);
-      if (showToastSuccess) {
-        showToastSuccess('Daily log saved!');
-      } else {
-        Alert.alert('Saved', 'Your daily log has been recorded.');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Could not save daily log.');
-    }
-  };
-
-  const openArticleDetails = (title, category, readTime, author, summary, bulletPoints, fullText, thumbnail) => {
-    setSelectedArticle({
-      title,
-      category,
-      readTime,
-      author: author || 'Medical Editorial Board • Reviewed by OB-GYN',
-      summary: summary || 'Understanding your body changes empowers proactive reproductive health and fertility planning.',
-      bulletPoints: bulletPoints || [
-        'Recognize subtle shifts in physical cues and hormonal patterns.',
-        'Keep track of your cycle to identify trends.',
-        'Consult with certified specialists whenever unexpected changes occur.',
-      ],
-      fullText: fullText || 'Tracking hormonal fluctuations across your menstrual cycle provides invaluable health data. By monitoring physiological symptoms such as cervical fluid elasticity, basal body temperature, and energy levels, you can accurately predict your peak fertile window and optimize your reproductive wellness.',
-      thumbnail,
-    });
-    setIsFullReadingMode(false);
-  };
-
-  const closeFullReadingMode = () => {
-    setIsFullReadingMode(false);
-    setSelectedArticle(null);
-  };
-
-  const renderPage0 = () => {
-    if (isLargeScreen) {
-      return (
-        <View style={styles.desktopPageContent}>
-          {/* DESKTOP TOP BAR (Clean title & actions, no duplicate profile) */}
-          <View style={styles.desktopTopBar}>
-            <View>
-              <Text style={styles.desktopGreeting}>
-                Welcome back, <Text style={{ color: colors.primary }}>{greetingDisplayName}</Text> 👋
-              </Text>
-              <Text style={styles.desktopDateSubtitle}>
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} · {isPregnancyMode ? 'Pregnancy Tracking' : isPostmenopauseMode ? 'Menopause Care' : `Cycle Day ${displayCurrentDay || 1} of ${displayCycleLength || 28}`}
-              </Text>
-            </View>
-
-            <View style={styles.desktopTopBarActions}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.desktopLogBtn}
-                onPress={() => setShowDailyLogDrawer(true)}
-              >
-                <Ionicons name="sparkles" size={15} color="#FFFFFF" />
-                <Text style={styles.desktopLogBtnText}>Log Today & AI</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.75}
-                style={styles.desktopIconBtn}
-                onPress={handleOpenNotifications}
-              >
-                <Ionicons name="notifications-outline" size={19} color="#1E293B" />
-                {unreadNotificationsCount > 0 && (
-                  <View style={styles.desktopNotifBadge}>
-                    <Text style={styles.desktopNotifBadgeText}>{unreadNotificationsCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.75}
-                style={styles.desktopIconBtn}
-                onPress={() => setShowSettingsModal(true)}
-              >
-                <Ionicons name="settings-outline" size={19} color="#1E293B" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {isPregnancyMode ? (
-            <PregnancyScreen
-              dueDate={pregnancyDueDate}
-              conceptionDate={pregnancyConceptionDate}
-              currentWeek={16}
-              greetingDisplayName={greetingDisplayName}
-              weekDays={weekDays}
-              onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
-              onBookDoctor={handleBookDoctorFromHome}
-              onOpenDoctorPage={() => scrollToPage(2)}
-            />
-          ) : isPostmenopauseMode ? (
-            <PostmenopauseScreen
-              greetingDisplayName={greetingDisplayName}
-              weekDays={weekDays}
-              onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
-              onOpenSetupWizard={(stage) => openModeChangeOnboarding(stage || 'postmenopause')}
-              onBookDoctor={handleBookDoctorFromHome}
-              onOpenDoctorPage={() => scrollToPage(2)}
-            />
-          ) : (
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={styles.desktopGridContent}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefreshing}
-                  onRefresh={handleRefresh}
-                  tintColor={colors.primary}
-                  colors={[colors.primary, '#FA4A14']}
-                  progressBackgroundColor="#FFFFFF"
-                />
-              }
-            >
-              <View style={styles.desktopGridRow}>
-                {/* LEFT COLUMN: HERO CYCLE CARD + PREDICTIONS TIMELINE */}
-                <View style={styles.desktopGridColLeft}>
-                  {/* Hero Functional Ring Card */}
-                  <TouchableOpacity
-                    activeOpacity={0.88}
-                    style={styles.desktopHeroCard}
-                    onPress={() => setShowCycleCalendarModal(true)}
-                  >
-                    <View style={styles.desktopHeroHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={styles.activeDotPulse} />
-                        <Text style={styles.desktopHeroBadge}>ACTIVE CYCLE STATUS</Text>
-                      </View>
-                      <Text style={styles.desktopHeroCalendarLink}>View Full Calendar →</Text>
-                    </View>
-
-                    <View style={styles.desktopHeroRingRow}>
-                      <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
-                      <View style={styles.desktopMetricsList}>
-                        <View style={styles.desktopMetricRow}>
-                          <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
-                          <Text style={styles.desktopMetricTitle}>Next period:</Text>
-                          <Text style={styles.desktopMetricVal}>{nextPeriodFormatted}</Text>
-                        </View>
-                        <View style={styles.desktopMetricRow}>
-                          <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
-                          <Text style={styles.desktopMetricTitle}>Cycle length:</Text>
-                          <Text style={styles.desktopMetricVal}>{displayCycleLength} days (Regular)</Text>
-                        </View>
-                        <View style={styles.desktopMetricRow}>
-                          <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
-                          <Text style={styles.desktopMetricTitle}>Fertility phase:</Text>
-                          <Text style={styles.desktopMetricVal}>{ovulationLabel}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Cycle Forecast Card */}
-                  <View style={styles.desktopForecastCard}>
-                    <Text style={styles.desktopCardHeading}>CYCLE FORECAST & TIMELINE</Text>
-                    <View style={styles.upcomingPredictionCardClean}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
-                        <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                {/* RIGHT COLUMN: AI ASSISTANT + TELEMEDICINE + LIFE STAGES */}
-                <View style={styles.desktopGridColRight}>
-                  {/* AI Health Companion Card */}
-                  <View style={styles.desktopAiCard}>
-                    <View style={styles.desktopAiHeader}>
-                      <View style={styles.desktopAiIconWrap}>
-                        <Ionicons name="sparkles" size={16} color="#DC2626" />
-                      </View>
-                      <Text style={styles.desktopAiTitle}>Dr. Apple AI Companion</Text>
-                      <View style={styles.desktopOnlinePill}>
-                        <View style={styles.desktopGreenDot} />
-                        <Text style={styles.desktopOnlineText}>Ready</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.desktopAiDesc}>
-                      Ask questions about cycle symptoms, hormonal health, or log your flow today.
-                    </Text>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.desktopAiBtn}
-                      onPress={() => setShowDailyLogDrawer(true)}
-                    >
-                      <Text style={styles.desktopAiBtnText}>Open AI Assistant & Log</Text>
-                      <Ionicons name="arrow-forward" size={13} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Telemedicine Spotlight */}
-                  <TouchableOpacity
-                    activeOpacity={0.88}
-                    style={styles.desktopDoctorCard}
-                    onPress={() => scrollToPage(2)}
-                  >
-                    <View style={styles.desktopDoctorHeader}>
-                      <View style={styles.desktopDoctorIconWrap}>
-                        <Ionicons name="videocam" size={18} color="#059669" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.desktopDoctorTitle}>Talk to an OB-GYN</Text>
-                        <Text style={styles.desktopDoctorSub}>Certified specialists online now</Text>
-                      </View>
-                      <View style={styles.doctorActionPill}>
-                        <Text style={styles.doctorActionPillText}>Consult</Text>
-                        <Ionicons name="arrow-forward" size={13} color="#008080" />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Life Stages Bento: Pregnancy & Menopause */}
-                  <View style={styles.desktopModesRow}>
-                    <TouchableOpacity
-                      activeOpacity={0.88}
-                      style={styles.desktopModeCard}
-                      onPress={() => openModeChangeOnboarding('pregnancy')}
-                    >
-                      <Text style={styles.desktopModeEmoji}>🤰</Text>
-                      <Text style={styles.desktopModeHeading}>Pregnancy</Text>
-                      <Text style={styles.desktopModeSub}>Baby tracker</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      activeOpacity={0.88}
-                      style={styles.desktopModeCard}
-                      onPress={() => openModeChangeOnboarding('postmenopause')}
-                    >
-                      <Text style={styles.desktopModeEmoji}>🌿</Text>
-                      <Text style={styles.desktopModeHeading}>Menopause</Text>
-                      <Text style={styles.desktopModeSub}>Hormone care</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      );
-    }
-
-    // Mobile View (< 768px)
-    return (
-      <View style={[styles.pageWidth, { width: screenWidth, backgroundColor: '#FFFFFF' }]}>
-        <TopProfileHeader
-          user={user}
-          isDoctorAccount={isDoctorAccount}
-          userName={userName}
-          userSubtitle={userSubtitle}
-          onOpenProfile={() => setShowProfileModal(true)}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onOpenNotifications={handleOpenNotifications}
-          unreadNotificationsCount={unreadNotificationsCount}
-        />
-
-        {isPregnancyMode ? (
-          <PregnancyScreen
-            dueDate={pregnancyDueDate}
-            conceptionDate={pregnancyConceptionDate}
-            currentWeek={16}
-            greetingDisplayName={greetingDisplayName}
-            weekDays={weekDays}
-            onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
-            onBookDoctor={handleBookDoctorFromHome}
-            onOpenDoctorPage={() => scrollToPage(2)}
-          />
-        ) : isPostmenopauseMode ? (
-          <PostmenopauseScreen
-            greetingDisplayName={greetingDisplayName}
-            weekDays={weekDays}
-            onSwitchToCycleMode={() => openModeChangeOnboarding('cycle')}
-            onOpenSetupWizard={(stage) => openModeChangeOnboarding(stage || 'postmenopause')}
-            onBookDoctor={handleBookDoctorFromHome}
-            onOpenDoctorPage={() => scrollToPage(2)}
-          />
-        ) : (
-          <ScrollView
-            contentContainerStyle={styles.pageScrollContentDark}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={handleRefresh}
-                tintColor={colors.primary}
-                colors={[colors.primary, '#FA4A14']}
-                progressBackgroundColor="#FFFFFF"
-              />
-            }
-          >
-            <View style={styles.welcomeSection}>
-              <Text style={styles.welcomeGreeting}>
-                Welcome, <Text style={styles.welcomeNameText}>{greetingDisplayName}</Text> 👋
-              </Text>
-              <Text style={styles.welcomeSubtitle}>
-                Here's your cycle & health overview for today
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.heroCardContainer}
-              onPress={() => setShowCycleCalendarModal(true)}
-            >
-              <View style={styles.heroWhiteCard}>
-                <View style={styles.heroRingRow}>
-                  <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
-                  <View style={styles.heroMetricsCol}>
-                    <View style={styles.metricItemRow}>
-                      <View style={[styles.metricDot, { backgroundColor: colors.primary }]} />
-                      <Text style={styles.metricItemText}>
-                        Next period <Text style={{ fontWeight: '800', color: '#111827' }}>{nextPeriodFormatted}</Text>
-                      </Text>
-                    </View>
-                    <View style={styles.metricItemRow}>
-                      <View style={[styles.metricDot, { backgroundColor: '#FF8A80' }]} />
-                      <Text style={styles.metricItemText}>Cycle length: {displayCycleLength} days</Text>
-                    </View>
-                    <View style={styles.metricItemRow}>
-                      <View style={[styles.metricDot, { backgroundColor: '#00A88F' }]} />
-                      <Text style={styles.metricItemText}>{ovulationLabel}</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.doctorFeaturedCard}
-              onPress={() => scrollToPage(2)}
-            >
-              <View style={styles.doctorFeaturedTopRow}>
-                <Text style={styles.doctorFeaturedTitle}>Talk to a Doctor</Text>
-                <View style={styles.doctorActionPill}>
-                  <Text style={styles.doctorActionPillText}>Consult</Text>
-                  <Ionicons name="arrow-forward" size={13} color="#008080" />
-                </View>
-              </View>
-              <Text style={styles.doctorFeaturedSubtitle}>
-                Book a video consultation with a certified women's health specialist.
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.bentoSectionGrid}>
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.bentoWhiteCard}
-                onPress={() => openModeChangeOnboarding('pregnancy')}
-              >
-                <Text style={styles.bentoCardHeading}>Pregnancy</Text>
-                <Text style={styles.bentoCardSub}>Baby growth & tracker</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={styles.bentoWhiteCard}
-                onPress={() => openModeChangeOnboarding('postmenopause')}
-              >
-                <Text style={styles.bentoCardHeading}>Menopause</Text>
-                <Text style={styles.bentoCardSub}>Hormones & vitality</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.predictionsContainer}>
-              <Text style={styles.sectionHeaderLabelDark}>CYCLE FORECAST</Text>
-              <View style={{ gap: 12 }}>
-                <View style={styles.upcomingPredictionCardClean}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.upcomingCardMainTitle}>{upcomingPredictions.periodMainTitle}</Text>
-                    <Text style={styles.upcomingCardSubTitle}>{upcomingPredictions.periodSubTitle}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View style={{ height: 100 }} />
-          </ScrollView>
-        )}
-      </View>
-    );
-  };
-
-  const renderPage1 = () => (
-    <View style={isLargeScreen ? styles.desktopPageContent : [styles.pageWidth, { width: screenWidth, backgroundColor: '#FFFFFF' }]}>
-      {isLargeScreen ? (
-        <View style={styles.desktopTopBar}>
-          <View>
-            <Text style={styles.desktopGreeting}>Learn & Health Library</Text>
-            <Text style={styles.desktopDateSubtitle}>Curated, evidence-based articles by certified OB-GYNs</Text>
-          </View>
-          <View style={styles.desktopTopBarActions}>
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={styles.desktopIconBtn}
-              onPress={handleOpenNotifications}
-            >
-              <Ionicons name="notifications-outline" size={19} color="#1E293B" />
-              {unreadNotificationsCount > 0 && (
-                <View style={styles.desktopNotifBadge}>
-                  <Text style={styles.desktopNotifBadgeText}>{unreadNotificationsCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={styles.desktopIconBtn}
-              onPress={() => setShowSettingsModal(true)}
-            >
-              <Ionicons name="settings-outline" size={19} color="#1E293B" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <TopProfileHeader
-          user={user}
-          isDoctorAccount={isDoctorAccount}
-          userName={userName}
-          userSubtitle={userSubtitle}
-          onOpenProfile={() => setShowProfileModal(true)}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onOpenNotifications={handleOpenNotifications}
-          unreadNotificationsCount={unreadNotificationsCount}
-        />
-      )}
-      <View style={{ flex: 1 }}>
-        <LearnScreen openArticleDetails={openArticleDetails} />
-      </View>
-    </View>
-  );
-
-  const renderPage2 = () => (
-    <View style={isLargeScreen ? styles.desktopPageContent : [styles.pageWidth, { width: screenWidth, backgroundColor: '#FFFFFF' }]}>
-      <DoctorCareScreen
-        initialDoctor={selectedDoctorForBooking}
-        onBookDoctor={handleBookDoctorFromHome}
-        onOpenProfile={() => setShowProfileModal(true)}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        onOpenNotifications={handleOpenNotifications}
-        unreadNotificationsCount={unreadNotificationsCount}
-        onNavigateHome={() => scrollToPage(0)}
-      />
-    </View>
-  );
+  const nextPeriodFormatted =
+    formatShortDateStr(cyclePrediction.nextPeriodStartDate) ||
+    formatShortDateStr(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
 
   return (
-    <View style={[styles.container, isLargeScreen && styles.desktopContainer]}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      edges={['top', 'left', 'right']}
+    >
+      <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
 
-      {/* WEB SIDEBAR ON LARGER SCREENS (PC / WEB) */}
-      {isLargeScreen && (
-        <WebSidebar
-          variant="patient"
-          currentPage={currentPage}
-          onNavigateTab={(index) => scrollToPage(index)}
-          onOpenAiCompanion={() => setShowDailyLogDrawer(true)}
-          onOpenProfile={() => setShowProfileModal(true)}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onOpenNotifications={handleOpenNotifications}
-          unreadNotificationsCount={unreadNotificationsCount}
-          activeMode={activeHealthMode}
-          onSwitchMode={openModeChangeOnboarding}
-          user={user}
-          onSignOut={onSignOut}
-          isDoctor={isDoctorAccount}
-        />
-      )}
-
-      {/* MAIN CONTENT AREA */}
-      {isLargeScreen ? (
-        <View style={styles.desktopContentArea}>
-          <View
-            style={[
-              styles.desktopPagePane,
-              currentPage === 0 ? styles.desktopPagePaneActive : styles.desktopPagePaneHidden,
-            ]}
-          >
-            {renderPage0()}
-          </View>
-          <View
-            style={[
-              styles.desktopPagePane,
-              currentPage === 1 ? styles.desktopPagePaneActive : styles.desktopPagePaneHidden,
-            ]}
-          >
-            {renderPage1()}
-          </View>
-          <View
-            style={[
-              styles.desktopPagePane,
-              currentPage === 2 ? styles.desktopPagePaneActive : styles.desktopPagePaneHidden,
-            ]}
-          >
-            {renderPage2()}
-          </View>
-        </View>
-      ) : (
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          pagingEnabled
-          nestedScrollEnabled={true}
-          directionalLockEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handleScroll}
-          contentOffset={{ x: 0, y: 0 }}
-          style={{ flex: 1 }}
-        >
-          {renderPage0()}
-          {renderPage1()}
-          {renderPage2()}
-        </ScrollView>
-      )}
-
-      {/* PERSISTENT BOTTOM NAVIGATION BAR: Only on mobile/smaller viewports */}
-      {!isLargeScreen && (
-        <View style={styles.bottomBarParentContainer}>
-          <View style={styles.persistentBottomBar}>
-            {/* TAB 1: HOMEPAGE */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.bottomBarTab}
-              onPress={() => scrollToPage(0)}
-            >
-              <Ionicons
-                name={currentPage === 0 ? "home" : "home-outline"}
-                size={22}
-                color={currentPage === 0 ? colors.primary : "#8E8E93"}
-              />
-              <Text
-                style={[
-                  styles.bottomBarTabLabel,
-                  currentPage === 0 && styles.bottomBarTabLabelActive,
-                ]}
-              >
-                Home
-              </Text>
-            </TouchableOpacity>
-
-            {/* TAB 2: CENTER AI AGENT ASSISTANT & SYMPTOM LOG */}
-            <View style={styles.bottomBarCenterBtnWrapper}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.bottomBarCenterBtn}
-                onPress={() => setShowDailyLogDrawer(true)}
-                accessibilityLabel="AI Health Companion"
-              >
-                <Ionicons name="sparkles" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            {/* TAB 3: LEARN */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.bottomBarTab}
-              onPress={() => scrollToPage(1)}
-            >
-              <Ionicons
-                name={currentPage === 1 ? "book" : "book-outline"}
-                size={22}
-                color={currentPage === 1 ? colors.primary : "#8E8E93"}
-              />
-              <Text
-                style={[
-                  styles.bottomBarTabLabel,
-                  currentPage === 1 && styles.bottomBarTabLabelActive,
-                ]}
-              >
-                Learn
-              </Text>
-            </TouchableOpacity>
-
-            {/* TAB 4: TELEMEDICINE */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.bottomBarTab}
-              onPress={() => scrollToPage(2)}
-            >
-              <Ionicons
-                name={currentPage === 2 ? "videocam" : "videocam-outline"}
-                size={22}
-                color={currentPage === 2 ? colors.primary : "#8E8E93"}
-              />
-              <Text
-                style={[
-                  styles.bottomBarTabLabel,
-                  currentPage === 2 && styles.bottomBarTabLabelActive,
-                ]}
-              >
-                Telemed
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      <Modal
-        visible={showNotificationsModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowNotificationsModal(false)}
-      >
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-        <SafeAreaView style={styles.articleDetailContainer} edges={['top', 'bottom', 'left', 'right']}>
-          <View style={styles.articleDetailHeader}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.closeDetailButton}
-              onPress={() => setShowNotificationsModal(false)}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-
-            <Text style={{ fontSize: 20, fontWeight: '900', color: colors.textPrimary }}>Notifications</Text>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.closeDetailButton}
-              onPress={handleMarkAllNotificationsRead}
-            >
-              <Ionicons name="checkmark-done" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            contentContainerStyle={styles.articleDetailScrollContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isNotificationsLoading}
-                onRefresh={async () => {
-                  setIsNotificationsLoading(true);
-                  await reloadNotifications();
-                  setIsNotificationsLoading(false);
-                }}
-                tintColor={colors.primary}
-              />
-            }
-          >
-            {displayNotifications.length === 0 ? (
-              <View style={styles.notificationEmptyContainer}>
-                <View style={styles.notificationEmptyIconCircle}>
-                  <Ionicons name="notifications-outline" size={38} color="#9CA3AF" />
-                </View>
-                <Text style={styles.notificationEmptyTitle}>All Caught Up!</Text>
-                <Text style={styles.notificationEmptySubtitle}>
-                  You don't have any unread health alerts right now. We will notify you when your cycle, medication, or consultation timings approach.
-                </Text>
-              </View>
-            ) : (
-              displayNotifications.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.75}
-                  style={[
-                    styles.notificationItemRow,
-                    !item.isRead && styles.notificationItemRowUnread,
-                  ]}
-                  onPress={() => handlePressNotificationItem(item)}
-                >
-                  <View style={[styles.notificationIconCircle, { backgroundColor: item.iconBg || '#FFE5E9' }]}>
-                    <Ionicons name={item.icon || 'notifications'} size={22} color={item.iconColor || colors.primary} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <View style={styles.notificationHeaderRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                        <Text style={styles.notificationTitle} numberOfLines={1}>{item.title}</Text>
-                        {!item.isRead && <View style={styles.notificationUnreadDot} />}
-                      </View>
-                      <Text style={styles.notificationTime}>{item.time}</Text>
-                    </View>
-                    <Text style={styles.notificationBody}>{item.body}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
-      <Modal
-        visible={showCycleCalendarModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowCycleCalendarModal(false)}
-      >
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-        {showCycleCalendarModal && (
-          <SafeAreaView style={styles.calendarPageContainer} edges={['top', 'bottom', 'left', 'right']}>
-            {/* TOP HEADER */}
-            <View style={styles.calendarPageHeader}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.calendarPageBackBtn}
-                onPress={() => setShowCycleCalendarModal(false)}
-              >
-                <Ionicons name="arrow-back" size={22} color="#111827" />
-              </TouchableOpacity>
-
-              <View style={{ alignItems: 'center' }}>
-                <Text style={styles.calendarPageTitle}>Cycle Calendar</Text>
-              </View>
-
-              <View style={{ width: 38 }} />
-            </View>
-
-            {/* PINNED STICKY WEEKDAY & LEGEND ROW */}
-            <View style={styles.calendarPagePinnedHeader}>
-              {/* Compact Legend Row */}
-              <View style={styles.calendarPageLegendRow}>
-                <View style={styles.calendarLegendItem}>
-                  <View style={[styles.calendarLegendDot, { backgroundColor: colors.primary }]} />
-                  <Text style={styles.calendarLegendText}>Period</Text>
-                </View>
-                <View style={styles.calendarLegendItem}>
-                  <View style={[styles.calendarLegendDot, { backgroundColor: '#E0F2F1', borderWidth: 1, borderColor: '#00A88F' }]} />
-                  <Text style={styles.calendarLegendText}>Fertile</Text>
-                </View>
-                <View style={styles.calendarLegendItem}>
-                  <View style={[styles.calendarLegendDot, { backgroundColor: '#00A88F' }]} />
-                  <Text style={styles.calendarLegendText}>Ovulation</Text>
-                </View>
-                <View style={styles.calendarLegendItem}>
-                  <View style={[styles.calendarLegendDot, { borderWidth: 2, borderColor: colors.primary, backgroundColor: '#FFFFFF' }]} />
-                  <Text style={styles.calendarLegendText}>Today</Text>
-                </View>
-              </View>
-
-              {/* Weekday Row */}
-              <View style={styles.calendarPageWeekdayRow}>
-                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((w, idx) => (
-                  <View key={idx} style={styles.calendarPageWeekdayCol}>
-                    <Text style={styles.calendarPageWeekdayText}>{w}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* SINGLE CURRENT MONTH SCROLLABLE CONTENT */}
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.calendarPageScrollContent}
-            >
-              <View style={styles.calendarMonthBlockSingle}>
-                {/* Month Title Header */}
-                <View style={styles.calendarMonthHeaderRow}>
-                  <Text style={styles.calendarMonthTitleText}>{currentMonthData.monthTitle}</Text>
-                </View>
-
-                {/* Day Cells Grid (7 Columns) */}
-                <View style={styles.calendarMonthGrid}>
-                  {currentMonthData.cells.map((cell) => {
-                    if (cell.empty) {
-                      return <View key={cell.key} style={styles.calendarPageCellTouchable} />;
-                    }
-
-                    const isSelected = (selectedDateCellInfo?.dateKey || selectedDateKey) === cell.dateKey;
-                    const isToday = cell.isToday;
-
-                    let cellBg = 'transparent';
-                    let textColor = '#1F2937';
-                    let fontWeight = '600';
-                    const isPeriodDay = cell.type === 'period';
-
-                    if (cell.type === 'period') {
-                      cellBg = '#FFEBEE';
-                      textColor = colors.primary;
-                      fontWeight = '800';
-                    } else if (cell.type === 'ovulation') {
-                      cellBg = '#00A88F';
-                      textColor = '#FFFFFF';
-                      fontWeight = '900';
-                    } else if (cell.type === 'fertile') {
-                      cellBg = '#E0F2F1';
-                      textColor = '#008080';
-                      fontWeight = '800';
-                    }
-
-                    if (isToday) {
-                      fontWeight = '900';
-                      if (!isPeriodDay && cell.type === 'normal') {
-                        cellBg = '#F3F4F6';
-                        textColor = colors.primary;
-                      }
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        key={cell.key}
-                        activeOpacity={0.7}
-                        style={styles.calendarPageCellTouchable}
-                        onPress={() => setSelectedDateKey(cell.dateKey)}
-                      >
-                        <View
-                          style={[
-                            styles.calendarPageDayCellCircle,
-                            { backgroundColor: cellBg },
-                            isToday && { borderWidth: 2, borderColor: colors.primary },
-                            isSelected && !isToday && styles.dayCellSelected,
-                            isSelected && isToday && styles.dayCellTodaySelected,
-                          ]}
-                        >
-                          <Text style={{ fontSize: 13, fontWeight, color: textColor }}>
-                            {cell.dayNum}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* SELECTED DAY INSIGHT & ACTION CARD */}
-              {selectedDateCellInfo && (
-                <View style={styles.calendarDayInsightCard}>
-                  <View style={styles.calendarDayInsightTopRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.calendarDayInsightDate}>
-                        {(() => {
-                          const [y, m, d] = selectedDateCellInfo.dateKey.split('-');
-                          const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
-                          const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                          const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                          const dayName = daysShort[dateObj.getDay()];
-                          const monthName = monthsShort[dateObj.getMonth()];
-                          return `${dayName}, ${monthName} ${Number(d)}${selectedDateCellInfo.isToday ? ' • Today' : ''}`;
-                        })()}
-                      </Text>
-                      <Text style={styles.calendarDayInsightPhase}>
-                        {selectedDateCellInfo.type === 'period'
-                          ? `🩸 Menstrual Period • Day ${selectedDateCellInfo.cycleDay}`
-                          : selectedDateCellInfo.type === 'ovulation'
-                          ? `✨ Ovulation Day • Peak Fertility (Day ${selectedDateCellInfo.cycleDay})`
-                          : selectedDateCellInfo.type === 'fertile'
-                          ? `🌱 Fertile Window • High Chance (Day ${selectedDateCellInfo.cycleDay})`
-                          : selectedDateCellInfo.cycleDay > 15
-                          ? `🌙 Luteal Phase • Day ${selectedDateCellInfo.cycleDay}`
-                          : `🌸 Follicular Phase • Day ${selectedDateCellInfo.cycleDay}`}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.calendarPhasePill,
-                        selectedDateCellInfo.type === 'period' && { backgroundColor: '#FFEBEE' },
-                        selectedDateCellInfo.type === 'ovulation' && { backgroundColor: '#E0F2F1' },
-                        selectedDateCellInfo.type === 'fertile' && { backgroundColor: '#E0F2F1' },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.calendarPhasePillText,
-                          selectedDateCellInfo.type === 'period' && { color: colors.primary },
-                          selectedDateCellInfo.type === 'ovulation' && { color: '#008080' },
-                          selectedDateCellInfo.type === 'fertile' && { color: '#008080' },
-                        ]}
-                      >
-                        Day {selectedDateCellInfo.cycleDay}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.calendarDayInsightNote}>
-                    {selectedDateCellInfo.type === 'period'
-                      ? 'Active menstrual flow. Stay hydrated, use warm compresses for cramping, and track flow intensity.'
-                      : selectedDateCellInfo.type === 'ovulation'
-                      ? 'Ovulation is predicted today. This is your peak 24-hour fertile window.'
-                      : selectedDateCellInfo.type === 'fertile'
-                      ? 'Elevated fertility window. Sperm can survive up to 5 days leading up to ovulation.'
-                      : selectedDateCellInfo.cycleDay > 15
-                      ? 'Progesterone is supporting your body in the second half of your cycle.'
-                      : 'Estrogen is gradually rising as follicles mature. Great time for high energy activities.'}
-                  </Text>
-
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={styles.calendarLogDayBtn}
-                    onPress={() => setShowDailyLogDrawer(true)}
-                  >
-                    <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.calendarLogDayBtnText}>Log Symptoms for this Day</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* MONTH OVERVIEW SUMMARY STATS */}
-              <View style={styles.calendarMonthStatsRow}>
-                <View style={styles.calendarMonthStatCard}>
-                  <Text style={styles.calendarMonthStatVal}>{displayCycleLength}d</Text>
-                  <Text style={styles.calendarMonthStatLbl}>Cycle Length</Text>
-                </View>
-                <View style={styles.calendarMonthStatCard}>
-                  <Text style={[styles.calendarMonthStatVal, { color: colors.primary }]}>
-                    {currentMonthData.stats?.periodDaysCount || 5}d
-                  </Text>
-                  <Text style={styles.calendarMonthStatLbl}>Period Days</Text>
-                </View>
-                <View style={styles.calendarMonthStatCard}>
-                  <Text style={[styles.calendarMonthStatVal, { color: '#00A88F' }]}>
-                    {currentMonthData.stats?.fertileDaysCount ? `${currentMonthData.stats.fertileDaysCount}d` : '6d'}
-                  </Text>
-                  <Text style={styles.calendarMonthStatLbl}>Fertile Days</Text>
-                </View>
-              </View>
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </SafeAreaView>
-        )}
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* AI HEALTH ASSISTANT & SYMPTOM LOG DRAWER                                  */}
-      {/* ========================================================================= */}
-      <AIAssistantDrawer
-        visible={showDailyLogDrawer}
-        onClose={() => setShowDailyLogDrawer(false)}
-        selectedDateKey={selectedDateKey}
-        healthContext={{
-          activeMode: isPregnancyMode ? 'pregnancy' : isPostmenopauseMode ? 'postmenopause' : 'cycle',
-          userName: greetingDisplayName || userName,
-          userAge: user?.date_of_birth ? Math.floor((new Date().getTime() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 3600 * 1000)) : undefined,
-          medicalProfile: {
-            reproductiveGoal: user?.health_profile?.reproductiveGoal || (isPregnancyMode ? 'track_pregnancy' : 'track_cycle'),
-            birthControl: user?.health_profile?.birthControl || 'None reported',
-            knownConditions: user?.health_profile?.conditions || [],
-            notes: user?.health_profile?.notes || '',
-          },
-          appointments: userBookingsList.map((b) => ({
-            id: b.booking_id,
-            doctorId: b.doctor_id,
-            doctorName: b.doctor_name,
-            doctorSpecialty: b.doctor_specialty,
-            scheduledTime: b.scheduled_time,
-            consultationType: b.consultation_type,
-            status: b.status,
-            reason: b.reason,
-          })),
-          pregnancy: isPregnancyMode ? {
-            currentWeek: 16,
-            dueDate: pregnancyDueDate,
-            conceptionDate: pregnancyConceptionDate,
-            trimester: 2,
-            babySize: 'Avocado',
-          } : null,
-          postmenopause: isPostmenopauseMode ? {
-            stage: activeHealthMode,
-          } : null,
-          cycle: {
-            currentCycleDay: displayCurrentDay,
-            cycleLength: displayCycleLength,
-            phaseName: cyclePrediction.currentPhase
-              ? cyclePrediction.currentPhase.charAt(0).toUpperCase() + cyclePrediction.currentPhase.slice(1) + ' Phase'
-              : 'Menstrual Phase',
-            nextPeriodDate: nextPeriodFormatted,
-            ovulationDate: ovulationFormatted,
-            selectedDate: selectedDateKey,
-          },
-        }}
-        onSaveLog={handleSaveDailyLog}
-        onNavigateTelemedicine={() => scrollToPage(2)}
+      {/* Top Header */}
+      <AestheticTopHeader
+        user={user}
+        onOpenProfile={() => navigation?.navigate('Profile')}
+        onOpenNotifications={() => setShowNotificationsModal(true)}
+        onOpenStreak={() => setShowStreakModal(true)}
+        streakCount={streakCount}
+        unreadNotificationsCount={unreadNotificationsCount}
       />
 
-      <Modal
-        visible={showExpandedCycleModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowExpandedCycleModal(false)}
-      >
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-        <SafeAreaView style={styles.articleDetailContainer} edges={['top', 'bottom', 'left', 'right']}>
-          <View style={styles.articleDetailHeader}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.closeDetailButton}
-              onPress={() => setShowExpandedCycleModal(false)}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
+      {isPregnancyMode ? (
+        <PregnancyScreen
+          currentWeek={16}
+          onBookDoctor={() => navigation?.navigate('Telemed')}
+          onOpenDoctorPage={() => navigation?.navigate('Telemed')}
+          navigation={navigation}
+        />
+      ) : isPostmenopauseMode ? (
+        <PostmenopauseScreen
+          onBookDoctor={() => navigation?.navigate('Telemed')}
+          onOpenDoctorPage={() => navigation?.navigate('Telemed')}
+          healthProfile={user?.health_profile}
+          greetingDisplayName={user?.name?.trim()?.split(/\s+/)?.[0] || ''}
+          navigation={navigation}
+        />
+      ) : (
+        <ScrollView
+          className="flex-1 px-5"
+          contentContainerStyle={{ paddingBottom: 110 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.textPrimary}
+              colors={[theme.textPrimary]}
+              progressBackgroundColor={theme.card}
+            />
+          }
+        >
+          {/* BENTO CARD 1: Reproductive Wellness */}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            className="rounded-[32px] p-5 pb-6 mb-3.5 shadow-xs"
+            style={{
+              backgroundColor: theme.card,
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+            }}
+            onPress={() => navigation?.navigate('CycleCalendar')}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-3">
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: theme.subtleSurface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="flower-outline" size={20} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: theme.textPrimary, lineHeight: 21 }}>Reproductive wellness</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, lineHeight: 16, marginTop: 2 }}>Your cycle at a glance</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+            </View>
 
-            <Text style={{ fontSize: 20, fontWeight: '900', color: colors.textPrimary }}>Cycle Day {displayCurrentDay}</Text>
+            <View className="flex-row items-center mt-5">
+              <View className="items-center">
+                <View style={{ width: 88, height: 88, alignItems: 'center', justifyContent: 'center' }}>
+                  <Svg width={88} height={88} viewBox="0 0 88 88" style={{ position: 'absolute' }}>
+                    <Circle cx="44" cy="44" r="36" fill="none" stroke={theme.cardBorder} strokeWidth="6" />
+                    <Circle
+                      cx="44"
+                      cy="44"
+                      r="36"
+                      fill="none"
+                      stroke={colors.primary}
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeDasharray={cycleProgressCircumference}
+                      strokeDashoffset={cycleProgressCircumference * (1 - cycleProgress)}
+                      rotation="-90"
+                      origin="44, 44"
+                    />
+                  </Svg>
+                  <Text style={{ fontSize: 23, fontWeight: '900', color: theme.textPrimary }}>{displayCurrentDay}</Text>
+                </View>
+                <Text style={{ marginTop: 3, fontSize: 10, fontWeight: '700', color: theme.textSecondary }}>OF {displayCycleLength}-DAY CYCLE</Text>
+              </View>
 
-            <TouchableOpacity activeOpacity={0.7} style={styles.closeDetailButton}>
-              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+              <View className="flex-1 ml-5">
+                <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.7, color: theme.textMuted }}>CURRENT PHASE</Text>
+                <Text style={{ marginTop: 3, fontSize: 17, fontWeight: '800', color: theme.textPrimary }}>
+                  {(cyclePrediction.currentPhase || 'follicular').charAt(0).toUpperCase() + (cyclePrediction.currentPhase || 'follicular').slice(1)}
+                </Text>
+                <View style={{ height: 1, backgroundColor: theme.cardBorder, marginVertical: 10 }} />
+                <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.7, color: theme.textMuted }}>NEXT PERIOD</Text>
+                <Text style={{ marginTop: 3, fontSize: 14, fontWeight: '800', color: theme.textPrimary }}>{nextPeriodFormatted}</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* CARD 1: DAILY WELLNESS & DR. RED AI SYMPTOM CHECK-IN */}
+          <View
+            style={{
+              backgroundColor: theme.card,
+              borderRadius: 32,
+              padding: 20,
+              marginBottom: 14,
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              overflow: 'hidden',
+              shadowColor: '#000000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDarkMode ? 0.3 : 0.05,
+              shadowRadius: 6,
+              elevation: 2,
+            }}
+          >
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: theme.textPrimary, lineHeight: 26 }}>
+                How are you feeling today?
+              </Text>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: theme.textSecondary, marginTop: 4, lineHeight: 18 }}>
+                Tell us more about your body to get analysis
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: '#584988',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 9999,
+                  marginTop: 14,
+                  shadowColor: '#584988',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}
+                onPress={handleTalkWithDrRed}
+                accessibilityLabel="Talk with Dr. Red"
+              >
+                <Ionicons name="sparkles" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.2 }}>
+                  Talk with Dr. Red
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Serene Smiling Yellow Sun Vector Illustration */}
+            <View style={{ width: 112, height: 112, alignItems: 'center', justifyContent: 'center', marginRight: -6 }}>
+              <Svg width={112} height={112} viewBox="0 0 112 112">
+                {/* Soft outer glow halo */}
+                <Circle cx="64" cy="64" r="46" fill="#FEF3C7" />
+                {/* Inner warm sun circle */}
+                <Circle cx="68" cy="68" r="38" fill="#FCD34D" />
+                {/* Peaceful curved eyes */}
+                <Path
+                  d="M 46 62 Q 52 66 58 62"
+                  stroke="#78350F"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                <Path
+                  d="M 66 59 Q 72 63 78 59"
+                  stroke="#78350F"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                {/* Gentle curved smile */}
+                <Path
+                  d="M 52 74 Q 64 84 76 74"
+                  stroke="#78350F"
+                  strokeWidth="2.8"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                {/* Golden 8-point sparkle star on top-right */}
+                <Polygon
+                  points="88,28 90,20 92,28 100,30 92,32 90,40 88,32 80,30"
+                  fill="#F59E0B"
+                />
+              </Svg>
+            </View>
           </View>
 
-          <ScrollView contentContainerStyle={styles.articleDetailScrollContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.expandedRingHeaderCard}>
-              <FunctionalCycleRing currentDay={displayCurrentDay} totalDays={displayCycleLength} />
-              <View style={{ flex: 1, marginLeft: 16 }}>
-                <Text style={styles.expandedRingTitle}>Day {displayCurrentDay} of {displayCycleLength}</Text>
-                <Text style={styles.expandedRingSub}>{Math.min(Math.round((displayCurrentDay / displayCycleLength) * 100), 100)}% through current cycle</Text>
-                <View style={styles.nextPeriodBadge}>
-                  <Ionicons name="water-outline" size={14} color={colors.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.nextPeriodBadgeText}>Next Period: {nextPeriodFormatted} ({upcomingPredictions.periodPill})</Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={styles.takeawayHeader}>Cycle Phase Overview</Text>
-            <View style={styles.segmentedPhaseCard}>
-              <View style={styles.phaseBarRow}>
-                <View style={[styles.phaseBarSegment, { backgroundColor: '#FFCDD2' }]} />
-                <View style={[styles.phaseBarSegment, { backgroundColor: '#D0F5ED' }]} />
-                <View style={[styles.phaseBarSegment, { backgroundColor: '#00A88F' }]} />
-                <View style={[styles.phaseBarSegment, { backgroundColor: colors.primary }]} />
-              </View>
-
-              <View style={styles.phaseLabelsGrid}>
-                <View style={styles.phaseItem}>
-                  <Text style={styles.phaseItemTitle}>Period</Text>
-                  <Text style={styles.phaseItemDays}>Days 1–5</Text>
-                </View>
-                <View style={styles.phaseItem}>
-                  <Text style={styles.phaseItemTitle}>Egg Prep</Text>
-                  <Text style={styles.phaseItemDays}>Days 6–12</Text>
-                </View>
-                <View style={styles.phaseItem}>
-                  <Text style={styles.phaseItemTitle}>Fertile</Text>
-                  <Text style={styles.phaseItemDays}>Days 13–16</Text>
-                </View>
-                <View style={[styles.phaseItem, styles.phaseItemActive]}>
-                  <Text style={[styles.phaseItemTitle, { color: colors.primary }]}>Pre-Period</Text>
-                  <Text style={styles.phaseItemDays}>Days 17–28</Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={styles.takeawayHeader}>Your Body's Signals Today</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 16 }}
-              contentContainerStyle={{ gap: 12 }}
+          {/* CARD 2: PARTNER RHYTHM & MOMENTS SYNC */}
+          {!isPartnerCardDismissed && (
+            <View
+              style={{
+                backgroundColor: isDarkMode ? '#241B1E' : '#FDF0F5',
+                borderRadius: 32,
+                padding: 20,
+                marginBottom: 14,
+                borderWidth: 1,
+                borderColor: isDarkMode ? '#3D252C' : 'rgba(251, 113, 133, 0.25)',
+                position: 'relative',
+                overflow: 'hidden',
+                shadowColor: '#F43F5E',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: isDarkMode ? 0.2 : 0.06,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
             >
-              <View style={[styles.biometricCardRow, { width: 240, marginBottom: 0 }]}>
-                <View style={[styles.bioIconCircle, { backgroundColor: '#E0F2F1' }]}>
-                  <Ionicons name="sparkles" size={20} color="#00A88F" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.bioCardTitle}>Pregnancy Chance</Text>
-                  <Text style={styles.bioCardVal}>Low (Egg already released)</Text>
-                </View>
+              {/* Soft floating background heart watermark */}
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -20,
+                  right: 10,
+                  opacity: 0.16,
+                }}
+                pointerEvents="none"
+              >
+                <Ionicons name="heart" size={130} color="#F43F5E" />
               </View>
 
-              <View style={[styles.biometricCardRow, { width: 240, marginBottom: 0 }]}>
-                <View style={[styles.bioIconCircle, { backgroundColor: '#FFEBEE' }]}>
-                  <Ionicons name="stats-chart" size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.bioCardTitle}>Hormone Shift</Text>
-                  <Text style={styles.bioCardVal}>Progesterone dipping</Text>
-                </View>
-              </View>
-
-              <View style={[styles.biometricCardRow, { width: 240, marginBottom: 0 }]}>
-                <View style={[styles.bioIconCircle, { backgroundColor: '#FFF3E0' }]}>
-                  <Ionicons name="thermometer-outline" size={20} color="#E65100" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.bioCardTitle}>Morning Temp</Text>
-                  <Text style={styles.bioCardVal}>36.6 °C (Warm pre-period)</Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <Text style={styles.takeawayHeader}>What to Expect Today</Text>
-            <View style={styles.insightBoxTextContainer}>
-              <Text style={styles.fullArticleBodyText}>
-                Your body is getting ready for your period in about 3 days as your hormone levels naturally dip. It's completely normal to feel lower energy, breast tenderness, mild bloating, or light cramps today.
-              </Text>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
-      {/* REDESIGNED SLEEK WELCOME BACK TO CYCLE TRACKING DRAWER */}
-      <Modal
-        visible={showWelcomeBackDrawer}
-        animationType="slide"
-        transparent={true}
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowWelcomeBackDrawer(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.drawerBackdrop}
-          onPress={() => setShowWelcomeBackDrawer(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={styles.drawerContentContainer}
-          >
-            {/* Top Close Button & Drag Handle */}
-            <View style={styles.modernDrawerTopBar}>
-              <View style={styles.drawerHandlePill} />
+              {/* Top Right: Dismiss X Button */}
               <TouchableOpacity
                 activeOpacity={0.7}
-                style={styles.modernDrawerCloseBtn}
-                onPress={() => setShowWelcomeBackDrawer(false)}
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  right: 16,
+                  zIndex: 10,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: isDarkMode ? '#2B2B2B' : 'rgba(255, 255, 255, 0.85)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: isDarkMode ? '#363636' : 'rgba(251, 113, 133, 0.2)',
+                }}
+                onPress={handleDismissPartnerCard}
+                accessibilityLabel="Dismiss partner card"
               >
-                <Ionicons name="close" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              {/* Hero Centered Heading */}
-              <View style={styles.modernDrawerHeroSection}>
-                <Text style={styles.modernDrawerTitle}>Welcome Back</Text>
-                <Text style={styles.modernDrawerSubtitle}>
-                  {welcomeBackFromMode === 'pregnancy'
-                    ? 'Has your period returned since pregnancy?'
-                    : 'Ready to resume your cycle tracking?'}
-                </Text>
-              </View>
-
-              {/* Clean Choice Card 1: Yes, period started */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={[
-                  styles.modernChoiceCard,
-                  welcomePeriodStatus === 'started' && styles.modernChoiceCardActive,
-                ]}
-                onPress={() => setWelcomePeriodStatus('started')}
-              >
-                <View style={styles.modernChoiceIconBoxRed}>
-                  <Ionicons name="water" size={22} color={colors.primary} />
-                </View>
-                <View style={styles.modernChoiceTextCol}>
-                  <Text style={styles.modernChoiceTitle}>Yes, my period started</Text>
-                  <Text style={styles.modernChoiceSub}>Pick the exact date on the calendar</Text>
-                </View>
-                <Ionicons
-                  name={welcomePeriodStatus === 'started' ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={welcomePeriodStatus === 'started' ? colors.primary : '#D1D5DB'}
-                />
+                <Ionicons name="close" size={16} color={isDarkMode ? '#ABABAB' : '#94A3B8'} />
               </TouchableOpacity>
 
-              {/* Precision Date Picker (Revealed when 'started' is selected) */}
-              {welcomePeriodStatus === 'started' && (
-                <MiniCalendarDatePicker
-                  selectedDate={welcomePeriodDate}
-                  onSelectDate={(date) => setWelcomePeriodDate(date)}
-                  maxDate={new Date()}
-                />
-              )}
-
-              {/* Clean Choice Card 2: Not yet */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={[
-                  styles.modernChoiceCard,
-                  welcomePeriodStatus === 'not_yet' && styles.modernChoiceCardActivePurple,
-                  { marginTop: 12 },
-                ]}
-                onPress={() => setWelcomePeriodStatus('not_yet')}
-              >
-                <View style={styles.modernChoiceIconBoxPurple}>
-                  <Ionicons name="moon-outline" size={22} color="#7C3AED" />
-                </View>
-                <View style={styles.modernChoiceTextCol}>
-                  <Text style={styles.modernChoiceTitle}>Not yet</Text>
-                  <Text style={styles.modernChoiceSub}>Still waiting / in transition</Text>
-                </View>
-                <Ionicons
-                  name={welcomePeriodStatus === 'not_yet' ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={welcomePeriodStatus === 'not_yet' ? '#7C3AED' : '#D1D5DB'}
-                />
-              </TouchableOpacity>
-
-              {/* Primary Action Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.modernPrimaryBtn}
-                onPress={handleSaveWelcomeBackCycle}
-              >
-                <Text style={styles.modernPrimaryBtnText}>Continue</Text>
-              </TouchableOpacity>
-
-              {/* Subtle Dismiss Link */}
-              <TouchableOpacity
-                activeOpacity={0.6}
-                style={styles.modernSkipBtn}
-                onPress={() => setShowWelcomeBackDrawer(false)}
-              >
-                <Text style={styles.modernSkipBtnText}>Skip for now</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* UNIFIED GENERAL ONBOARDING SETUP MODAL (FOR SEAMLESS MODE CHANGES) */}
-      <Modal
-        visible={showModeChangeModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => {
-          setShowModeChangeModal(false);
-          setModeChangeTarget(null);
-        }}
-      >
-        <OnboardingSetupScreen
-          initialStage={modeChangeTarget}
-          isChangingMode={true}
-          onBack={() => {
-            setShowModeChangeModal(false);
-            setModeChangeTarget(null);
-          }}
-          onComplete={handleCompleteModeChange}
-        />
-      </Modal>
-
-      {/* SNAPCHAT-INSPIRED PROFILE & HEALTH RECORDS MODAL */}
-      <Modal
-        visible={showProfileModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowProfileModal(false)}
-      >
-        <ProfileScreen
-          onClose={() => setShowProfileModal(false)}
-          onOpenSettings={() => {
-            setShowProfileModal(false);
-            setShowSettingsModal(true);
-          }}
-          currentMode={isPregnancyMode ? 'pregnancy' : isPostmenopauseMode ? 'postmenopause' : 'cycle'}
-          cyclePrediction={cyclePrediction}
-          activeCycleProfile={activeCycleProfile}
-          cycleLogs={cycleLogs}
-          onBookDoctor={() => {
-            setShowProfileModal(false);
-            scrollToPage(2);
-          }}
-        />
-      </Modal>
-
-      {/* SETTINGS & PREFERENCES MODAL */}
-      <Modal
-        visible={showSettingsModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowSettingsModal(false)}
-      >
-        <SettingsScreen
-          onClose={() => setShowSettingsModal(false)}
-          onSignOut={() => {
-            setShowSettingsModal(false);
-            onSignOut && onSignOut();
-          }}
-          onRedoSetup={() => {
-            setShowSettingsModal(false);
-            openModeChangeOnboarding(null);
-          }}
-          currentMode={isPregnancyMode ? 'pregnancy' : isPostmenopauseMode ? 'postmenopause' : 'cycle'}
-          onSwitchMode={(mode) => {
-            setShowSettingsModal(false);
-            openModeChangeOnboarding(mode);
-          }}
-          onOpenPrivacyPolicy={() => setShowPrivacyPolicyModal(true)}
-          onOpenTermsOfUse={() => setShowTermsModal(true)}
-          cyclePrediction={cyclePrediction}
-          activeCycleProfile={activeCycleProfile}
-          cycleLogs={cycleLogs}
-          onBookDoctor={() => {
-            setShowSettingsModal(false);
-            scrollToPage(2);
-          }}
-        />
-      </Modal>
-
-      {/* PRIVACY POLICY DETAIL MODAL */}
-      <Modal
-        visible={showPrivacyPolicyModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowPrivacyPolicyModal(false)}
-      >
-        <PrivacyPolicyDetailScreen onBack={() => setShowPrivacyPolicyModal(false)} />
-      </Modal>
-
-      {/* TERMS OF USE DETAIL MODAL */}
-      <Modal
-        visible={showTermsModal}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowTermsModal(false)}
-      >
-        <TermsOfUseDetailScreen onBack={() => setShowTermsModal(false)} />
-      </Modal>
-
-
-
-      <Modal
-        visible={showLegendModal}
-        transparent
-        animationType="fade"
-        statusBarTranslucent={true}
-        onRequestClose={() => setShowLegendModal(false)}
-      >
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.modalOverlay}
-          onPress={() => setShowLegendModal(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={styles.modalContent}
-          >
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Calendar Guide</Text>
-              <TouchableOpacity activeOpacity={0.7} onPress={() => setShowLegendModal(false)}>
-                <Ionicons name="close" size={22} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.legendGridModal}>
-              <View style={styles.legendPill}>
-                <View style={[styles.legendDot, { backgroundColor: '#FFCDD2' }]} />
-                <Text style={styles.legendText}>Period</Text>
-              </View>
-              <View style={styles.legendPill}>
-                <View style={[styles.legendDot, { backgroundColor: '#D0F5ED' }]} />
-                <Text style={styles.legendText}>Fertile window</Text>
-              </View>
-              <View style={styles.legendPill}>
-                <View style={[styles.legendDot, { backgroundColor: '#00A88F' }]} />
-                <Text style={styles.legendText}>Ovulation</Text>
-              </View>
-              <View style={styles.legendPill}>
-                <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-                <Text style={styles.legendText}>Today</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      <Modal
-        visible={!!selectedArticle && !isFullReadingMode}
-        transparent
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setSelectedArticle(null)}
-      >
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.drawerBackdrop}
-          onPress={() => setSelectedArticle(null)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={styles.drawerContentContainer}
-          >
-            {/* FULL-WIDTH TOP IMAGE HEADER WITH OVERLAY CONTROLS */}
-            {selectedArticle?.thumbnail ? (
-              <View style={styles.drawerTopHeaderContainer}>
-                <Image
-                  source={{ uri: selectedArticle.thumbnail }}
-                  style={styles.drawerTopHeaderImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.drawerHandlePillOverlay} />
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.drawerCloseButtonOverlay}
-                  onPress={() => setSelectedArticle(null)}
+              {/* Avatar & Hearts Connected Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, marginBottom: 8 }}>
+                {/* User Avatar */}
+                <View
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    borderWidth: 2.5,
+                    borderColor: isDarkMode ? '#363636' : '#FFFFFF',
+                    overflow: 'hidden',
+                    backgroundColor: isDarkMode ? '#2B2B2B' : '#FFFFFF',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
                 >
-                  <Ionicons name="close" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ paddingTop: 12, paddingHorizontal: 20 }}>
-                <View style={styles.drawerHandlePill} />
-                <View style={{ alignItems: 'flex-end', marginBottom: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    style={styles.bookmarkButtonCircle}
-                    onPress={() => setSelectedArticle(null)}
-                  >
-                    <Ionicons name="close" size={20} color={colors.textPrimary} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.drawerScrollBody}>
-              <Text style={styles.drawerArticleTitle}>{selectedArticle?.title}</Text>
-              <Text style={styles.drawerArticleMeta}>{selectedArticle?.readTime} • {selectedArticle?.author}</Text>
-
-              <View style={styles.dividerLine} />
-
-              <Text style={styles.drawerSummaryText}>{selectedArticle?.summary}</Text>
-
-              <Text style={styles.takeawayHeader}>Key Takeaways</Text>
-              {selectedArticle?.bulletPoints.map((point, index) => (
-                <View key={index} style={styles.takeawayRow}>
-                  <Ionicons name="checkmark-circle" size={18} color={colors.primary} style={{ marginRight: 8, marginTop: 2 }} />
-                  <Text style={styles.drawerTakeawayText}>{point}</Text>
-                </View>
-              ))}
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.openFullArticleButton}
-                onPress={() => setIsFullReadingMode(true)}
-              >
-                <Ionicons name="book" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.openFullArticleButtonText}>Read Full Article</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      <Modal
-        visible={!!selectedArticle && isFullReadingMode}
-        animationType="fade"
-        statusBarTranslucent={true}
-        onRequestClose={closeFullReadingMode}
-      >
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
-        {selectedArticle && (
-          <SafeAreaView style={styles.articleDetailContainer} edges={['top', 'bottom', 'left', 'right']}>
-            <View style={styles.articleDetailHeader}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.closeDetailButton}
-                onPress={closeFullReadingMode}
-              >
-                <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity activeOpacity={0.7} style={styles.closeDetailButton}>
-                <Ionicons name="bookmark-outline" size={22} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.articleDetailScrollContent} showsVerticalScrollIndicator={false}>
-              {selectedArticle?.thumbnail && (
-                <View style={styles.fullArticleThumbnailContainer}>
                   <Image
-                    source={{ uri: selectedArticle.thumbnail }}
-                    style={styles.fullArticleThumbnailImage}
+                    source={{
+                      uri:
+                        user?.avatar_url ||
+                        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+                    }}
+                    style={{ width: '100%', height: '100%', borderRadius: 26 }}
                     resizeMode="cover"
                   />
                 </View>
+
+                {/* Love Connection Hearts */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, gap: 5 }}>
+                  <Ionicons name="heart" size={13} color="#FB7185" />
+                  <Ionicons name="heart" size={17} color="#F43F5E" />
+                  <Ionicons name="heart" size={13} color="#FB7185" />
+                </View>
+
+                {/* Partner Avatar or Plus Button */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: isDarkMode ? '#2B2B2B' : '#FFFFFF',
+                    borderWidth: 2.5,
+                    borderColor: isDarkMode ? '#363636' : '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                  onPress={() => setShowPartnerModal(true)}
+                  accessibilityLabel="Partner action"
+                >
+                  {partnerStatus?.status === 'connected' ? (
+                    partnerStatus.partnerAvatarUrl ? (
+                      <Image
+                        source={{ uri: partnerStatus.partnerAvatarUrl }}
+                        style={{ width: '100%', height: '100%', borderRadius: 26 }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={{ width: '100%', height: '100%', borderRadius: 26, backgroundColor: '#FFE4E6', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#BE123C' }}>
+                          {(partnerStatus.partnerName || 'P').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )
+                  ) : (
+                    <Ionicons name="add" size={26} color="#FB3B6B" />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Center Descriptive Headline */}
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '800',
+                  color: isDarkMode ? '#FFFFFF' : '#111827',
+                  textAlign: 'center',
+                  paddingHorizontal: 16,
+                  marginTop: 10,
+                  marginBottom: 16,
+                  lineHeight: 22,
+                }}
+              >
+                {partnerStatus?.status === 'connected'
+                  ? `Syncing rhythm and moments with ${partnerStatus.partnerName || 'your partner'}.`
+                  : 'Sync your rhythm and moments with your partner.'}
+              </Text>
+
+              {/* Primary Pink Action Pill Button */}
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={{
+                  backgroundColor: '#FB3B6B',
+                  paddingVertical: 14,
+                  borderRadius: 9999,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#FB3B6B',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.28,
+                  shadowRadius: 6,
+                  elevation: 3,
+                }}
+                onPress={() => setShowPartnerModal(true)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 }}>
+                  {partnerStatus?.status === 'connected' ? 'Manage Partner Sync' : 'Invite partner'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* CARD 3: TELEMEDICINE SPECIALIST & VIRTUAL CLINIC */}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={{
+              backgroundColor: isDarkMode ? '#172722' : '#F0FDF9',
+              borderRadius: 32,
+              padding: 20,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: isDarkMode ? '#23443B' : 'rgba(13, 148, 136, 0.22)',
+              position: 'relative',
+              overflow: 'hidden',
+              shadowColor: '#0D9488',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: isDarkMode ? 0.2 : 0.06,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+            onPress={() => navigation?.navigate('Telemed')}
+            accessibilityLabel="Consult with an OB-GYN"
+          >
+            {/* Soft decorative background stethoscope watermark */}
+            <View
+              style={{
+                position: 'absolute',
+                top: -15,
+                right: -10,
+                opacity: 0.08,
+              }}
+              pointerEvents="none"
+            >
+              <Ionicons name="medkit" size={140} color="#0D9488" />
+            </View>
+
+            {/* Content Row: Text + Vector Artwork */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: isDarkMode ? '#FFFFFF' : '#111827', lineHeight: 26 }}>
+                  Talk to a Doctor
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: isDarkMode ? '#ABABAB' : '#64748B', marginTop: 4, lineHeight: 18 }}>
+                  Private video & chat care for cycle health, fertility, and wellness.
+                </Text>
+
+                {/* Teal Action Pill Button */}
+                <View
+                  style={{
+                    backgroundColor: '#0D9488',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    alignSelf: 'flex-start',
+                    paddingHorizontal: 18,
+                    paddingVertical: 10,
+                    borderRadius: 9999,
+                    marginTop: 14,
+                    shadowColor: '#0D9488',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 4,
+                    elevation: 3,
+                  }}
+                >
+                  <Ionicons name="videocam" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.2 }}>
+                    Book Consultation
+                  </Text>
+                </View>
+              </View>
+
+              {/* Clinical Telemedicine Vector Illustration */}
+              <View style={{ width: 106, height: 106, alignItems: 'center', justifyContent: 'center', marginRight: -4 }}>
+                <Svg width={106} height={106} viewBox="0 0 106 106">
+                  {/* Outer soft teal circular glow */}
+                  <Circle cx="53" cy="53" r="46" fill="#CCFBF1" />
+                  <Circle cx="53" cy="53" r="38" fill="#E6FFFA" stroke="#99F6E4" strokeWidth="1.5" />
+
+                  {/* Consultation Video Screen Tablet */}
+                  <Rect x="25" y="24" width="56" height="58" rx="12" fill="#FFFFFF" stroke="#0D9488" strokeWidth="2" />
+                  {/* Camera notch */}
+                  <Circle cx="53" cy="30" r="1.8" fill="#0D9488" />
+
+                  {/* Clinician Avatar inside screen */}
+                  <Circle cx="53" cy="44" r="9" fill="#0D9488" />
+                  <Path d="M 37 66 C 37 56, 69 56, 69 66 Z" fill="#14B8A6" />
+                  {/* Medical Cross on Chest */}
+                  <Rect x="51.5" y="58" width="3" height="7" rx="1" fill="#FFFFFF" />
+                  <Rect x="49.5" y="60" width="7" height="3" rx="1" fill="#FFFFFF" />
+
+                  {/* Looping Stethoscope below */}
+                  <Path
+                    d="M 29 48 C 23 58, 26 76, 40 82 C 48 86, 64 85, 76 76"
+                    stroke="#0F766E"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                  {/* Stethoscope bell */}
+                  <Circle cx="76" cy="76" r="4.5" fill="#FFFFFF" stroke="#0F766E" strokeWidth="2" />
+                  <Circle cx="76" cy="76" r="2" fill="#0D9488" />
+
+                  {/* Golden Sparkle Star on top right (matching Card 1 aesthetic) */}
+                  <Polygon
+                    points="84,20 86,12 88,20 96,22 88,24 86,32 84,24 76,22"
+                    fill="#F59E0B"
+                  />
+                </Svg>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* ========================================================================= */}
+          {/* SECTION: EDUCATIONAL PERIOD & CYCLE INSIGHTS (MATCHING REFERENCE UI)       */}
+          {/* ========================================================================= */}
+
+          {/* Section Headline */}
+          <Text
+            style={{
+              fontSize: 22,
+              fontWeight: '900',
+              color: theme.textPrimary,
+              marginTop: 18,
+              marginBottom: 14,
+              paddingHorizontal: 2,
+              letterSpacing: -0.3,
+            }}
+          >
+            Your late period
+          </Text>
+
+          {/* HERO EDUCATIONAL FEATURE CARD: Perimenopause periods (Dusty Purple / Lavender) */}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={{
+              backgroundColor: isDarkMode ? '#281E2F' : '#94759F',
+              borderRadius: 32,
+              padding: 22,
+              marginBottom: 20,
+              shadowColor: '#94759F',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: isDarkMode ? 0.35 : 0.22,
+              shadowRadius: 10,
+              elevation: 4,
+              position: 'relative',
+              overflow: 'hidden',
+              minHeight: 215,
+              borderWidth: isDarkMode ? 1 : 0,
+              borderColor: isDarkMode ? '#3D2847' : 'transparent',
+            }}
+            onPress={() => handleOpenEduArticle(CYCLE_ARTICLES_DATA[0])}
+          >
+            {/* Realistic Period Products Vector Illustration on the Right */}
+            <View
+              style={{
+                position: 'absolute',
+                right: -6,
+                top: 0,
+                bottom: 0,
+                width: 155,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              pointerEvents="none"
+            >
+              <Svg width={155} height={215} viewBox="0 0 155 215">
+                {/* 1. Tilted Menstrual Cup at top right */}
+                <G transform="translate(68, 52) rotate(-22)">
+                  {/* Cup Body */}
+                  <Path
+                    d="M -22 -18 C -24 6, -12 28, 0 35 C 12 28, 24 6, 22 -18 Z"
+                    fill="#C5B2D6"
+                    stroke="#FFFFFF"
+                    strokeWidth="1.6"
+                  />
+                  {/* Outer Rim Lip */}
+                  <Ellipse cx="0" cy="-18" rx="22" ry="5.5" fill="#DDD0E8" stroke="#FFFFFF" strokeWidth="1.5" />
+                  {/* Inner Rim Depth */}
+                  <Ellipse cx="0" cy="-18" rx="17" ry="3.5" fill="#B299C2" />
+                  {/* Measuring lines on silicone */}
+                  <Line x1="-12" y1="-2" x2="-2" y2="-2" stroke="#FFFFFF" strokeWidth="1.3" opacity={0.65} />
+                  <Line x1="-14" y1="8" x2="-2" y2="8" stroke="#FFFFFF" strokeWidth="1.3" opacity={0.65} />
+                  {/* Stem */}
+                  <Path d="M -2.5 35 L -2 46 C -2 48, 2 48, 2 46 L 2.5 35 Z" fill="#DDD0E8" stroke="#FFFFFF" strokeWidth="1" />
+                </G>
+
+                {/* 2. White Tampon with Purple/Magenta Band tilted below */}
+                <G transform="translate(98, 98) rotate(-16)">
+                  {/* Tampon Cylinder Body */}
+                  <Rect x="-6" y="-30" width="12" height="38" rx="6" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1" />
+                  {/* Magenta Band */}
+                  <Rect x="-6" y="-12" width="12" height="5" fill="#D946EF" opacity={0.9} />
+                  {/* Pull String */}
+                  <Path d="M 0 8 C 4 16, -2 24, 2 32" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" fill="none" opacity={0.95} />
+                </G>
+
+                {/* 3. Folded Mint-Green Sanitary Pad Wrapper at bottom right */}
+                <G transform="translate(76, 156) rotate(-10)">
+                  {/* Pad Wrapper Body */}
+                  <Rect
+                    x="-44"
+                    y="-24"
+                    width="88"
+                    height="54"
+                    rx="8"
+                    fill="#A3D9C9"
+                    stroke="#7BBFA9"
+                    strokeWidth="1.5"
+                  />
+                  {/* Crimped/Heat-sealed border edges */}
+                  <Line x1="-44" y1="-24" x2="-44" y2="30" stroke="#75B6A1" strokeWidth="2.5" strokeDasharray="3 2" />
+                  <Line x1="44" y1="-24" x2="44" y2="30" stroke="#75B6A1" strokeWidth="2.5" strokeDasharray="3 2" />
+                  {/* Quilted embossing pattern */}
+                  <Line x1="-32" y1="-12" x2="32" y2="-12" stroke="#BCEAE0" strokeWidth="1" opacity={0.8} />
+                  <Line x1="-32" y1="2" x2="32" y2="2" stroke="#BCEAE0" strokeWidth="1" opacity={0.8} />
+                  <Line x1="-32" y1="16" x2="32" y2="16" stroke="#BCEAE0" strokeWidth="1" opacity={0.8} />
+                  {/* Adhesive peel tab */}
+                  <Rect x="-12" y="-24" width="24" height="8" rx="2" fill="#E6F8F3" />
+                </G>
+              </Svg>
+            </View>
+
+            {/* Left Content Column (62% width to allow graphics breathing room) */}
+            <View style={{ width: '62%', zIndex: 2 }}>
+              <Text style={{ fontSize: 23, fontWeight: '900', color: '#FFFFFF', marginBottom: 14, letterSpacing: -0.3 }}>
+                Perimenopause periods
+              </Text>
+
+              {/* Bullet 1 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(255,255,255,0.22)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 9,
+                  }}
+                >
+                  <Ionicons name="sync-outline" size={13} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', flex: 1, lineHeight: 17 }}>
+                  Understand new cycle shifts
+                </Text>
+              </View>
+
+              {/* Bullet 2 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(255,255,255,0.22)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 9,
+                  }}
+                >
+                  <Ionicons name="wine-outline" size={13} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', flex: 1, lineHeight: 17 }}>
+                  Rethink your period products
+                </Text>
+              </View>
+
+              {/* Bullet 3 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(255,255,255,0.22)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 9,
+                  }}
+                >
+                  <Ionicons name="alert-circle-outline" size={14} color="#FFFFFF" />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', flex: 1, lineHeight: 17 }}>
+                  Know when to get help for period issues
+                </Text>
+              </View>
+
+              {/* White Pill Action Button */}
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 9999,
+                  alignSelf: 'flex-start',
+                  shadowColor: '#000000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#111827' }}>
+                  Be prepared
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* SUB-SECTION: Based on your current cycle */}
+          <View style={{ marginBottom: 8 }}>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: '900',
+                color: theme.textPrimary,
+                marginBottom: 12,
+                paddingHorizontal: 2,
+              }}
+            >
+              Based on your current cycle
+            </Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 6 }}>
+              {CYCLE_ARTICLES_DATA.filter((art) => art.id !== 'art_perimenopause').map((art) => (
+                <TouchableOpacity
+                  key={art.id}
+                  activeOpacity={0.88}
+                  style={{ width: 148, marginRight: 12 }}
+                  onPress={() => handleOpenEduArticle(art)}
+                >
+                  {/* Graphic Thumbnail Container matching reference screenshot */}
+                  <View
+                    style={{
+                      width: 148,
+                      height: 136,
+                      borderRadius: 22,
+                      backgroundColor: isDarkMode ? '#2B2B2B' : (art.bgColor || '#EDE6F5'),
+                      borderWidth: 1,
+                      borderColor: isDarkMode ? '#363636' : (art.borderColor || '#DDD6FE'),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      shadowColor: '#000000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 3,
+                      elevation: 1,
+                    }}
+                  >
+                    {art.id === 'art_late_period' ? (
+                      /* Phone with pink LATE circle held by hand */
+                      <Svg width={148} height={136} viewBox="0 0 148 136">
+                        {/* Hand & arm from bottom right */}
+                        <Path
+                          d="M 68 136 L 68 108 C 68 98, 74 92, 82 90 L 88 136 Z"
+                          fill="#F5D0C5"
+                        />
+                        <G transform="translate(68, 64) rotate(-8)">
+                          {/* Phone shadow */}
+                          <Rect x="-27" y="-45" width="54" height="88" rx="9" fill="#D8CFE5" />
+                          {/* Phone outer body */}
+                          <Rect x="-26" y="-46" width="52" height="86" rx="8" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.5" />
+                          {/* Screen */}
+                          <Rect x="-23" y="-42" width="46" height="78" rx="6" fill="#F8FAFC" />
+                          {/* Top notch */}
+                          <Rect x="-6" y="-40" width="12" height="2.5" rx="1.2" fill="#CBD5E1" />
+                          {/* Vibrant Pink LATE Badge Circle */}
+                          <Circle cx="0" cy="-14" r="16" fill="#FF2D55" />
+                          <SvgText x="0" y="-10" fill="#FFFFFF" fontSize="8.5" fontWeight="900" textAnchor="middle" letterSpacing="0.5">
+                            LATE
+                          </SvgText>
+                          {/* 3 Pastel color swatches below */}
+                          <Rect x="-18" y="10" width="10" height="7" rx="2" fill="#E9D5FF" />
+                          <Rect x="-5" y="10" width="10" height="7" rx="2" fill="#FED7AA" />
+                          <Rect x="8" y="10" width="10" height="7" rx="2" fill="#E2E8F0" />
+                        </G>
+                        {/* Hand fingers holding phone */}
+                        <Path
+                          d="M 40 82 C 40 76, 46 76, 48 82 L 48 95 C 48 100, 42 100, 40 95 Z"
+                          fill="#F5D0C5"
+                        />
+                        <Path
+                          d="M 88 68 C 94 68, 96 72, 94 78 L 90 88 C 88 92, 84 92, 84 86 Z"
+                          fill="#F0C2B4"
+                        />
+                      </Svg>
+                    ) : art.id === 'art_cramps_no_period' ? (
+                      /* Cute ghost with BOO! speech bubble */
+                      <Svg width={148} height={136} viewBox="0 0 148 136">
+                        {/* Pink BOO Speech Bubble */}
+                        <G transform="translate(104, 38)">
+                          <Ellipse cx="0" cy="0" rx="18" ry="12" fill="#FF3B5C" />
+                          <SvgText x="0" y="3.5" fill="#FFFFFF" fontSize="8" fontWeight="900" textAnchor="middle">
+                            BOO!
+                          </SvgText>
+                          {/* Speech tail */}
+                          <Path d="M -10 6 L -16 11 L -7 9 Z" fill="#FF3B5C" />
+                        </G>
+
+                        {/* Friendly Sheet Ghost */}
+                        <G transform="translate(70, 70)">
+                          {/* Ghost body with ripples */}
+                          <Path
+                            d="M -24 16 C -24 -24, 24 -24, 24 16 C 24 24, 20 28, 16 23 C 12 18, 8 28, 4 23 C 0 18, -4 28, -8 23 C -12 18, -16 28, -20 23 C -22 21, -24 24, -24 16 Z"
+                            fill="#FFFFFF"
+                            stroke="#EAE6F3"
+                            strokeWidth="1.5"
+                          />
+                          {/* Floating wispy tail */}
+                          <Path
+                            d="M -4 23 Q 0 35, 8 36 Q 16 37, 14 42"
+                            stroke="#FFFFFF"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            fill="none"
+                          />
+                          {/* Dark oval eyes */}
+                          <Ellipse cx="-8" cy="-2" rx="2.5" ry="3.5" fill="#1E293B" />
+                          <Ellipse cx="8" cy="-2" rx="2.5" ry="3.5" fill="#1E293B" />
+                          {/* Round mouth */}
+                          <Circle cx="0" cy="8" r="2.2" fill="#1E293B" />
+                        </G>
+                      </Svg>
+                    ) : art.id === 'art_remedies' ? (
+                      /* Fresh Green Parsley / Herb Leaves held by hand */
+                      <Svg width={148} height={136} viewBox="0 0 148 136">
+                        <G transform="translate(74, 58)">
+                          {/* Stems */}
+                          <Path d="M 0 30 Q -6 10, -14 -4" stroke="#4ADE80" strokeWidth="2.5" fill="none" />
+                          <Path d="M 4 30 Q 8 12, 16 -6" stroke="#4ADE80" strokeWidth="2.5" fill="none" />
+                          <Path d="M 2 30 Q 0 8, 2 -14" stroke="#22C55E" strokeWidth="2.5" fill="none" />
+
+                          {/* Leaf clusters */}
+                          <Circle cx="-16" cy="-8" r="14" fill="#16A34A" />
+                          <Circle cx="-8" cy="-20" r="13" fill="#22C55E" />
+                          <Circle cx="12" cy="-18" r="14" fill="#15803D" />
+                          <Circle cx="20" cy="-6" r="13" fill="#22C55E" />
+                          <Circle cx="2" cy="-26" r="12" fill="#4ADE80" />
+                          <Circle cx="0" cy="-12" r="14" fill="#16A34A" />
+
+                          {/* Highlights & florets */}
+                          <Circle cx="-22" cy="-4" r="7" fill="#4ADE80" opacity={0.9} />
+                          <Circle cx="-14" cy="-26" r="8" fill="#86EFAC" opacity={0.9} />
+                          <Circle cx="16" cy="-26" r="7" fill="#86EFAC" opacity={0.9} />
+                          <Circle cx="26" cy="-10" r="7" fill="#4ADE80" opacity={0.9} />
+                          <Circle cx="-2" cy="-32" r="6" fill="#BBF7D0" opacity={0.9} />
+                        </G>
+
+                        {/* Hand holding stems */}
+                        <G transform="translate(76, 92)">
+                          <Path
+                            d="M -4 6 C -4 -2, 16 -6, 26 2 L 40 40 L 10 44 Z"
+                            fill="#F5D0C5"
+                          />
+                          <Path
+                            d="M -2 4 C 4 2, 14 4, 18 10 C 18 16, 8 18, 0 14 Z"
+                            fill="#F0C2B4"
+                          />
+                        </G>
+                      </Svg>
+                    ) : (
+                      /* Calm Zen Stones */
+                      <Svg width={148} height={136} viewBox="0 0 148 136">
+                        <G transform="translate(74, 68)">
+                          <Ellipse cx="0" cy="22" rx="34" ry="14" fill="#64748B" />
+                          <Ellipse cx="0" cy="20" rx="32" ry="12" fill="#94A3B8" />
+                          <Ellipse cx="-2" cy="4" rx="25" ry="11" fill="#475569" />
+                          <Ellipse cx="-2" cy="2" rx="23" ry="9" fill="#64748B" />
+                          <Ellipse cx="2" cy="-14" rx="16" ry="8" fill="#334155" />
+                          <Ellipse cx="2" cy="-16" rx="14" ry="6.5" fill="#475569" />
+                          <Polygon points="26,-22 28,-30 30,-22 38,-20 30,-18 28,-10 26,-18 18,-20" fill="#F59E0B" />
+                        </G>
+                      </Svg>
+                    )}
+                  </View>
+
+                  {/* Title & Read Time */}
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '800',
+                      color: theme.textPrimary,
+                      marginTop: 8,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {art.title}
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 3 }}>
+                    {art.readTime}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Wide See More Pill Button */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: isDarkMode ? '#2B2B2B' : '#ECEFE6',
+              paddingVertical: 14,
+              borderRadius: 9999,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 10,
+              marginBottom: 16,
+              borderWidth: isDarkMode ? 1 : 0,
+              borderColor: theme.cardBorder,
+            }}
+            onPress={() => navigation?.navigate('Learn')}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '800', color: theme.textPrimary }}>
+              See more
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* Notifications Bottom Sheet */}
+      <AppBottomSheet
+        visible={showNotificationsModal}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onClose={() => setShowNotificationsModal(false)}
+        onRequestClose={() => setShowNotificationsModal(false)}
+        scrollable={false}
+        noPadding={true}
+        cardStyle={{ paddingHorizontal: 0, backgroundColor: theme.modalBg }}
+        contentStyle={{ paddingHorizontal: 0, width: '100%', backgroundColor: theme.modalBg }}
+        height="86%"
+        maxHeight="86%"
+      >
+        <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
+
+        {/* Clean Edge-to-Edge Header */}
+        <View
+          style={{
+            width: '100%',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingVertical: 6,
+            backgroundColor: theme.modalBg,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: isDarkMode ? '#363636' : '#F8FAFC',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+            }}
+            onPress={() => setShowNotificationsModal(false)}
+          >
+            <Ionicons name="arrow-back" size={18} color={theme.textPrimary} />
+          </TouchableOpacity>
+
+          <Text style={{ fontSize: 17, fontWeight: '800', color: theme.textPrimary }}>Notifications</Text>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: isDarkMode ? '#363636' : '#F8FAFC',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: theme.cardBorder,
+            }}
+            onPress={async () => {
+              if (typeof notificationService?.markAllAsRead === 'function') {
+                await notificationService.markAllAsRead();
+              }
+              setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
+              setUnreadNotificationsCount(0);
+              showToastSuccess && showToastSuccess('All marked as read');
+            }}
+            accessibilityLabel="Mark all as read"
+          >
+            <Ionicons name="checkmark-done" size={18} color={theme.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Seamless List (No All-Round Borders, Edge-to-Edge Full Width) */}
+        <ScrollView
+          style={{ width: '100%' }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ width: '100%', paddingBottom: 36 }}
+        >
+          {notificationsList.length === 0 ? (
+            <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 20 }}>
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="notifications-off-outline" size={26} color="#94A3B8" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#334155' }}>No notifications yet</Text>
+              <Text style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 4 }}>
+                We'll notify you when you have updates on your cycle, consultations, or medications.
+              </Text>
+            </View>
+          ) : (
+            notificationsList.map((notif, idx) => {
+              const isConsultation =
+                notif.type === 'appointment' ||
+                notif.title?.toLowerCase().includes('consultation') ||
+                notif.title?.toLowerCase().includes('doctor');
+              const isPillOrMed =
+                notif.type === 'medication' ||
+                notif.title?.toLowerCase().includes('pill') ||
+                notif.title?.toLowerCase().includes('medication');
+              const isCycle =
+                notif.type === 'period_alert' ||
+                notif.type === 'fertile_window' ||
+                notif.title?.toLowerCase().includes('period') ||
+                notif.title?.toLowerCase().includes('cycle');
+
+              const iconName = isConsultation
+                ? 'videocam-outline'
+                : isPillOrMed
+                  ? 'medical-outline'
+                  : isCycle
+                    ? 'water-outline'
+                    : notif.icon || 'notifications-outline';
+
+              const iconBg = isConsultation
+                ? '#ECFDF5'
+                : isPillOrMed
+                  ? '#EEF2FF'
+                  : isCycle
+                    ? '#FFF1F2'
+                    : notif.iconBg || '#F8FAFC';
+
+              const iconColor = isConsultation
+                ? '#059669'
+                : isPillOrMed
+                  ? '#4F46E5'
+                  : isCycle
+                    ? '#E11D48'
+                    : notif.iconColor || '#64748B';
+
+              return (
+                <TouchableOpacity
+                  key={notif.id || idx}
+                  activeOpacity={0.75}
+                  style={{
+                    width: '100%',
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    paddingHorizontal: 16,
+                    paddingVertical: 13,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.divider,
+                    backgroundColor: notif.isRead ? theme.card : (isDarkMode ? '#333333' : '#FAFCFF'),
+                  }}
+                  onPress={async () => {
+                    if (!notif.isRead && typeof notificationService?.markAsRead === 'function') {
+                      await notificationService.markAsRead(notif.id);
+                      setNotificationsList((prev) =>
+                        prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+                      );
+                      setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+                    }
+                  }}
+                >
+                  {/* Category Circular Icon Badge */}
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: iconBg,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    <Ionicons name={iconName} size={18} color={iconColor} />
+                  </View>
+
+                  {/* Notification Content */}
+                  <View style={{ flex: 1, paddingRight: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: '700',
+                          color: theme.textPrimary,
+                          flex: 1,
+                          marginRight: 8,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {notif.title}
+                      </Text>
+                      {!notif.isRead && (
+                        <View
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 3.5,
+                            backgroundColor: colors.primary,
+                          }}
+                        />
+                      )}
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 12.5,
+                        color: theme.textSecondary,
+                        lineHeight: 17,
+                        fontWeight: '400',
+                      }}
+                    >
+                      {notif.body}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </ScrollView>
+      </AppBottomSheet>
+
+      {/* Reusable Streak Breakdown & Education Modal */}
+      <StreakModal
+        visible={showStreakModal}
+        onClose={() => setShowStreakModal(false)}
+        initialStreakData={{ appStreak: streakCount }}
+      />
+
+      {/* Production-Ready Partner Sync Bottom Sheet Modal */}
+      <PartnerSyncModal
+        visible={showPartnerModal}
+        onClose={() => setShowPartnerModal(false)}
+        user={user}
+        onPartnerUpdated={(newStatus) => {
+          setPartnerStatus(newStatus);
+          setIsPartnerCardDismissed(!!newStatus?.cardDismissed);
+        }}
+      />
+
+      {/* Article Preview Bottom Sheet (Matching Learn Page) */}
+      <Modal
+        visible={!!selectedEduArticle && !isFullReadingMode}
+        transparent
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setSelectedEduArticle(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}
+          onPress={() => setSelectedEduArticle(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              overflow: 'hidden',
+              maxHeight: '85%',
+            }}
+          >
+            {selectedEduArticle?.thumbnail ? (
+              <View style={{ width: '100%', height: 190, position: 'relative' }}>
+                <Image
+                  source={{ uri: selectedEduArticle.thumbnail }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={{
+                    position: 'absolute',
+                    top: 14,
+                    right: 16,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => setSelectedEduArticle(null)}
+                >
+                  <Ionicons name="close" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                    {selectedEduArticle?.category}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
+                  onPress={() => setSelectedEduArticle(null)}
+                >
+                  <Ionicons name="close" size={18} color="#374151" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 36 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: '#111827', lineHeight: 26, marginBottom: 6 }}>
+                {selectedEduArticle?.title}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600', marginBottom: 12 }}>
+                {selectedEduArticle?.readTime} • {selectedEduArticle?.author}
+              </Text>
+
+              <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 8 }} />
+
+              <Text style={{ fontSize: 13, color: '#374151', lineHeight: 20, marginBottom: 16 }}>
+                {selectedEduArticle?.summary}
+              </Text>
+
+              {selectedEduArticle?.bulletPoints && selectedEduArticle.bulletPoints.length > 0 && (
+                <>
+                  <Text style={{ fontSize: 12, fontWeight: '900', color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                    Key Takeaways
+                  </Text>
+                  {selectedEduArticle.bulletPoints.map((point, index) => (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={{ marginRight: 8, marginTop: 1 }} />
+                      <Text style={{ fontSize: 13, color: '#4B5563', flex: 1, lineHeight: 18, fontWeight: '500' }}>
+                        {point}
+                      </Text>
+                    </View>
+                  ))}
+                </>
               )}
 
-              <Text style={styles.articleDetailTitle}>{selectedArticle.title}</Text>
-              <Text style={styles.articleDetailMeta}>{selectedArticle.readTime} • {selectedArticle.author}</Text>
-
-              <View style={styles.dividerLine} />
-
-              <Text style={styles.fullArticleBodyText}>{selectedArticle.fullText}</Text>
-              <Text style={styles.fullArticleBodyText}>
-                Consistency in logging daily health metrics yields the highest statistical confidence when computing personal cycle averages. Over time, your personal Red Apple insights adapt directly to your unique hormonal rhythm.
-              </Text>
+              {/* Read Full Article Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.primary,
+                  paddingVertical: 13,
+                  borderRadius: 50,
+                  marginTop: 16,
+                  shadowColor: colors.primary,
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 5,
+                  elevation: 2,
+                }}
+                onPress={() => setIsFullReadingMode(true)}
+              >
+                <Ionicons name="book" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Read Full Article</Text>
+              </TouchableOpacity>
             </ScrollView>
-          </SafeAreaView>
-        )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
-    </View>
+      {/* Full Article Reader Page Modal (Matching Learn Page) */}
+      <Modal
+        visible={!!selectedEduArticle && isFullReadingMode}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setIsFullReadingMode(false)}
+      >
+        {selectedEduArticle && (
+          <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: 40 }}>
+            {/* Header with Back Button */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}
+                onPress={() => setIsFullReadingMode(false)}
+              >
+                <Ionicons name="arrow-back" size={20} color="#111827" />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#111827' }}>Clinical Education</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: '#111827', lineHeight: 28, marginBottom: 6 }}>
+                {selectedEduArticle.title}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600', marginBottom: 12 }}>
+                {selectedEduArticle.readTime} • {selectedEduArticle.author}
+              </Text>
+
+              <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
+
+              <Text style={{ fontSize: 14, color: '#334155', lineHeight: 22, marginBottom: 16 }}>
+                {selectedEduArticle.fullText}
+              </Text>
+
+              <Text style={{ fontSize: 14, color: '#334155', lineHeight: 22, marginBottom: 24 }}>
+                Consistency in learning about your reproductive wellness empowers informed health decisions and personalized care throughout each phase of life.
+              </Text>
+
+              {/* Ask Dr. Red AI about this article */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#584988',
+                  paddingVertical: 14,
+                  borderRadius: 18,
+                  shadowColor: '#584988',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 5,
+                  elevation: 2,
+                }}
+                onPress={() => {
+                  const title = selectedEduArticle.title;
+                  setIsFullReadingMode(false);
+                  setSelectedEduArticle(null);
+                  if (navigation?.navigate) {
+                    navigation.navigate('AICompanion', {
+                      initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my cycle?`,
+                      autoSend: true,
+                      timestamp: Date.now(),
+                    });
+                  }
+                }}
+              >
+                <Ionicons name="sparkles" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Ask Dr. Red about this</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
+      </Modal>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  /* Desktop Web Layout Styles (Sidebar + Main Content Area) */
-  desktopContainer: {
-    flexDirection: 'row',
-    height: '100%',
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    overflow: 'hidden',
-  },
-  desktopContentArea: {
-    flex: 1,
-    height: '100%',
-    backgroundColor: '#F8FAFC',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  desktopPagePane: {
-    width: '100%',
-    height: '100%',
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  desktopPagePaneActive: {
-    display: 'flex',
-  },
-  desktopPagePaneHidden: {
-    display: 'none',
-  },
-  desktopPageContent: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#F8FAFC',
-  },
-
-  /* Desktop Top Bar */
-  desktopTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 32,
-    paddingVertical: 18,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  desktopGreeting: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.4,
-  },
-  desktopDateSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  desktopTopBarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  desktopLogBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    gap: 6,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  desktopLogBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  desktopIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  desktopNotifBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    backgroundColor: colors.primary,
-    borderRadius: 7,
-    minWidth: 14,
-    height: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  desktopNotifBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '800',
-  },
-
-  /* Desktop Bento Grid */
-  desktopGridContent: {
-    paddingHorizontal: 32,
-    paddingTop: 28,
-    paddingBottom: 60,
-  },
-  desktopGridRow: {
-    flexDirection: 'row',
-    gap: 24,
-    width: '100%',
-    maxWidth: 1180,
-    alignSelf: 'center',
-  },
-  desktopGridColLeft: {
-    flex: 1.35,
-    gap: 20,
-  },
-  desktopGridColRight: {
-    flex: 1,
-    gap: 18,
-  },
-
-  /* Desktop Hero Card */
-  desktopHeroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-  },
-  desktopHeroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  desktopHeroBadge: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  activeDotPulse: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: colors.primary,
-  },
-  desktopHeroCalendarLink: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  desktopHeroRingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 24,
-  },
-  desktopMetricsList: {
-    flex: 1,
-    gap: 12,
-  },
-  desktopMetricRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  desktopMetricTitle: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  desktopMetricVal: {
-    fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '700',
-  },
-
-  /* Desktop Forecast Card */
-  desktopForecastCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  desktopCardHeading: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-
-  /* Desktop AI Card */
-  desktopAiCard: {
-    backgroundColor: '#FFF9F9',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#FFE4E6',
-  },
-  desktopAiHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  desktopAiIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  desktopAiTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-    flex: 1,
-  },
-  desktopOnlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    gap: 4,
-  },
-  desktopGreenDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#10B981',
-  },
-  desktopOnlineText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  desktopAiDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 17,
-    marginBottom: 14,
-  },
-  desktopAiBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    gap: 6,
-  },
-  desktopAiBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  /* Desktop Doctor Card */
-  desktopDoctorCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  desktopDoctorHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  desktopDoctorIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  desktopDoctorTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  desktopDoctorSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-
-  /* Desktop Modes Bento */
-  desktopModesRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  desktopModeCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  desktopModeEmoji: {
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  desktopModeHeading: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  desktopModeSub: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 1,
-  },
-
-  /* Persistent Floating Bottom Navigation Bar Parent Container */
-  bottomBarParentContainer: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 24 : 16,
-    left: 16,
-    right: 16,
-    maxWidth: 640,
-    alignSelf: 'center',
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-    zIndex: 999,
-  },
-  persistentBottomBar: {
-    flex: 1,
-    height: 64,
-    borderRadius: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-  },
-  bottomBarTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    height: '100%',
-  },
-  bottomBarTabLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-  bottomBarTabLabelActive: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  bottomBarCenterBtnWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  bottomBarCenterBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-
-  /* TOP BAR: USER PROFILE & ACTION BUTTONS */
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: STATUSBAR_HEIGHT + 6,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
-  },
-  userInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userAvatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E5E7EB',
-  },
-  userTextCol: {
-    marginLeft: 12,
-  },
-  userNameText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  verifiedDoctorBadge: {
-    marginLeft: 2,
-  },
-  userSubtitleText: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-
-  /* Homepage Styles */
-  homepageContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  homepageText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-  },
-
-  /* Modern Light Mockup 1 Styles */
-  darkCyclePage: {
-    backgroundColor: '#FFFFFF',
-  },
-  modernDarkTopBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: STATUSBAR_HEIGHT + 6,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
-  },
-  brandSquircleBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  searchGlassCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginLeft: 10,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  modernDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginHorizontal: 3,
-  },
-  modernDotActive: {
-    backgroundColor: '#DC2626',
-    width: 16,
-  },
-  modernDotInactive: {
-    backgroundColor: '#D1D5DB',
-  },
-  bellBtnDark: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  bellBadgeGlow: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#DC2626',
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  bellBadgeGlowText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  pageScrollContentDark: {
-    paddingTop: 8,
-    paddingBottom: 90,
-    backgroundColor: '#FFFFFF',
-  },
-
-  /* Horizontal Stories Row */
-  storiesContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  storyCard: {
-    alignItems: 'center',
-    width: 66,
-  },
-  storyAvatarBox: {
-    width: 66,
-    height: 66,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  storyLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4B5563',
-    textAlign: 'center',
-  },
-
-  /* Welcome Message Section (Just on top of the Cycle Card) */
-  welcomeSection: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 14,
-  },
-  welcomeGreeting: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.4,
-  },
-  welcomeNameText: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#6B7280',
-    marginTop: 3,
-  },
-
-  /* Hero Featured White Card (Matching Mockup 1: Spacious, Uncluttered) */
-  heroCardContainer: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  heroWhiteCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  heroCardCalendarLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  heroCardCalendarLinkLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroCardCalendarLinkText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  heroCardCalendarLinkPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  heroCardCalendarLinkPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  heroCardPhaseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  heroPhasePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFE5E9',
-    paddingVertical: 5,
-    paddingHorizontal: 11,
-    borderRadius: 20,
-    gap: 6,
-  },
-  heroPhasePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  heroDayBadge: {
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 5,
-    paddingHorizontal: 11,
-    borderRadius: 20,
-  },
-  heroDayBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroUserAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: '#FFE5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroUserAvatarText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  heroUserName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  heroUserPhase: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  heroRingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroMetricsCol: {
-    flex: 1,
-    marginLeft: 18,
-    gap: 10,
-  },
-  metricItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metricDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  metricItemText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-  heroFooterMeta: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#9CA3AF',
-  },
-
-  /* Hero Floating Actions Docked Right */
-  heroFloatingActions: {
-    position: 'absolute',
-    right: -8,
-    bottom: 24,
-    alignItems: 'center',
-    gap: 8,
-    zIndex: 10,
-  },
-  heroActionCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#111827', // High contrast floating buttons matching mockup
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  heroActionBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#DC2626',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  heroActionBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '900',
-  },
-
-  /* 2-Column Bento Grid */
-  bentoSectionGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
-  },
-  bentoWhiteCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 26,
-    padding: 18,
-    minHeight: 88,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  bentoIconSquare: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bentoCardHeading: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-    marginTop: 0,
-    marginBottom: 2,
-  },
-  bentoCardSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-
-  /* Doctor Featured Card (Matching Mockup 2 Featured Card) */
-  doctorFeaturedCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 22,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  doctorFeaturedTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  doctorBadgeIconLarge: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: '#E0F2F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doctorFeaturedTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 0,
-  },
-  doctorFeaturedSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  doctorActionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0F2F1',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 4,
-  },
-  doctorActionPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#008080',
-  },
-
-  /* Cal AI Style 7-Day Calendar Strip */
-  calAiCalendarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 16,
-  },
-  calAiDayCol: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  calAiCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  calAiCircleDashed: {
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-  },
-  calAiCircleToday: {
-    backgroundColor: '#111827',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  calAiCirclePeriod: {
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    backgroundColor: '#FFE5E9',
-  },
-  calAiCircleSelected: {
-    borderWidth: 2,
-    borderColor: '#111827',
-    borderStyle: 'solid',
-  },
-  calAiDayLetter: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  calAiDayLetterNormal: {
-    color: '#6B7280',
-  },
-  calAiDayLetterToday: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  calAiDayLetterPeriod: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  calAiDateNum: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
-  },
-  calAiDateNumToday: {
-    color: '#111827',
-    fontWeight: '900',
-  },
-  calAiDateNumPeriod: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  calAiDateNumSelected: {
-    color: '#111827',
-    fontWeight: '900',
-  },
-
-  /* Predictions Container */
-  predictionsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionHeaderLabelDark: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#6B7280',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  upcomingPredictionCardClean: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  upcomingIconSquircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upcomingPillRed: {
-    backgroundColor: '#FFE5E9',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  upcomingPillRedText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  upcomingPillGreen: {
-    backgroundColor: '#E0F2F1',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  upcomingPillGreenText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#008080',
-  },
-  upcomingCardMainTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  upcomingCardSubTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-
-  /* Floating Bottom Dock (Anchored at Bottom, matching Mockup 1) */
-  floatingBottomDock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#111827', // High contrast floating dark dock matching mockup
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 18,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  dockPlusGlowButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  dockUserStatusRow: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  dockUserStatusName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  dockUserStatusSub: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  dockGearBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight,
-  },
-
-  /* Shazam Header */
-  shazamHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: STATUSBAR_HEIGHT + 6,
-    paddingBottom: 12,
-  },
-  headerShortcutLeft: {
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    width: 90,
-  },
-  headerShortcutRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    width: 90,
-  },
-  headerShortcutLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  centerTitleDotCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerPageTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    marginBottom: 6,
-    letterSpacing: -0.4,
-  },
-  headerIconOnly: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIconOnlySpacer: {
-    width: 44,
-  },
-  centerDotCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerModeTogglePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  headerModeToggleText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  dotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dot: {
-    height: 6,
-    borderRadius: 3,
-  },
-  dotActive: {
-    width: 18,
-    backgroundColor: colors.primary,
-  },
-  dotInactive: {
-    width: 6,
-    backgroundColor: '#D0D0D8',
-  },
-
-  /* Full Width Swipe Pages */
-  pageWidth: {
-    width: SCREEN_WIDTH,
-    flex: 1,
-    backgroundColor: colors.backgroundLight,
-  },
-  pageScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 32,
-  },
-
-  /* Greeting Header */
-  greetingHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  greetingSub: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    fontWeight: '400',
-  },
-  greetingName: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  bellButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.backgroundSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  bellBadgeDot: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: colors.primary,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-
-  /* Notifications Modal Styles */
-  notificationItemRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-  },
-  notificationItemRowUnread: {
-    backgroundColor: '#FFFBF8',
-    borderColor: '#FED7AA',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  notificationUnreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-    marginLeft: 6,
-  },
-  notificationIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notificationHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  notificationTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  notificationTime: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  notificationBody: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  notificationEmptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-    paddingHorizontal: 32,
-  },
-  notificationEmptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  notificationEmptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  notificationEmptySubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-
-  /* Outside Month Header Styles (Matching Prototype) */
-  calendarHeaderOutsideRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
-  },
-  calendarMonthTitleOutside: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  calendarSubTitleOutside: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  calendarNavBtnOutside: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-
-  /* Compact Calendar Card */
-  calendarCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  calendarHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  calendarMonthTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  calendarSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  calendarSubTitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-  infoIconButton: {
-    padding: 2,
-  },
-  framelessChartButton: {
-    padding: 6,
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  weekdayText: {
-    width: 36,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  calendarDayCell: {
-    width: '14.28%',
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  dayCellCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  dayCellSelected: {
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: 17,
-    overflow: 'hidden',
-  },
-  dayCellTodaySelected: {
-    borderWidth: 2,
-    borderColor: colors.primaryDark,
-    borderRadius: 17,
-    overflow: 'hidden',
-  },
-  dayCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayNormal: {
-    backgroundColor: 'transparent',
-  },
-  dayTextNormal: {
-    color: colors.textPrimary,
-  },
-  dayPeriod: {
-    backgroundColor: '#FFCDD2',
-  },
-  dayTextPeriod: {
-    color: colors.primary,
-    fontWeight: '800',
-  },
-  dayFertile: {
-    backgroundColor: '#D0F5ED',
-  },
-  dayTextFertile: {
-    color: '#00A88F',
-    fontWeight: '800',
-  },
-  dayOvulation: {
-    backgroundColor: '#00A88F',
-  },
-  dayTextOvulation: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  dayToday: {
-    backgroundColor: colors.primary,
-  },
-  dayTextToday: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  dayTextBase: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  /* Main Cycle Ring Summary Card */
-  mainCycleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  cardExpandButtonTopRight: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 4,
-    zIndex: 10,
-  },
-  ringWrapper: {
-    marginRight: 16,
-  },
-  cycleDetailsCol: {
-    flex: 1,
-  },
-  cycleDetailHeader: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  bulletDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  bulletText: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: '400',
-  },
-  boldText: {
-    fontWeight: '800',
-  },
-
-  /* Expanded Cycle Modal Styles */
-  expandedRingHeaderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FAF0F2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  expandedRingTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  expandedRingSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  nextPeriodBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  nextPeriodBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  segmentedPhaseCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#FAF0F2',
-    marginBottom: 20,
-  },
-  phaseBarRow: {
-    flexDirection: 'row',
-    height: 10,
-    borderRadius: 5,
-    overflow: 'hidden',
-    marginBottom: 14,
-    gap: 4,
-  },
-  phaseBarSegment: {
-    flex: 1,
-  },
-  phaseLabelsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  phaseItem: {
-    flex: 1,
-  },
-  phaseItemActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
-    paddingBottom: 4,
-  },
-  phaseItemTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textSecondary,
-  },
-  phaseItemDays: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  biometricGridCol: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  biometricCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-  },
-  bioIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bioCardTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  bioCardVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  insightBoxTextContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#FAF0F2',
-    marginBottom: 24,
-  },
-
-  /* Solid Side-by-Side Action Cards */
-  solidActionCardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  solidFullWidthDoctorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#E0F2F1',
-    borderColor: '#B2DFDB',
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 16,
-    shadowColor: '#008080',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  doctorCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  doctorIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#008080',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  doctorCardMainTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#004D4D',
-  },
-  doctorCardSubTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#006666',
-    marginTop: 2,
-  },
-  doctorConsultBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginLeft: 8,
-  },
-  doctorConsultBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#008080',
-    marginRight: 4,
-  },
-
-  solidPregnancyCard: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: 22,
-    padding: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  solidDoctorCard: {
-    flex: 1,
-    backgroundColor: '#008080',
-    borderRadius: 22,
-    padding: 16,
-    shadowColor: '#008080',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  solidCardIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  solidCardTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  solidCardSub: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-
-  /* Daily Log Summary Card */
-  dailyLogSummaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#FAF0F2',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  dailyLogSummaryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  dailyLogIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFEBEE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dailyLogTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dailyLogMainTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  todayLoggedBadge: {
-    backgroundColor: '#E0F2F1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  todayLoggedBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#00A88F',
-  },
-  dailyLogSubText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  logTodayActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginLeft: 8,
-  },
-  logTodayActionText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* Daily Log Drawer Specific Styles */
-  dailyLogDrawerTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  dailyLogDrawerSub: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  feelingIconsRowDrawer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  feelingCircleButtonDrawer: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#F5F5FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feelingLabelText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  innerDividerLine: {
-    height: 1,
-    backgroundColor: '#F0F0F5',
-    marginVertical: 14,
-  },
-  saveDailyLogButtonDrawer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 28,
-    paddingVertical: 16,
-    marginTop: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveDailyLogTextDrawer: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* MODERN WELCOME BACK DRAWER STYLES */
-  modernDrawerTopBar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
-    paddingBottom: 4,
-    position: 'relative',
-    width: '100%',
-  },
-  modernDrawerCloseBtn: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modernDrawerHeroSection: {
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 18,
-  },
-  modernDrawerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'center',
-    letterSpacing: -0.4,
-  },
-  modernDrawerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 20,
-    paddingHorizontal: 20,
-  },
-  modernChoiceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: '#F3F4F6',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  modernChoiceCardActive: {
-    backgroundColor: '#FFF8F9',
-    borderColor: colors.primary,
-  },
-  modernChoiceCardActivePurple: {
-    backgroundColor: '#FAF5FF',
-    borderColor: '#7C3AED',
-  },
-  modernChoiceIconBoxRed: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#FFE5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modernChoiceIconBoxPurple: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#F3E8FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modernChoiceTextCol: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  modernChoiceTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  modernChoiceSub: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  modernPrimaryBtn: {
-    backgroundColor: colors.primary,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  modernPrimaryBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  modernSkipBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    marginTop: 2,
-    marginBottom: Platform.OS === 'ios' ? 16 : 8,
-  },
-  modernSkipBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-
-  /* Section Header Labels */
-  sectionHeaderLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-
-  /* Upcoming Cards Column */
-  upcomingCardsCol: {
-    gap: 10,
-    marginBottom: 20,
-  },
-  upcomingPeriodCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF0F3',
-    borderRadius: 22,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#FFD6E0',
-  },
-  upcomingIconCircleRed: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FFE4E6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upcomingFertileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0F2F1',
-    borderRadius: 22,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#B2DFDB',
-  },
-  upcomingIconCircleGreen: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#C8E6C9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upcomingCardMainTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  upcomingCardSubTitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-
-  /* Quick Log Grid */
-  quickLogGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  quickLogCard: {
-    flex: 1,
-    minWidth: 90,
-    backgroundColor: '#FAF0F2',
-    borderRadius: 18,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-  },
-  quickLogIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickLogCardText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-
-  /* Pregnancy Setup Modal Styles */
-  pregnancySetupIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFEBEE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  pregnancySetupTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  pregnancySetupSub: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  methodTabRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F5F5FA',
-    borderRadius: 16,
-    padding: 4,
-    marginBottom: 16,
-  },
-  methodTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  methodTabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  methodTabText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  methodTabTextActive: {
-    color: colors.primary,
-    fontWeight: '900',
-  },
-  dueDateInputCard: {
-    backgroundColor: '#F5F5FA',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  dueDateInputLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  dueDateInputVal: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: colors.primary,
-  },
-  confirmPregnancyButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 28,
-    paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  confirmPregnancyText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* Minimal Cycle Screen Styles (Matching Prototype) */
-  minimalCycleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
-  },
-  minimalCycleTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  minimalCycleSub: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  minimalMonthNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  minimalMonthNavBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.backgroundSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#F0E6E6',
-  },
-  minimalCalendarCard: {
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 28,
-    paddingVertical: 20,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    borderColor: '#F0E6E6',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  weekdayRowMinimal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  weekdayTextMinimal: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  minimalDayCellWrapper: {
-    width: `${100 / 7}%`,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  minimalDayCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  minimalDayText: {
-    fontSize: 14,
-  },
-  minimalLegendGrid: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    gap: 10,
-  },
-  minimalLegendRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  minimalLegendPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 24,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#F0E6E6',
-  },
-  minimalLegendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginRight: 10,
-  },
-  minimalLegendLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-
-  /* Cycle Length History Chart Styles */
-  chartCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#F0F0F5',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 18,
-  },
-  chartMainContainer: {
-    flexDirection: 'row',
-    height: 100,
-  },
-  yAxisCol: {
-    width: 32,
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  yAxisText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  graphPlotArea: {
-    flex: 1,
-    position: 'relative',
-    height: 90,
-  },
-  gridLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'transparent',
-  },
-  dataPointDotContainer: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    marginLeft: -7,
-    marginTop: -2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  dataPointDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-  },
-  xAxisRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-  },
-  xAxisLabelsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  xAxisText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textMuted,
-    width: 30,
-    textAlign: 'center',
-  },
-
-  /* Additional Metrics Styles */
-  metricCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#FAF0F2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  metricHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  metricTitleIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metricCardTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  metricDescriptionText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  normalBadge: {
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  normalBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  metricStatGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  metricStatBox: {
-    alignItems: 'flex-start',
-  },
-  metricStatVal: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-  metricStatLbl: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  flowTimelineContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 4,
-  },
-  flowDayPillActive: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  flowDayPillMedium: {
-    flex: 1,
-    backgroundColor: '#EF5350',
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  flowDayPillLight: {
-    flex: 1,
-    backgroundColor: '#FFCDD2',
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  flowDayText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  fertilityRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  fertilityItem: {
-    flex: 1,
-  },
-  fertilitySubLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  fertilityBigText: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
-
-  /* Calendar Legend Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  legendGridModal: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  legendPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSurface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-
-  /* DRAGGABLE DRAWER BOTTOM SHEET STYLES */
-  drawerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  drawerContentContainer: {
-    width: '100%',
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  drawerTopHeaderContainer: {
-    width: '100%',
-    height: 170,
-    backgroundColor: '#374151',
-    position: 'relative',
-  },
-  drawerTopHeaderImage: {
-    width: '100%',
-    height: '100%',
-  },
-  drawerHandlePillOverlay: {
-    position: 'absolute',
-    top: 10,
-    alignSelf: 'center',
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    zIndex: 10,
-  },
-  drawerCloseButtonOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 16,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  drawerScrollBody: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-  },
-  drawerHandlePill: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#E0E0E6',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  drawerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  articleCategoryBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-  },
-  articleCategoryText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.6,
-  },
-  bookmarkButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F5F8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fullArticleThumbnailContainer: {
-    width: '100%',
-    height: 220,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
-    marginBottom: 18,
-  },
-  fullArticleThumbnailImage: {
-    width: '100%',
-    height: '100%',
-  },
-  drawerArticleTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    lineHeight: 30,
-    marginBottom: 8,
-  },
-  drawerArticleMeta: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-  dividerLine: {
-    height: 1,
-    backgroundColor: '#EBEBEF',
-    marginVertical: 14,
-  },
-  drawerSummaryText: {
-    fontSize: 15,
-    lineHeight: 23,
-    color: colors.textPrimary,
-    marginBottom: 18,
-  },
-  takeawayHeader: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  takeawayRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  drawerTakeawayText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
-  },
-  openFullArticleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 28,
-    paddingVertical: 16,
-    marginTop: 18,
-    marginBottom: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  openFullArticleButtonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  saveLibrarySecondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-    borderRadius: 28,
-    paddingVertical: 14,
-  },
-  saveLibrarySecondaryText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-
-  /* FULL READING MODE & ANALYTICS FULL SCREEN STYLES */
-  articleDetailContainer: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight,
-  },
-  articleDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  closeDetailButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.backgroundSurface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  articleDetailScrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  articleDetailTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    lineHeight: 34,
-    marginBottom: 10,
-  },
-  articleDetailMeta: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  fullArticleBodyText: {
-    fontSize: 16,
-    lineHeight: 26,
-    color: colors.textPrimary,
-    marginBottom: 16,
-  },
-  doctorAvatarCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bookingDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  bookingDetailText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  successIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#008080',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  bookingSuccessTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  bookingSuccessSub: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 30,
-  },
-  saveArticleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 28,
-    paddingVertical: 16,
-    marginTop: 24,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveArticleText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* Pregnancy Onboarding Wizard Styles */
-  pregWizardModalContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  pregWizardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  pregWizardCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pregWizardProgressContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 14,
-  },
-  pregWizardProgressSegment: {
-    flex: 1,
-    height: 5,
-    borderRadius: 3,
-  },
-  pregWizardProgressSegmentActive: {
-    backgroundColor: colors.primary,
-  },
-  pregWizardProgressSegmentInactive: {
-    backgroundColor: '#E5E7EB',
-  },
-  pregWizardStepBadge: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  pregWizardScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  pregWizardStepContent: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  pregWizardIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFF0F5',
-    borderColor: '#FFD1DC',
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  pregWizardQuestionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    lineHeight: 30,
-    marginBottom: 8,
-  },
-  pregWizardQuestionSub: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  pregWizardOptionsCol: {
-    width: '100%',
-    gap: 12,
-  },
-  pregWizardOptionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pregWizardOptionCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: '#FFF5F7',
-  },
-  pregWizardOptionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  pregWizardOptionTitleActive: {
-    color: colors.primary,
-  },
-  pregWizardOptionSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  datePickerCard: {
-    width: '100%',
-    backgroundColor: colors.backgroundSurface,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  datePickerCardLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  datePill: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    marginRight: 8,
-  },
-  datePillActive: {
-    backgroundColor: colors.primary,
-  },
-  datePillText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  datePillTextActive: {
-    color: '#FFFFFF',
-  },
-  calculatedPreviewCard: {
-    width: '100%',
-    backgroundColor: '#FFF5F7',
-    borderColor: '#FFD1DC',
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 8,
-  },
-  calcPreviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  calcPreviewTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.8,
-    marginLeft: 6,
-  },
-  calcPreviewWeekText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  calcPreviewSubText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  pregWizardBottomActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: '#FFFFFF',
-    gap: 12,
-  },
-  pregWizardBackBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    backgroundColor: '#F3F4F6',
-  },
-  pregWizardBackBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  pregWizardNextBtn: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  pregWizardNextBtnText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  transparentOverlayHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    backgroundColor: 'transparent',
-    borderBottomWidth: 0,
-    elevation: 0,
-    paddingTop: STATUSBAR_HEIGHT + 8,
-  },
-  headerIconOnlyCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  /* ========================================================================= */
-  /* DEDICATED CYCLE CALENDAR PAGE STYLES (RED APPLE SIGNATURE DESIGN)         */
-  /* ========================================================================= */
-  calendarPageContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  calendarPageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
-  },
-  calendarPageBackBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  calendarPageTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  calendarPageTodayHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  calendarPageTodayHeaderBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  calendarPagePinnedHeader: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  calendarPageWeekdayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
-  },
-  calendarPageWeekdayCol: {
-    width: `${100 / 7}%`,
-    alignItems: 'center',
-  },
-  calendarPageWeekdayText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9CA3AF',
-  },
-  calendarPageLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  calendarLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  calendarLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  calendarLegendText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  calendarPageScrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 48,
-  },
-  calendarMonthBlock: {
-    marginBottom: 28,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  calendarMonthHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  calendarMonthTitleText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.2,
-  },
-  calendarCurrentMonthBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: '#FEF2F2',
-  },
-  calendarCurrentMonthBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  calendarMonthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calendarPageCellTouchable: {
-    width: `${100 / 7}%`,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  calendarPageDayCellCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calendarMonthBlockSingle: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  calendarDayInsightCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  calendarDayInsightTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  calendarDayInsightDate: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  calendarDayInsightPhase: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4B5563',
-    marginTop: 2,
-  },
-  calendarPhasePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-  },
-  calendarPhasePillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#374151',
-  },
-  calendarDayInsightNote: {
-    fontSize: 13,
-    color: '#4B5563',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  calendarLogDayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingVertical: 11,
-    borderRadius: 12,
-  },
-  calendarLogDayBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  calendarMonthStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  calendarMonthStatCard: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  calendarMonthStatVal: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#111827',
-  },
-  calendarMonthStatLbl: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-
-  /* DAILY LOG DRAWER */
-  dailyLogDrawerContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    maxHeight: SCREEN_HEIGHT * 0.85,
-  },
-  dailyLogHeroSection: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    marginBottom: 16,
-  },
-  dailyLogHeroTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  dailyLogHeroSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  dailyLogSectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 10,
-    marginTop: 12,
-  },
-  flowPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  flowPillBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  flowPillBtnActive: {
-    backgroundColor: '#FFEBEE',
-    borderColor: colors.primary,
-  },
-  flowPillBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  flowPillBtnTextActive: {
-    color: colors.primary,
-  },
-  chipsWrapRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  chipBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  chipBtnActive: {
-    backgroundColor: '#FFEBEE',
-    borderColor: colors.primary,
-  },
-  chipBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
-  },
-  chipBtnTextActive: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  dailyLogSaveBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  dailyLogSaveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-});
-

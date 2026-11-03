@@ -46,7 +46,6 @@ export class CronWorkerService {
     const now = new Date();
 
     try {
-      // 1. CYCLE REMINDERS (Period in 2 days, fertile window starting)
       const usersWithProfile = await prisma.user.findMany({
         where: {
           pregnancy_mode: false,

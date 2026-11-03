@@ -1,13 +1,10 @@
 import React, { useState, useRef } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
-  Dimensions,
   useWindowDimensions,
   FlatList,
   TouchableOpacity,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -83,36 +80,37 @@ export default function ArticleCarousel({
     return (
       <TouchableOpacity
         activeOpacity={0.92}
-        style={[styles.cardContainer, { width: cardWidth }]}
+        className="bg-white rounded-[22px] p-[18px] border border-gray-200 shadow-sm justify-between min-h-[180px]"
+        style={{ width: cardWidth, marginRight: CARD_SPACING }}
         onPress={() => onSelectArticle && onSelectArticle(item)}
       >
-        <View style={styles.cardHeaderRow}>
-          <View style={[styles.categoryBadge, { backgroundColor: item.iconBg }]}>
-            <Text style={[styles.categoryBadgeText, { color: item.iconColor }]}>
+        <View className="flex-row items-center justify-between mb-2.5">
+          <View className="px-2.5 py-1 rounded-[10px]" style={{ backgroundColor: item.iconBg }}>
+            <Text className="text-[10px] font-extrabold tracking-wider" style={{ color: item.iconColor }}>
               {item.category}
             </Text>
           </View>
-          <View style={styles.readTimeRow}>
-            <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 3 }} />
-            <Text style={styles.readTimeText}>{item.readTime}</Text>
+          <View className="flex-row items-center">
+            <Ionicons name="time-outline" size={12} color="#9CA3AF" style={{ marginRight: 3 }} />
+            <Text className="text-[11px] text-gray-400 font-semibold">{item.readTime}</Text>
           </View>
         </View>
 
-        <Text style={styles.cardTitle} numberOfLines={2}>
+        <Text className="text-base font-extrabold text-gray-900 leading-[22px] mb-1.5" numberOfLines={2}>
           {item.title}
         </Text>
 
-        <Text style={styles.cardSummary} numberOfLines={3}>
+        <Text className="text-[13px] text-gray-600 leading-[19px] mb-3.5" numberOfLines={3}>
           {item.summary}
         </Text>
 
-        <View style={styles.cardFooterRow}>
-          <View style={[styles.cardIconCircle, { backgroundColor: item.iconBg }]}>
+        <View className="flex-row items-center justify-between border-t border-gray-100 pt-3">
+          <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: item.iconBg }}>
             <Ionicons name={item.icon} size={20} color={item.iconColor} />
           </View>
 
-          <View style={styles.readPill}>
-            <Text style={styles.readPillText}>Read Insight</Text>
+          <View className="flex-row items-center bg-red-50 px-3 py-1.5 rounded-[14px]">
+            <Text className="text-xs font-extrabold text-red-600 mr-1">Read Insight</Text>
             <Ionicons name="arrow-forward" size={13} color="#DC2626" />
           </View>
         </View>
@@ -121,7 +119,7 @@ export default function ArticleCarousel({
   };
 
   return (
-    <View style={styles.container}>
+    <View className="mb-2">
       <FlatList
         ref={flatListRef}
         data={articles}
@@ -135,20 +133,19 @@ export default function ArticleCarousel({
         nestedScrollEnabled={true}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={styles.flatListContent}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 4 }}
       />
 
       {/* Pagination Indicator Dots */}
-      <View style={styles.paginationRow}>
+      <View className="flex-row items-center justify-center mt-3 space-x-1.5">
         {articles.map((item, index) => {
           const isActive = index === activeIndex;
           return (
             <View
               key={item.id}
-              style={[
-                styles.dot,
-                isActive ? styles.dotActive : styles.dotInactive,
-              ]}
+              className={`h-1.5 rounded-[3px] ${
+                isActive ? 'w-[22px] bg-red-600' : 'w-1.5 bg-gray-200'
+              }`}
             />
           );
         })}
@@ -156,114 +153,3 @@ export default function ArticleCarousel({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 8,
-  },
-  flatListContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    gap: CARD_SPACING,
-  },
-  cardContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    justifyContent: 'space-between',
-    minHeight: 180,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  categoryBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  categoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  readTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  readTimeText: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-    lineHeight: 22,
-    marginBottom: 6,
-  },
-  cardSummary: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 19,
-    marginBottom: 14,
-  },
-  cardFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  cardIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  readPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    gap: 4,
-  },
-  readPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  paginationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 6,
-  },
-  dot: {
-    height: 6,
-    borderRadius: 3,
-  },
-  dotActive: {
-    width: 22,
-    backgroundColor: '#DC2626',
-  },
-  dotInactive: {
-    width: 6,
-    backgroundColor: '#E5E7EB',
-  },
-});

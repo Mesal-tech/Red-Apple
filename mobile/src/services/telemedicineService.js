@@ -1,5 +1,7 @@
 import { apiRequest } from './apiClient';
 
+const DEFAULT_TIMEOUT_MS = 12000;
+
 /**
  * Fetch doctors directly from backend database API with optional specialty and search query
  */
@@ -10,12 +12,12 @@ export async function getDoctors(specialty = '', search = '') {
     if (search) params.append('search', search);
 
     const queryStr = params.toString() ? `?${params.toString()}` : '';
-    const res = await apiRequest(`/telemedicine/doctors${queryStr}`, { method: 'GET' }, 4000);
+    const res = await apiRequest(`/telemedicine/doctors${queryStr}`, { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && Array.isArray(res.doctors)) {
       return res.doctors;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Error fetching doctors from backend:', err.message);
+    console.log('[TelemedicineService] Failed to fetch doctors from backend:', err.message);
   }
   return [];
 }
@@ -25,12 +27,12 @@ export async function getDoctors(specialty = '', search = '') {
  */
 export async function getDoctorDetails(doctorId) {
   try {
-    const res = await apiRequest(`/telemedicine/doctors/${doctorId}`, { method: 'GET' }, 4000);
+    const res = await apiRequest(`/telemedicine/doctors/${doctorId}`, { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && res.doctor) {
       return res.doctor;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Error fetching doctor details:', err.message);
+    console.log('[TelemedicineService] Failed to fetch doctor details:', err.message);
   }
   return null;
 }
@@ -59,7 +61,7 @@ export async function bookConsultation({
         consultationType,
       }),
     },
-    6000
+    DEFAULT_TIMEOUT_MS
   );
   if (res && res.booking) {
     return res.booking;
@@ -72,21 +74,35 @@ export async function bookConsultation({
  */
 export async function getUserBookings() {
   try {
-    const res = await apiRequest('/telemedicine/bookings', { method: 'GET' }, 4000);
+    const res = await apiRequest('/telemedicine/bookings', { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && Array.isArray(res.bookings)) {
       return res.bookings;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Error fetching user bookings:', err.message);
+    console.log('[TelemedicineService] Failed to fetch user bookings:', err.message);
   }
   return [];
+}
+
+/** Fetch appointments assigned to the authenticated doctor's profile. */
+export async function getDoctorBookings() {
+  try {
+    const res = await apiRequest('/telemedicine/doctor/bookings', { method: 'GET' }, DEFAULT_TIMEOUT_MS);
+    if (res && Array.isArray(res.bookings)) {
+      return res.bookings;
+    }
+  } catch (err) {
+    console.log('[TelemedicineService] Failed to fetch doctor bookings:', err.message);
+    throw err;
+  }
+  throw new Error('The server did not return doctor bookings.');
 }
 
 /**
  * Cancel a user booking
  */
 export async function cancelBooking(bookingId) {
-  const res = await apiRequest(`/telemedicine/bookings/${bookingId}/cancel`, { method: 'PATCH' }, 4000);
+  const res = await apiRequest(`/telemedicine/bookings/${bookingId}/cancel`, { method: 'PATCH' }, DEFAULT_TIMEOUT_MS);
   if (res && res.booking) {
     return res.booking;
   }
@@ -103,7 +119,7 @@ export async function completeConsultation(bookingId, doctorNotes, prescriptionS
       method: 'PATCH',
       body: JSON.stringify({ doctorNotes, prescriptionSummary }),
     },
-    4000
+    DEFAULT_TIMEOUT_MS
   );
   if (res && res.booking) {
     return res.booking;
@@ -121,7 +137,7 @@ export async function addDoctorSlot(slotData) {
       method: 'POST',
       body: JSON.stringify(slotData),
     },
-    4000
+    DEFAULT_TIMEOUT_MS
   );
   if (res && res.slot) {
     return res.slot;
@@ -138,7 +154,7 @@ export async function toggleDoctorSlot(slotId) {
     {
       method: 'PATCH',
     },
-    4000
+    DEFAULT_TIMEOUT_MS
   );
   if (res && res.slot) {
     return res.slot;
@@ -153,12 +169,12 @@ export async function getDoctorSlots(doctorId, date = '') {
   if (!doctorId) return [];
   try {
     const query = date ? `?date=${encodeURIComponent(date)}` : '';
-    const res = await apiRequest(`/telemedicine/doctors/${doctorId}/slots${query}`, { method: 'GET' }, 4000);
+    const res = await apiRequest(`/telemedicine/doctors/${doctorId}/slots${query}`, { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && Array.isArray(res.slots)) {
       return res.slots;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Failed to load doctor slots from server:', err.message);
+    console.log('[TelemedicineService] Failed to load doctor slots from server:', err.message);
   }
   return [];
 }
@@ -174,12 +190,12 @@ export async function getStreamToken(userId = '', userName = '', role = 'user') 
     if (role) params.append('role', role);
     const queryStr = params.toString() ? `?${params.toString()}` : '';
 
-    const res = await apiRequest(`/telemedicine/stream-token${queryStr}`, { method: 'GET' }, 4000);
+    const res = await apiRequest(`/telemedicine/stream-token${queryStr}`, { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && res.apiKey) {
       return res;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Failed to fetch stream token from server:', err.message);
+    console.log('[TelemedicineService] Failed to fetch stream token from server:', err.message);
   }
   return null;
 }
@@ -195,12 +211,12 @@ export async function fetchPartnerClinics(params = {}) {
     if (params.search) urlParams.append('search', params.search);
 
     const queryStr = urlParams.toString() ? `?${urlParams.toString()}` : '';
-    const res = await apiRequest(`/telemedicine/clinics${queryStr}`, { method: 'GET' }, 4000);
+    const res = await apiRequest(`/telemedicine/clinics${queryStr}`, { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && Array.isArray(res.clinics)) {
       return res.clinics;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Failed to fetch partner clinics:', err.message);
+    console.log('[TelemedicineService] Failed to fetch partner clinics:', err.message);
   }
   return [];
 }
@@ -210,13 +226,12 @@ export async function fetchPartnerClinics(params = {}) {
  */
 export async function fetchPartnerClinicById(clinicId) {
   try {
-    const res = await apiRequest(`/telemedicine/clinics/${clinicId}`, { method: 'GET' }, 4000);
+    const res = await apiRequest(`/telemedicine/clinics/${clinicId}`, { method: 'GET' }, DEFAULT_TIMEOUT_MS);
     if (res && res.clinic) {
       return res.clinic;
     }
   } catch (err) {
-    console.warn('[TelemedicineService] Failed to fetch partner clinic details:', err.message);
+    console.log('[TelemedicineService] Failed to fetch partner clinic details:', err.message);
   }
   return null;
 }
-

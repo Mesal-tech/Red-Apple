@@ -286,4 +286,66 @@ export async function saveStreakDataSafe(data) {
   } catch (e) {}
 }
 
+export const PROFILE_METRICS_KEY = '@red_apple_profile_metrics';
+
+export async function getStoredProfileMetricsSafe() {
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_METRICS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return inMemorySession.profileMetrics || null;
+}
+
+export async function saveStoredProfileMetricsSafe(metrics) {
+  inMemorySession.profileMetrics = metrics;
+  try {
+    await AsyncStorage.setItem(PROFILE_METRICS_KEY, JSON.stringify(metrics));
+  } catch (e) {}
+}
+
+/* ================= AI CHAT HISTORY STORAGE ================= */
+
+export const AI_CHAT_HISTORY_KEY_PREFIX = '@red_apple_ai_chat_';
+
+export async function getAIChatHistorySafe(userId) {
+  const key = `${AI_CHAT_HISTORY_KEY_PREFIX}${userId || 'guest'}`;
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function saveAIChatHistorySafe(userId, messages) {
+  const key = `${AI_CHAT_HISTORY_KEY_PREFIX}${userId || 'guest'}`;
+  try {
+    if (!Array.isArray(messages)) return;
+    // Strip streaming flags and keep up to 60 recent messages
+    const sanitized = messages
+      .filter((m) => m && (m.content || (m.toolActions && m.toolActions.length > 0)))
+      .slice(-60)
+      .map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content || '',
+        triage: m.triage || null,
+        suggestedQuickReplies: m.suggestedQuickReplies || [],
+        toolActions: m.toolActions || [],
+        isAiGenerated: Boolean(m.isAiGenerated),
+        timestamp: m.timestamp || new Date().toISOString(),
+      }));
+    await AsyncStorage.setItem(key, JSON.stringify(sanitized));
+  } catch (e) {}
+}
+
+export async function clearAIChatHistorySafe(userId) {
+  const key = `${AI_CHAT_HISTORY_KEY_PREFIX}${userId || 'guest'}`;
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch (e) {}
+}
+
 

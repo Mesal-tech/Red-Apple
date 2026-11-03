@@ -37,6 +37,24 @@ function mapPrismaUser(u: any): User {
 }
 
 class UserStore {
+  private isTransientDatabaseError(error: unknown): boolean {
+    const err = error as {
+      code?: string;
+      message?: string;
+      cause?: { code?: string; message?: string };
+      meta?: { driverAdapterError?: { cause?: { code?: string; message?: string } } };
+    };
+    const code = err?.code || err?.cause?.code || err?.meta?.driverAdapterError?.cause?.code;
+    const message = [
+      err?.message,
+      err?.cause?.message,
+      err?.meta?.driverAdapterError?.cause?.message,
+    ].filter(Boolean).join(' ');
+
+    return ['ETIMEDOUT', 'P1001', 'P1002', 'P2024', 'ECONNRESET', '57P01'].includes(code || '') ||
+      /connection terminated|connection timeout|database server.*(unreachable|closed)|socket hang up/i.test(message);
+  }
+
   public async init(): Promise<void> {
     // Pure PostgreSQL / Prisma backed store. No mock files or seeds.
     return Promise.resolve();
@@ -88,16 +106,31 @@ class UserStore {
 
   public async findByEmail(email: string): Promise<User | null> {
     const normalized = email.toLowerCase().trim();
-    const u = await prisma.user.findFirst({
-      where: {
-        email: {
-          equals: normalized,
-          mode: 'insensitive',
-        },
-      },
-    });
+    const maxAttempts = 4;
 
-    return u ? mapPrismaUser(u) : null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const u = await prisma.user.findFirst({
+          where: {
+            email: {
+              equals: normalized,
+              mode: 'insensitive',
+            },
+          },
+        });
+
+        return u ? mapPrismaUser(u) : null;
+      } catch (error) {
+        if (!this.isTransientDatabaseError(error) || attempt === maxAttempts) {
+          throw error;
+        }
+
+        // Back off briefly so a transient pooler/server restart can settle.
+        await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+      }
+    }
+
+    return null;
   }
 
   public async findById(id: string): Promise<User | null> {
@@ -165,6 +198,22 @@ class UserStore {
     });
 
     return mapPrismaUser(updated);
+  }
+
+  public async deleteUser(userId: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { user_id: userId } });
+    if (!user) {
+      throw new Error('User not found.');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.deleteMany({ where: { user_id: userId } });
+      await tx.booking.deleteMany({ where: { user_id: userId } });
+      await tx.user.delete({ where: { user_id: userId } });
+    });
+
+    refreshTokensCache.delete(userId);
+    if (user.email) resetOtpCache.delete(user.email.toLowerCase());
   }
 
   public async saveRefreshToken(userId: string, token: string): Promise<void> {

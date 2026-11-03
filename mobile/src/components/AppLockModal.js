@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   Modal,
@@ -116,66 +115,69 @@ export default function AppLockModal({
 
   return (
     <Modal visible={visible} animationType="fade" transparent={false}>
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <SafeAreaView className="flex-1 bg-white justify-between">
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
         {/* Top Cancel button only if in setup or disable mode */}
-        <View style={styles.topBar}>
+        <View className="h-12 px-5 justify-center">
           {mode !== 'unlock' && (
-            <TouchableOpacity onPress={onCancel} style={styles.cancelBtn}>
+            <TouchableOpacity onPress={onCancel} className="w-9 h-9 rounded-full bg-gray-100 items-center justify-center">
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
           )}
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.lockIconCircle}>
+        <View className="items-center px-8 mt-2.5">
+          <View className="w-[76px] h-[76px] rounded-full bg-red-50 items-center justify-center mb-5">
             <Ionicons name="shield-checkmark" size={36} color={colors.primary} />
           </View>
 
-          <Text style={styles.title}>{getTitle()}</Text>
-          <Text style={styles.subtitle}>{getSubtitle()}</Text>
+          <Text className="text-[22px] font-extrabold text-gray-900 text-center mb-2">{getTitle()}</Text>
+          <Text className="text-sm text-gray-500 text-center leading-5 mb-8">{getSubtitle()}</Text>
 
           {/* PIN DOTS */}
-          <Animated.View style={[styles.dotsContainer, { transform: [{ translateX: shakeAnim }] }]}>
+          <Animated.View className="flex-row gap-5 mb-4" style={{ transform: [{ translateX: shakeAnim }] }}>
             {[0, 1, 2, 3].map((idx) => {
               const isFilled = pin.length > idx;
+              const hasError = Boolean(errorMessage);
               return (
                 <View
                   key={idx}
-                  style={[
-                    styles.pinDot,
-                    isFilled && styles.pinDotFilled,
-                    Boolean(errorMessage) && styles.pinDotError,
-                  ]}
+                  className={`w-[18px] h-[18px] rounded-full border-2 ${
+                    hasError
+                      ? 'border-red-500 bg-red-100'
+                      : isFilled
+                      ? 'border-primary bg-primary scale-110'
+                      : 'border-gray-300 bg-white'
+                  }`}
                 />
               );
             })}
           </Animated.View>
 
           {Boolean(errorMessage) && (
-            <Text style={styles.errorText}>{errorMessage}</Text>
+            <Text className="text-[13px] text-red-500 font-semibold mt-1">{errorMessage}</Text>
           )}
         </View>
 
         {/* NUMPAD */}
-        <View style={styles.keypad}>
+        <View className="px-10 pb-9 gap-4">
           {[
             ['1', '2', '3'],
             ['4', '5', '6'],
             ['7', '8', '9'],
             ['', '0', 'delete'],
           ].map((row, rIdx) => (
-            <View key={rIdx} style={styles.keypadRow}>
+            <View key={rIdx} className="flex-row justify-between">
               {row.map((item, cIdx) => {
                 if (item === '') {
-                  return <View key={cIdx} style={styles.keypadBtnPlaceholder} />;
+                  return <View key={cIdx} className="w-[72px] h-[72px]" />;
                 }
                 if (item === 'delete') {
                   return (
                     <TouchableOpacity
                       key={cIdx}
-                      style={styles.keypadBtn}
+                      className="w-[72px] h-[72px] rounded-full bg-gray-50 items-center justify-center border border-gray-200"
                       onPress={handleDelete}
                       activeOpacity={0.6}
                     >
@@ -186,11 +188,11 @@ export default function AppLockModal({
                 return (
                   <TouchableOpacity
                     key={cIdx}
-                    style={styles.keypadBtn}
+                    className="w-[72px] h-[72px] rounded-full bg-gray-50 items-center justify-center border border-gray-200"
                     onPress={() => handleKeyPress(item)}
                     activeOpacity={0.6}
                   >
-                    <Text style={styles.keypadDigit}>{item}</Text>
+                    <Text className="text-[26px] font-bold text-gray-900">{item}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -201,108 +203,3 @@ export default function AppLockModal({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'space-between',
-  },
-  topBar: {
-    height: 48,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  cancelBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    marginTop: 10,
-  },
-  lockIconCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#FFF0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    gap: 20,
-    marginBottom: 16,
-  },
-  pinDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
-  },
-  pinDotFilled: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    transform: [{ scale: 1.1 }],
-  },
-  pinDotError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEE2E2',
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#EF4444',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  keypad: {
-    paddingHorizontal: 40,
-    paddingBottom: 36,
-    gap: 16,
-  },
-  keypadRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  keypadBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#F9FAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  keypadBtnPlaceholder: {
-    width: 72,
-    height: 72,
-  },
-  keypadDigit: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-  },
-});

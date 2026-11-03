@@ -1,7 +1,7 @@
 /**
  * clinicLocatorService.js
  * Service for discovering nearby women's reproductive health, fertility,
- * and wellness clinics using OpenStreetMap Overpass API and curated partner databases.
+ * and wellness clinics using OpenStreetMap's Overpass API.
  */
 
 // Haversine formula to compute great-circle distance in kilometers
@@ -53,7 +53,7 @@ export const CLINIC_CATEGORIES = {
   },
   sexual_health: {
     id: 'sexual_health',
-    label: 'Sexual & Maternal Wellness',
+    label: 'Sexual Health & Wellness',
     shortLabel: 'Sexual Health',
     color: '#0D9488', // Emerald Teal
     badgeBg: '#CCFBF1',
@@ -63,13 +63,23 @@ export const CLINIC_CATEGORIES = {
   },
   clinic: {
     id: 'clinic',
-    label: "Women's Health Clinic",
-    shortLabel: "Women's Clinic",
+    label: 'Clinic',
+    shortLabel: 'Clinic',
     color: '#E11D48', // App Signature Rose Red
     badgeBg: '#FFE4E6',
     iconName: 'fitness',
     tagMatch: 'amenity=clinic',
     description: 'Comprehensive outpatient wellness, screenings & consultations',
+  },
+  hospital: {
+    id: 'hospital',
+    label: 'Hospital',
+    shortLabel: 'Hospital',
+    color: '#2563EB',
+    badgeBg: '#DBEAFE',
+    iconName: 'business',
+    tagMatch: 'amenity=hospital',
+    description: 'Hospital and medical services',
   },
 };
 
@@ -79,6 +89,7 @@ export const CLINIC_CATEGORIES = {
 function categorizeOsmClinic(tags = {}) {
   const spec = (tags['healthcare:speciality'] || '').toLowerCase();
   const healthcare = (tags['healthcare'] || '').toLowerCase();
+  const amenity = (tags['amenity'] || '').toLowerCase();
   const counselling = (tags['healthcare:counselling'] || '').toLowerCase();
   const name = (tags['name'] || tags['name:en'] || '').toLowerCase();
 
@@ -99,6 +110,9 @@ function categorizeOsmClinic(tags = {}) {
   if (healthcare === 'birthing_center' || name.includes('birthing') || name.includes('birth center')) {
     return 'birthing_center';
   }
+  if (healthcare === 'hospital' || amenity === 'hospital') {
+    return 'hospital';
+  }
   if (
     counselling.includes('sexual_health') ||
     name.includes('sexual health') ||
@@ -112,31 +126,18 @@ function categorizeOsmClinic(tags = {}) {
 }
 
 /**
- * Query Overpass API with standard tags:
- * healthcare:speciality=gynaecology
- * healthcare:speciality=fertility
- * healthcare=birthing_center
- * healthcare:counselling=sexual_health
- * amenity=clinic
- * healthcare=clinic
+ * Query Overpass API for mapped women's health facilities.
  */
 export async function queryOverpassApi(lat, lng, radiusMeters = 10000) {
   const overpassQuery = `[out:json][timeout:20];
 (
-  node["healthcare:speciality"="gynaecology"](around:${radiusMeters},${lat},${lng});
-  way["healthcare:speciality"="gynaecology"](around:${radiusMeters},${lat},${lng});
-  node["healthcare:speciality"="fertility"](around:${radiusMeters},${lat},${lng});
-  way["healthcare:speciality"="fertility"](around:${radiusMeters},${lat},${lng});
-  node["healthcare"="birthing_center"](around:${radiusMeters},${lat},${lng});
-  way["healthcare"="birthing_center"](around:${radiusMeters},${lat},${lng});
-  node["healthcare:counselling"="sexual_health"](around:${radiusMeters},${lat},${lng});
-  way["healthcare:counselling"="sexual_health"](around:${radiusMeters},${lat},${lng});
-  node["amenity"="clinic"](around:${radiusMeters},${lat},${lng});
-  way["amenity"="clinic"](around:${radiusMeters},${lat},${lng});
-  node["healthcare"="clinic"](around:${radiusMeters},${lat},${lng});
-  way["healthcare"="clinic"](around:${radiusMeters},${lat},${lng});
+  nwr["healthcare:speciality"~"gynaecology|gynecology|obstetrics|fertility",i](around:${radiusMeters},${lat},${lng});
+  nwr["healthcare"="birthing_center"](around:${radiusMeters},${lat},${lng});
+  nwr["healthcare:counselling"="sexual_health"](around:${radiusMeters},${lat},${lng});
+  nwr["amenity"~"clinic|hospital"]["name"~"women|matern|fertility|ivf|gynaec|gyneco|obstet|reproductive|sexual health|birthing",i](around:${radiusMeters},${lat},${lng});
+  nwr["healthcare"~"clinic|hospital"]["name"~"women|matern|fertility|ivf|gynaec|gyneco|obstet|reproductive|sexual health|birthing",i](around:${radiusMeters},${lat},${lng});
 );
-out center 35;`;
+out center;`;
 
   const endpoints = [
     'https://overpass-api.de/api/interpreter',
@@ -171,167 +172,91 @@ out center 35;`;
     }
   }
 
-  return [];
+  return null;
 }
 
 /**
- * Generate supplementary nearby clinics relative to user coordinates
- * Used when OSM has sparse voluntary mapping in rural or less mapped regions
+ * Load named nearby health facilities from OpenStreetMap.
  */
-function generateSupplementaryClinics(userLat, userLng) {
-  // Deterministic realistic offsets around user within 1.2km to 5.5km
-  const templates = [
-    {
-      offsetLat: 0.012,
-      offsetLng: 0.009,
-      name: 'Red Apple Telemedicine Partner Clinic',
-      category: 'gynaecology',
-      isPartner: true,
-      address: 'Central Health District, Suite 4',
-      phone: '+234 800 RED APPLE',
-      rating: 4.9,
-      reviewsCount: 124,
-    },
-    {
-      offsetLat: -0.015,
-      offsetLng: 0.018,
-      name: 'Blossom Women\'s Fertility & IVF Center',
-      category: 'fertility',
-      isPartner: true,
-      address: 'Fertility Square, West Avenue',
-      phone: '+234 802 333 7711',
-      rating: 4.8,
-      reviewsCount: 96,
-    },
-    {
-      offsetLat: 0.021,
-      offsetLng: -0.014,
-      name: 'Eden Birthing Center & Maternal Suites',
-      category: 'birthing_center',
-      isPartner: true,
-      address: '44 Maternity Gardens Boulevard',
-      phone: '+234 809 888 1234',
-      rating: 4.7,
-      reviewsCount: 88,
-    },
-    {
-      offsetLat: -0.008,
-      offsetLng: -0.019,
-      name: 'Oasis Reproductive & Sexual Wellness Clinic',
-      category: 'sexual_health',
-      isPartner: false,
-      address: '12 Wellness Close, Health Enclave',
-      phone: '+234 810 999 4567',
-      rating: 4.9,
-      reviewsCount: 72,
-    },
-    {
-      offsetLat: 0.028,
-      offsetLng: 0.022,
-      name: 'LifeSpring Comprehensive Gynaecology',
-      category: 'gynaecology',
-      isPartner: false,
-      address: 'Plot 7, Medical Park Road',
-      phone: '+234 803 765 4321',
-      rating: 4.6,
-      reviewsCount: 65,
-    },
-  ];
+export async function fetchNearbyWomenHealthFacilities(
+  userLat,
+  userLng,
+  { targetCount = 10, initialRadiusMeters = 5000, maxRadiusMeters = 50000, onRadiusChange } = {}
+) {
+  const facilitiesByKey = new Map();
+  const radii = [];
+  for (let radius = initialRadiusMeters; radius < maxRadiusMeters; radius *= 2) {
+    radii.push(radius);
+  }
+  if (radii[radii.length - 1] !== maxRadiusMeters) radii.push(maxRadiusMeters);
 
-  return templates.map((t, idx) => {
-    const lat = userLat + t.offsetLat;
-    const lng = userLng + t.offsetLng;
-    const distanceKm = calculateDistanceKm(userLat, userLng, lat, lng);
-    return {
-      id: `local-partner-${idx}`,
-      name: t.name,
-      lat,
-      lng,
-      category: t.category,
-      categoryLabel: CLINIC_CATEGORIES[t.category].label,
-      isPartner: t.isPartner,
-      rating: t.rating,
-      reviewsCount: t.reviewsCount,
-      address: t.address,
-      phone: t.phone,
-      openingHours: 'Mon - Sat: 8:00 AM - 6:00 PM',
-      distanceKm,
-      source: 'partner_network',
-    };
-  });
-}
+  let searchedRadiusMeters = initialRadiusMeters;
+  let sourceUnavailable = false;
+  for (const radiusMeters of radii) {
+    searchedRadiusMeters = radiusMeters;
+    onRadiusChange?.(radiusMeters / 1000);
+    try {
+      const osmElements = await queryOverpassApi(userLat, userLng, radiusMeters);
+      if (!osmElements) {
+        sourceUnavailable = true;
+        break;
+      }
 
-/**
- * Main public method to load all nearby reproductive health clinics
- * Blends live OSM Overpass data with curated partner clinic databases
- */
-export async function fetchNearbyReproductiveClinics(userLat, userLng, radiusMeters = 10000) {
-  const clinics = [];
-  const seenKeys = new Set();
-
-  // 1. Fetch live OpenStreetMap data
-  try {
-    const osmElements = await queryOverpassApi(userLat, userLng, radiusMeters);
-
-    for (const el of osmElements) {
+      for (const el of osmElements) {
       const lat = el.lat || el.center?.lat;
       const lng = el.lon || el.center?.lon;
-      if (!lat || !lng) continue;
+      if (lat == null || lng == null) continue;
 
       const tags = el.tags || {};
       const rawName = tags.name || tags['name:en'] || '';
-      if (!rawName && !tags['healthcare:speciality']) continue;
+      if (!rawName) continue;
 
       const category = categorizeOsmClinic(tags);
-      const name = rawName || `${CLINIC_CATEGORIES[category].shortLabel} Facility`;
+      const name = rawName;
 
       const key = `${name.toLowerCase()}-${lat.toFixed(3)}-${lng.toFixed(3)}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
+      if (facilitiesByKey.has(key)) continue;
 
       const distanceKm = calculateDistanceKm(userLat, userLng, lat, lng);
 
       // Extract address details
       const street = tags['addr:street'] ? `${tags['addr:housenumber'] ? tags['addr:housenumber'] + ' ' : ''}${tags['addr:street']}` : '';
-      const suburb = tags['addr:suburb'] || tags['addr:district'] || tags['addr:city'] || '';
-      const address = street ? `${street}${suburb ? ', ' + suburb : ''}` : (suburb || 'Local Health Facility');
+      const city = tags['addr:city'] || tags['addr:town'] || '';
+      const suburb = tags['addr:suburb'] || tags['addr:district'] || '';
+      const address = [street, suburb, city].filter(Boolean).join(', ');
 
-      clinics.push({
+      facilitiesByKey.set(key, {
         id: `osm-${el.id}`,
         name,
         lat,
         lng,
         category,
         categoryLabel: CLINIC_CATEGORIES[category].label,
-        isPartner: false,
-        rating: 4.5 + parseFloat(((el.id % 5) * 0.1).toFixed(1)), // subtle natural score
-        reviewsCount: 15 + (el.id % 80),
         address,
         phone: tags.phone || tags['contact:phone'] || null,
-        openingHours: tags.opening_hours || 'Mon - Sat: 8:00 AM - 6:00 PM',
+        openingHours: tags.opening_hours || null,
+        city,
+        website: tags.website || tags['contact:website'] || null,
         distanceKm,
         source: 'openstreetmap',
+        sourceUrl: `https://www.openstreetmap.org/${el.type}/${el.id}`,
       });
-    }
-  } catch (err) {
-    console.warn('[ClinicLocatorService] OSM query error:', err.message);
-  }
-
-  // 3. Fallback / density check: if OSM voluntary mapping is sparse (< 3 clinics),
-  // inject supplementary partner network clinics around the user
-  if (clinics.length < 3) {
-    const supplementals = generateSupplementaryClinics(userLat, userLng);
-    for (const sup of supplementals) {
-      const key = `${sup.name.toLowerCase()}-${sup.lat.toFixed(3)}-${sup.lng.toFixed(3)}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        clinics.push(sup);
       }
+
+      if (facilitiesByKey.size >= targetCount || radiusMeters === maxRadiusMeters) break;
+    } catch (err) {
+      console.warn('[ClinicLocatorService] OSM query error:', err.message);
     }
   }
 
   // Sort clinics ascending by proximity (closest first)
-  clinics.sort((a, b) => a.distanceKm - b.distanceKm);
+  const facilities = Array.from(facilitiesByKey.values()).sort((a, b) => a.distanceKm - b.distanceKm);
 
-  return clinics;
+  return {
+    facilities,
+    searchedRadiusKm: searchedRadiusMeters / 1000,
+    targetCount,
+    maxRadiusReached: searchedRadiusMeters >= maxRadiusMeters,
+    sourceUnavailable,
+  };
 }
