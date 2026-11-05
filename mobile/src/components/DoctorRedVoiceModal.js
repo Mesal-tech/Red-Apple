@@ -8,15 +8,31 @@ import {
   StatusBar,
   Text,
   TouchableOpacity,
+  TurboModuleRegistry,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AudioContext, AudioManager, AudioRecorder, RecordingNotificationManager } from 'react-native-audio-api';
 import { useTheme } from '../context/ThemeContext';
 import { apiRequest, getBaseApiUrl } from '../services/apiClient';
 import { saveAIChatHistorySafe } from '../utils/storage';
+
+let cachedAudioApi = null;
+let checkedAudioApi = false;
+function getAudioApi() {
+  if (checkedAudioApi) return cachedAudioApi;
+  checkedAudioApi = true;
+  try {
+    if (Platform.OS !== 'web' && !TurboModuleRegistry?.get?.('AudioAPIModule')) {
+      return null;
+    }
+    cachedAudioApi = require('react-native-audio-api');
+    return cachedAudioApi;
+  } catch (e) {
+    return null;
+  }
+}
 
 const GEMINI_INPUT_RATE = 16000;
 const GEMINI_OUTPUT_RATE = 24000;
@@ -101,6 +117,9 @@ function mergeTranscriptText(previous, incoming) {
 }
 
 function getErrorMessage(error) {
+  if (/react-native-audio-api|native audio|development build/i.test(error?.message || '')) {
+    return 'Live voice requires a custom development build (not Expo Go).';
+  }
   if (error?.status === 401) return 'Sign in to start a private voice session.';
   if (error?.status === 503) return 'Gemini voice is not configured on the backend yet.';
   if (error?.status === 429) return 'The voice service is busy right now. Please try again shortly.';
@@ -185,7 +204,12 @@ export default function DoctorRedVoiceModal({
     setLiveText('Connecting securely to Dr. Red…');
     setVoicePhase('connecting');
     resourcesRef.current = {};
+    const audioApi = getAudioApi();
     try {
+      if (!audioApi?.AudioContext || !audioApi?.AudioManager || !audioApi?.AudioRecorder) {
+        throw new Error('react-native-audio-api native module is unavailable. Use a custom development build.');
+      }
+      const { AudioContext, AudioManager, AudioRecorder, RecordingNotificationManager } = audioApi;
       const permission = await AudioManager.requestRecordingPermissions();
       if (permission !== 'Granted') throw new Error('Microphone permission is required to start voice.');
       AudioManager.setAudioSessionOptions({
@@ -501,7 +525,9 @@ export default function DoctorRedVoiceModal({
       if (resourcesRef.current) {
         resourcesRef.current = null;
       }
-      Promise.resolve(AudioManager.setAudioSessionActivity(false)).catch(() => {});
+      if (audioApi?.AudioManager) {
+        Promise.resolve(audioApi.AudioManager.setAudioSessionActivity(false)).catch(() => {});
+      }
       if (mountedRef.current) {
         setErrorMessage(getErrorMessage(error));
         setLiveText('Your health companion is ready when you are.');
@@ -524,6 +550,7 @@ export default function DoctorRedVoiceModal({
     const hasSession = Boolean(resources);
     resourcesRef.current = null;
     if (hasSession) {
+      const audioApi = getAudioApi();
       if (resources?.recorder) {
         try { resources.recorder.clearOnAudioReady(); } catch {}
         try { resources.recorder.clearOnError(); } catch {}
@@ -537,10 +564,12 @@ export default function DoctorRedVoiceModal({
       if (resources?.audioContext && resources.audioContext.state !== 'closed') {
         Promise.resolve(resources.audioContext.close()).catch(() => {});
       }
-      Promise.resolve(AudioManager.setAudioSessionActivity(false)).catch(() => {});
-    }
-    if (Platform.OS === 'android') {
-      Promise.resolve(RecordingNotificationManager.hide()).catch(() => {});
+      if (audioApi?.AudioManager) {
+        Promise.resolve(audioApi.AudioManager.setAudioSessionActivity(false)).catch(() => {});
+      }
+      if (Platform.OS === 'android' && audioApi?.RecordingNotificationManager) {
+        Promise.resolve(audioApi.RecordingNotificationManager.hide()).catch(() => {});
+      }
     }
     isMutedRef.current = false;
     setIsMuted(false);

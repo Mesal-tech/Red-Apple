@@ -41,8 +41,8 @@ export const darkTheme = {
 const ThemeContext = createContext({
   isDarkMode: false,
   theme: lightTheme,
-  setDarkMode: () => {},
-  toggleDarkMode: () => {},
+  setDarkMode: () => { },
+  toggleDarkMode: () => { },
 });
 
 export function ThemeProvider({ children }) {
@@ -101,8 +101,8 @@ export function useTheme() {
     return {
       isDarkMode: false,
       theme: lightTheme,
-      setDarkMode: () => {},
-      toggleDarkMode: () => {},
+      setDarkMode: () => { },
+      toggleDarkMode: () => { },
       isLoaded: true,
     };
   }

@@ -41,9 +41,9 @@ export default function OnboardingScreen({ onNavigateLogin, onNavigateSignUp, na
     <SafeAreaView className="flex-1" edges={['left', 'right', 'bottom']}>
       <Animated.View style={{ flex: 1, opacity: fade }}>
         <View style={{ height: heroSize + 28, maxHeight: '64%', overflow: 'hidden', backgroundColor: theme.background }}>
-          <Image source={slide.kind === 'care' ? require('../../assets/images/onboarding_done.png') : require('../../assets/images/onboarding_done.jpg')} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+          <Image source={slide.kind === 'care' ? require('../../assets/images/onboarding_done.png') : require('../../assets/images/onboarding_done_no_bg.png')} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
           <LinearGradient colors={['rgba(0,0,0,0.46)', 'transparent']} locations={[0, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 130 }} />
-          <LinearGradient colors={isDarkMode ? ['transparent', 'rgba(20,24,23,0.82)', theme.background] : ['transparent', 'rgba(255,255,255,0.84)', '#FFFFFF']} locations={[0, 0.58, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 112 }} />
+          <LinearGradient colors={isDarkMode ? ['transparent', 'rgba(20,24,23,0.82)', theme.background] : ['transparent', 'rgba(248,249,250,0.84)', theme.background]} locations={[0, 0.58, 1]} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 112 }} />
           <View className="absolute left-6" style={{ top: insets.top + 8 }}><Brand /></View>
         </View>
         <View className="flex-1 justify-end px-6 pb-4 pt-6">

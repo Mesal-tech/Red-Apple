@@ -22,7 +22,7 @@ export function getBaseApiUrl() {
   if (hostUri) {
     const host = hostUri.split(':')[0];
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      return `http://${host}:5000/api`;
+      return `http://${host}:5001/api`;
     }
   }
 
@@ -34,11 +34,11 @@ export function getBaseApiUrl() {
 
   // 3. Official host bridge for Android emulator
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
+    return 'http://10.0.2.2:5001/api';
   }
 
   // 4. Fallback to active developer host IP on Wi-Fi
-  return 'http://192.168.1.234:5000/api';
+  return 'http://192.168.1.234:5001/api';
 }
 
 /**
@@ -54,14 +54,14 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
   // Build candidate bases to ensure instant reachability in emulator & LAN
   const candidateBases = [primaryBase];
   if (Platform.OS === 'android') {
-    if (!candidateBases.includes('http://10.0.2.2:5000/api')) {
-      candidateBases.push('http://10.0.2.2:5000/api');
+    if (!candidateBases.includes('http://10.0.2.2:5001/api')) {
+      candidateBases.push('http://10.0.2.2:5001/api');
     }
-    if (!candidateBases.includes('http://127.0.0.1:5000/api')) {
-      candidateBases.push('http://127.0.0.1:5000/api');
+    if (!candidateBases.includes('http://127.0.0.1:5001/api')) {
+      candidateBases.push('http://127.0.0.1:5001/api');
     }
-    if (!candidateBases.includes('http://192.168.1.234:5000/api')) {
-      candidateBases.push('http://192.168.1.234:5000/api');
+    if (!candidateBases.includes('http://192.168.1.234:5001/api')) {
+      candidateBases.push('http://192.168.1.234:5001/api');
     }
   }
 

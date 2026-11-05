@@ -133,7 +133,7 @@ export function useGoogleAuth({ onTokenSuccess, onError }) {
 
     const redirectUri =
       process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI ||
-      'http://192.168.1.234.nip.io:5000/api/auth/google/callback';
+      'http://192.168.1.234.nip.io:5001/api/auth/google/callback';
     const appReturnUrl = getAppReturnUrl();
     const nonce = Math.random().toString(36).substring(2, 15);
 

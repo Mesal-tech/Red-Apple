@@ -6,7 +6,7 @@ import { cronWorker } from './services/cronWorker.service';
 import { createServer } from 'http';
 import { attachGeminiLiveProxy } from './services/geminiLiveProxy.service';
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const app = createExpressApp();
 const server = createServer(app);
 attachGeminiLiveProxy(server);
