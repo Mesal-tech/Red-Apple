@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -112,15 +112,31 @@ function CustomTabBar({ state, descriptors, navigation }) {
                 justifyContent: 'center',
               }}
             >
-              <Ionicons
-                name={iconName}
-                size={21}
-                color={
-                  isFocused
-                    ? (isDarkMode ? '#161616' : '#FFFFFF')
-                    : (isDarkMode ? '#ABABAB' : '#1E293B')
-                }
-              />
+              {route.name === 'AICompanion' ? (
+                <Image
+                  source={require('../../assets/dr_red_ai_icon.png')}
+                  accessibilityLabel="Dr. Red AI"
+                  resizeMode="cover"
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    borderWidth: 1.5,
+                    borderColor: isDarkMode ? '#BFC5C4' : '#FFFFFF',
+                    opacity: isFocused ? 1 : 0.95,
+                  }}
+                />
+              ) : (
+                <Ionicons
+                  name={iconName}
+                  size={21}
+                  color={
+                    isFocused
+                      ? (isDarkMode ? '#161616' : '#FFFFFF')
+                      : (isDarkMode ? '#ABABAB' : '#1E293B')
+                  }
+                />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -159,14 +175,6 @@ export default function MainTabNavigator({
           )}
         </Tab.Screen>
 
-        <Tab.Screen
-          name="AICompanion"
-          component={AIAssistantScreen}
-          options={{
-            tabBarStyle: { display: 'none' },
-          }}
-        />
-
         <Tab.Screen name="Learn" component={LearnScreen} />
 
         <Tab.Screen name="Clinics">
@@ -187,6 +195,14 @@ export default function MainTabNavigator({
             />
           )}
         </Tab.Screen>
+
+        <Tab.Screen
+          name="AICompanion"
+          component={AIAssistantScreen}
+          options={{
+            tabBarStyle: { display: 'none' },
+          }}
+        />
       </Tab.Navigator>
     </View>
   );

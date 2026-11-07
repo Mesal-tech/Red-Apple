@@ -83,7 +83,7 @@ Then start the API:
 npm run dev
 ```
 
-The API listens on port `5000` by default. Check that it is responding at [http://localhost:5000/health](http://localhost:5000/health).
+The API listens on port `5001` by default. Check that it is responding at [http://localhost:5001/health](http://localhost:5001/health).
 
 ### 2. Start the mobile app
 
@@ -101,9 +101,9 @@ During Expo development, the API client derives the backend host from the Metro 
 
 | Client | Example URL |
 | --- | --- |
-| Android emulator | `http://10.0.2.2:5000/api` |
-| iOS simulator | `http://localhost:5000/api` |
-| Physical device | `http://<computer-lan-ip>:5000/api` |
+| Android emulator | `http://10.0.2.2:5001/api` |
+| iOS simulator | `http://localhost:5001/api` |
+| Physical device | `http://<computer-lan-ip>:5001/api` |
 
 For a physical device, the phone and computer must be on the same network, and the computer firewall must allow the API port.
 
@@ -129,7 +129,7 @@ npm ci
 npm run dev
 ```
 
-Vite prints the dashboard URL. The development server proxies `/api` requests to `http://localhost:5000`; start the backend first for API-backed features. If the landing site is already using port 5173, Vite will choose another available port or you can pass one explicitly, for example `npm run dev -- --port 5174`.
+Vite prints the dashboard URL. The development server proxies `/api` requests to `http://localhost:5001`; start the backend first for API-backed features. If the landing site is already using port 5173, Vite will choose another available port or you can pass one explicitly, for example `npm run dev -- --port 5174`.
 
 ## Environment configuration
 
@@ -141,7 +141,7 @@ Keep local credentials in ignored `.env` files. Never commit real keys, password
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | PostgreSQL connection used by the API |
 | `DIRECT_URL` | For Prisma CLI when using a pooler | Direct PostgreSQL connection for migrations; falls back to `DATABASE_URL` |
-| `PORT` | No | API port; defaults to `5000` |
+| `PORT` | No | API port; defaults to `5001` |
 | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Yes for deployed environments | Signing keys; replace all example values with unique, strong secrets |
 | `GEMINI_API_KEY` | For AI features | Gemini API access for the health assistant |
 | `STREAM_API_KEY`, `STREAM_API_SECRET` | For telemedicine | Stream video credentials |
@@ -199,7 +199,7 @@ The mobile package currently does not define an npm `test` or `lint` script. Che
 
 ## API overview
 
-The API is served from `http://localhost:5000` by default. The health check is `GET /health`. Main route groups are mounted under `/api`:
+The API is served from `http://localhost:5001` by default. The health check is `GET /health`. Main route groups are mounted under `/api`:
 
 | Route prefix | Area |
 | --- | --- |

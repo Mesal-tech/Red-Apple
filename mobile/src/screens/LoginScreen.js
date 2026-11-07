@@ -165,8 +165,6 @@ export default function LoginScreen({ onBack, onNavigateSignUp, onLoginSuccess, 
               >
                 <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
               </TouchableOpacity>
-
-              <Text className="ml-3 text-xs font-bold uppercase tracking-[2px]" style={{ color: theme.textMuted }}>Red Apple Health</Text>
             </View>
 
             {/* Header Identity */}
