@@ -347,13 +347,14 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response, ne
       return res.status(401).json({ success: false, error: 'Authentication required.' });
     }
 
-    const { name, phone, pregnancy_mode, health_profile, date_of_birth } = req.body;
+    const { name, phone, pregnancy_mode, health_profile, date_of_birth, avatar_url } = req.body;
 
     const updates: any = {};
     if (typeof name === 'string') updates.name = name.trim();
     if (typeof phone === 'string') updates.phone = phone.trim();
     if (typeof pregnancy_mode === 'boolean') updates.pregnancy_mode = pregnancy_mode;
     if (typeof date_of_birth === 'string') updates.date_of_birth = date_of_birth;
+    if (typeof avatar_url === 'string') updates.avatar_url = avatar_url;
     if (health_profile && typeof health_profile === 'object') updates.health_profile = health_profile;
 
     try {

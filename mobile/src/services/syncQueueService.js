@@ -175,6 +175,16 @@ class SyncQueueService {
   }
 
   /**
+   * Clears all pending mutations from offline queue.
+   */
+  async clearQueue() {
+    try {
+      await AsyncStorage.removeItem(QUEUE_STORAGE_KEY);
+      this.notifyListeners({ type: 'QUEUE_CLEARED' });
+    } catch (e) {}
+  }
+
+  /**
    * Returns current count of pending offline changes.
    */
   async getPendingCount() {

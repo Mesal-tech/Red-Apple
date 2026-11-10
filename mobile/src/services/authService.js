@@ -2,6 +2,7 @@ import {
   getAuthSessionSafe,
   saveAuthSessionSafe,
   clearAuthSessionSafe,
+  clearAppSessionSafe,
 } from '../utils/storage';
 import { apiRequest } from './apiClient';
 
@@ -20,10 +21,10 @@ export async function getStoredSession() {
 }
 
 /**
- * Completely wipe stored credentials on sign-out or session expiry.
+ * Completely wipe stored credentials and cached data on sign-out or session expiry.
  */
 export async function clearStoredSession() {
-  await clearAuthSessionSafe();
+  await clearAppSessionSafe();
 }
 
 /**
@@ -214,7 +215,9 @@ export async function logoutUser() {
 
 /** Permanently delete the authenticated account and clear its local credentials. */
 export async function deleteAccountUser() {
-  const result = await apiRequest('/auth/account', { method: 'DELETE' });
-  await clearStoredSession();
-  return result;
+  try {
+    return await apiRequest('/auth/account', { method: 'DELETE' });
+  } finally {
+    await clearStoredSession();
+  }
 }

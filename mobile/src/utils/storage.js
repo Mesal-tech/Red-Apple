@@ -21,6 +21,8 @@ let inMemorySession = {
   healthProfile: null,
   healthMode: null,
   cycleLogs: [],
+  streakData: null,
+  profileMetrics: null,
 };
 
 /* ================= AUTH STORAGE ================= */
@@ -138,23 +140,56 @@ export async function saveOnboardingStatusSafe() {
 }
 
 export async function clearAppSessionSafe() {
-  await clearAuthSessionSafe();
   inMemorySession.privacyAccepted = false;
   inMemorySession.onboardingCompleted = false;
+  inMemorySession.accessToken = null;
+  inMemorySession.refreshToken = null;
+  inMemorySession.user = null;
+  inMemorySession.postmenopauseData = null;
   inMemorySession.healthProfile = null;
   inMemorySession.healthMode = null;
-  inMemorySession.postmenopauseData = null;
   inMemorySession.cycleLogs = [];
+  inMemorySession.streakData = null;
+  inMemorySession.profileMetrics = null;
+
   try {
-    await Promise.all([
-      AsyncStorage.removeItem(PRIVACY_KEY),
-      AsyncStorage.removeItem(ONBOARDING_KEY),
-      AsyncStorage.removeItem(POSTMENOPAUSE_DATA_KEY),
-      AsyncStorage.removeItem(HEALTH_PROFILE_KEY),
-      AsyncStorage.removeItem(HEALTH_MODE_KEY),
-      AsyncStorage.removeItem(CYCLE_LOGS_KEY),
-    ]);
-  } catch (e) {}
+    const allKeys = await AsyncStorage.getAllKeys();
+    // Keep device-level preferences like theme; wipe all user-specific data and caches
+    const keysToRemove = allKeys.filter((k) => k !== '@red_apple_theme_preference');
+    if (keysToRemove.length > 0) {
+      await AsyncStorage.multiRemove(keysToRemove);
+    }
+  } catch (e) {
+    try {
+      await Promise.allSettled([
+        AsyncStorage.removeItem(ACCESS_TOKEN_KEY),
+        AsyncStorage.removeItem(REFRESH_TOKEN_KEY),
+        AsyncStorage.removeItem(USER_DATA_KEY),
+        AsyncStorage.removeItem(PRIVACY_KEY),
+        AsyncStorage.removeItem(ONBOARDING_KEY),
+        AsyncStorage.removeItem(POSTMENOPAUSE_DATA_KEY),
+        AsyncStorage.removeItem(HEALTH_PROFILE_KEY),
+        AsyncStorage.removeItem(HEALTH_MODE_KEY),
+        AsyncStorage.removeItem(CYCLE_LOGS_KEY),
+        AsyncStorage.removeItem(STREAK_DATA_KEY),
+        AsyncStorage.removeItem(PROFILE_METRICS_KEY),
+        AsyncStorage.removeItem('@redapple_app_lock_pin'),
+        AsyncStorage.removeItem('@redapple_offline_mutation_queue'),
+        AsyncStorage.removeItem('@red_apple_partner_sync'),
+        AsyncStorage.removeItem('@redapple_notification_settings'),
+        AsyncStorage.removeItem('@redapple_inapp_notifications'),
+        AsyncStorage.removeItem('@redapple_push_token'),
+      ]);
+    } catch (err) {}
+  }
+
+  // Cancel any scheduled push or local notifications
+  try {
+    const Notifications = require('expo-notifications');
+    if (Notifications && typeof Notifications.cancelAllScheduledNotificationsAsync === 'function') {
+      await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+    }
+  } catch (notifErr) {}
 }
 
 export async function getPostmenopauseDataSafe() {

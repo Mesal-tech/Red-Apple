@@ -29,7 +29,7 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess,
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [agreeTerms, setAgreeTerms] = useState(true);
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -318,16 +318,34 @@ export default function SignUpScreen({ onBack, onNavigateLogin, onSignUpSuccess,
             <TouchableOpacity
               activeOpacity={0.88}
               className="h-[62px] rounded-full items-center justify-center mt-6 mb-5"
-              style={{ backgroundColor: isDark ? '#A52B39' : '#101B1A' }}
+              style={{
+                backgroundColor: !agreeTerms
+                  ? (isDark ? '#3A4742' : '#D1D5DB')
+                  : (isDark ? '#A52B39' : '#101B1A'),
+                opacity: !agreeTerms ? 0.6 : 1,
+              }}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={loading || !agreeTerms}
             >
               {loading ? (
                 <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#FFFFFF" size="small" /></View>
               ) : (
                 <>
                   <Text className="text-base font-bold text-white">Create Account</Text>
-                  <View className="absolute right-1.5 h-[49px] w-[49px] items-center justify-center rounded-full" style={{ backgroundColor: isDark ? '#DCEAE5' : '#FFFFFF' }}><Ionicons name="arrow-forward" size={19} color="#101B1A" /></View>
+                  <View
+                    className="absolute right-1.5 h-[49px] w-[49px] items-center justify-center rounded-full"
+                    style={{
+                      backgroundColor: !agreeTerms
+                        ? (isDark ? '#26302C' : '#E5E7EB')
+                        : (isDark ? '#DCEAE5' : '#FFFFFF'),
+                    }}
+                  >
+                    <Ionicons
+                      name="arrow-forward"
+                      size={19}
+                      color={!agreeTerms ? (isDark ? '#6B7280' : '#9CA3AF') : '#101B1A'}
+                    />
+                  </View>
                 </>
               )}
             </TouchableOpacity>

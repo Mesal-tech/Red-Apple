@@ -31,6 +31,7 @@ import CycleCalendarScreen from '../screens/CycleCalendarScreen';
 import AIAssistantScreen from '../screens/AIAssistantScreen';
 import PrivacyPolicyDetailScreen from '../screens/PrivacyPolicyDetailScreen';
 import TermsOfUseDetailScreen from '../screens/TermsOfUseDetailScreen';
+import AppearanceScreen from '../screens/AppearanceScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -40,7 +41,7 @@ const Stack = createNativeStackNavigator();
  */
 function isUserOnboarded(user) {
   if (!user) return false;
-  if (user.role === 'doctor' || user.email === 'mesalokubor63@gmail.com') return true;
+  if (user.role === 'doctor' || user.email === '') return true;
   if (user.health_profile?.completedAt) return true;
   if (user.health_profile?.stage) return true;
   if (user.pregnancy_mode === true) return true;
@@ -111,6 +112,7 @@ function AuthenticatedAppStack({
 
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyDetailScreen} />
       <Stack.Screen name="TermsOfUse" component={TermsOfUseDetailScreen} />
+      <Stack.Screen name="Appearance" component={AppearanceScreen} />
     </Stack.Navigator>
   );
 }
@@ -205,7 +207,7 @@ function MainNavigation() {
     };
   }, []);
 
-  const isDoctor = user?.role === 'doctor' || user?.email === 'mesalokubor63@gmail.com';
+  const isDoctor = user?.role === 'doctor' || user?.email === '';
 
   const hasOnboarded = setupCompletedOverride !== null
     ? setupCompletedOverride
@@ -229,7 +231,7 @@ function MainNavigation() {
         if (pin) {
           setIsAppLocked(true);
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     checkPinLock();
@@ -253,6 +255,12 @@ function MainNavigation() {
           setLocalMode(storedMode);
         }
       });
+    } else {
+      setLocalMode(null);
+      setLocalOnboarded(false);
+      setSetupCompletedOverride(null);
+      setIsAppLocked(false);
+      setPreviewPatientMode(false);
     }
   }, [isAuthenticated, user?.health_profile?.stage, user?.pregnancy_mode]);
 
@@ -306,9 +314,9 @@ function MainNavigation() {
                   }
                 }
               })
-              .catch(() => {});
+              .catch(() => { });
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -334,6 +342,8 @@ function MainNavigation() {
   const handleSignOut = async () => {
     setSetupCompletedOverride(null);
     setLocalMode(null);
+    setLocalOnboarded(false);
+    setIsAppLocked(false);
     setPreviewPatientMode(false);
     await logout();
     await clearAppSessionSafe();

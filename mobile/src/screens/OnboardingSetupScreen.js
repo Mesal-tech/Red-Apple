@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Text,
   View,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -152,6 +153,51 @@ function getPregnancyDateBounds(calcMethod, today) {
     defaultDate: new Date(now - 42 * ONE_DAY), // ~6 weeks ago
   };
 }
+
+const AVATAR_PRESETS = [
+  {
+    id: 'avatar_1',
+    url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
+    label: 'Alison',
+  },
+  {
+    id: 'avatar_2',
+    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+    label: 'Maya',
+  },
+  {
+    id: 'avatar_3',
+    url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
+    label: 'Zara',
+  },
+  {
+    id: 'avatar_4',
+    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
+    label: 'Amara',
+  },
+  {
+    id: 'avatar_5',
+    url: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=300&q=80',
+    label: 'Chloe',
+  },
+  {
+    id: 'avatar_6',
+    url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=300&q=80',
+    label: 'Leila',
+  },
+  {
+    id: 'avatar_7',
+    url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=300&q=80',
+    label: 'Elena',
+  },
+  {
+    id: 'avatar_8',
+    url: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&w=300&q=80',
+    label: 'Nia',
+  },
+];
+
+const AGES_LIST = Array.from({ length: 73 }, (_, i) => i + 13); // 13 to 85
 
 /* ================= CONSTRAINED DATE WHEEL PICKER ================= */
 function ConstrainedDateWheelPicker({
@@ -522,13 +568,40 @@ export default function OnboardingSetupScreen({
   initialStage,
   isChangingMode = false,
 }) {
-  const { updateProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { showError, showSuccess } = useToast();
   const { theme, isDarkMode } = useTheme();
 
-  // Step 1: Life Stage
+  // Step 1: Username
+  const initialUsername = useMemo(() => {
+    if (user?.name && !user.name.includes('@')) {
+      return user.name;
+    }
+    return '';
+  }, [user?.name]);
+  const [username, setUsername] = useState(initialUsername);
+
+  // Step 2: Avatar
+  const [selectedAvatar, setSelectedAvatar] = useState(user?.avatar_url || AVATAR_PRESETS[0].url);
+
+  // Step 3: Age
+  const initialAge = useMemo(() => {
+    if (user?.health_profile?.age) return Number(user.health_profile.age);
+    if (user?.date_of_birth) {
+      try {
+        const birthDate = new Date(user.date_of_birth);
+        const ageDiffMs = Date.now() - birthDate.getTime();
+        const calculatedAge = Math.abs(new Date(ageDiffMs).getUTCFullYear() - 1970);
+        if (!isNaN(calculatedAge) && calculatedAge >= 13 && calculatedAge <= 85) return calculatedAge;
+      } catch {}
+    }
+    return 26;
+  }, [user?.health_profile?.age, user?.date_of_birth]);
+  const [selectedAge, setSelectedAge] = useState(initialAge);
+
+  // Step 4: Life Stage
   const [selectedStage, setSelectedStage] = useState(initialStage || 'cycle');
-  const [step, setStep] = useState(isChangingMode && initialStage ? 2 : 1);
+  const [step, setStep] = useState(isChangingMode && initialStage ? 4 : 1);
   const [submitting, setSubmitting] = useState(false);
 
   // Branch A: Cycle / TTC
@@ -565,7 +638,7 @@ export default function OnboardingSetupScreen({
   const [postPriorities, setPostPriorities] = useState(['bone_density', 'cardio']);
   const [hrtStatus, setHrtStatus] = useState('considering');
 
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 8;
 
   const togglePeriSymptom = (id) => {
     setPeriSymptoms((prev) =>
@@ -580,6 +653,12 @@ export default function OnboardingSetupScreen({
   };
 
   const handleNextStep = async () => {
+    if (step === 1 && !isChangingMode) {
+      if (!username.trim() || username.trim().length < 2) {
+        showError('Please enter a username (at least 2 characters).');
+        return;
+      }
+    }
     if (step < TOTAL_STEPS) {
       setStep(step + 1);
     } else {
@@ -588,7 +667,8 @@ export default function OnboardingSetupScreen({
   };
 
   const handlePrevStep = () => {
-    if (step > 1) {
+    const minStep = isChangingMode && initialStage ? 4 : 1;
+    if (step > minStep) {
       setStep(step - 1);
     } else {
       onBack();
@@ -603,6 +683,8 @@ export default function OnboardingSetupScreen({
 
       const healthProfile = {
         stage: selectedStage,
+        age: selectedAge,
+        avatarUrl: selectedAvatar,
         completedAt: new Date().toISOString(),
         cycleLength: cycleDays,
         periodDuration: periodDays,
@@ -634,6 +716,8 @@ export default function OnboardingSetupScreen({
       // Sync backend
       try {
         await updateProfile({
+          name: username?.trim() || undefined,
+          avatar_url: selectedAvatar || undefined,
           pregnancy_mode: selectedStage === 'pregnancy',
           health_profile: healthProfile,
         });
@@ -669,8 +753,15 @@ export default function OnboardingSetupScreen({
       <SafeAreaView className="flex-1 bg-transparent" edges={['top', 'left', 'right', 'bottom']}>
         {/* HEADER: BACK, PROGRESS, CLOSE */}
         <View className="flex-row items-center justify-between px-6 pt-2 pb-2">
+          {step > (isChangingMode && initialStage ? 4 : 1) ? (
+            <TouchableOpacity onPress={handlePrevStep} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 24 }} />
+          )}
           <View className="flex-1 flex-row items-center justify-center mx-3 gap-1.5">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {Array.from({ length: TOTAL_STEPS }, (_, idx) => idx + 1).map((i) => (
               <View
                 key={i}
                 className="flex-1 h-[5px] rounded-full"
@@ -678,12 +769,174 @@ export default function OnboardingSetupScreen({
               />
             ))}
           </View>
+          <View style={{ width: 24 }} />
         </View>
 
         {/* SCROLLABLE MAIN CONTENT */}
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-          {/* ================= STEP 1: PRIMARY GOAL ================= */}
+          {/* ================= STEP 1: USERNAME ================= */}
           {step === 1 && (
+            <View className="w-full">
+              <StaggerItem delay={0}>
+                <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>What should we call you?</Text>
+              </StaggerItem>
+              <StaggerItem delay={50}>
+                <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>
+                  Choose a username or preferred name to personalize your experience across Red Apple.
+                </Text>
+              </StaggerItem>
+
+              <StaggerItem delay={110}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    height: 58,
+                    backgroundColor: theme.inputBg,
+                    borderRadius: 24,
+                    borderWidth: 1,
+                    borderColor: isDarkMode ? theme.inputBorder : '#D7DCE0',
+                    paddingHorizontal: 18,
+                  }}
+                >
+                  <Ionicons name="person-outline" size={20} color={isDarkMode ? '#A8D0C3' : '#173D36'} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 16, color: theme.textPrimary, fontWeight: '600', marginLeft: 12 }}
+                    placeholder="Enter your username"
+                    placeholderTextColor={theme.textMuted}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    value={username}
+                    onChangeText={setUsername}
+                    returnKeyType="done"
+                    onSubmitEditing={handleNextStep}
+                  />
+                </View>
+              </StaggerItem>
+            </View>
+          )}
+
+          {/* ================= STEP 2: AVATAR ================= */}
+          {step === 2 && (
+            <View className="w-full items-center">
+              <StaggerItem delay={0} style={{ width: '100%' }}>
+                <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>
+                  Choose your avatar
+                </Text>
+              </StaggerItem>
+              <StaggerItem delay={50} style={{ width: '100%' }}>
+                <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>
+                  Pick an avatar that represents you across Red Apple.
+                </Text>
+              </StaggerItem>
+
+              {/* Large Selected Preview */}
+              <StaggerItem delay={100} style={{ alignItems: 'center', marginBottom: 24 }}>
+                <View
+                  style={{
+                    width: 104,
+                    height: 104,
+                    borderRadius: 52,
+                    borderWidth: 3,
+                    borderColor: isDarkMode ? '#A52B39' : '#173D36',
+                    overflow: 'hidden',
+                    backgroundColor: theme.inputBg,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                >
+                  <Image
+                    source={{ uri: selectedAvatar }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                </View>
+              </StaggerItem>
+
+              {/* Avatar Grid */}
+              <View className="flex-row flex-wrap justify-between w-full" style={{ gap: 14 }}>
+                {AVATAR_PRESETS.map((item, idx) => {
+                  const isSelected = item.url === selectedAvatar;
+                  return (
+                    <StaggerItem key={item.id} delay={120 + idx * 25} style={{ width: '22%', aspectRatio: 1 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setSelectedAvatar(item.url)}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: 999,
+                          borderWidth: isSelected ? 3 : 1.5,
+                          borderColor: isSelected
+                            ? (isDarkMode ? '#A52B39' : '#173D36')
+                            : (isDarkMode ? theme.cardBorder : '#E5E7EB'),
+                          overflow: 'hidden',
+                          backgroundColor: theme.inputBg,
+                          position: 'relative',
+                        }}
+                      >
+                        <Image
+                          source={{ uri: item.url }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                        {isSelected && (
+                          <View
+                            style={{
+                              position: 'absolute',
+                              right: 2,
+                              bottom: 2,
+                              width: 18,
+                              height: 18,
+                              borderRadius: 9,
+                              backgroundColor: isDarkMode ? '#A52B39' : '#173D36',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderWidth: 1.5,
+                              borderColor: '#FFFFFF',
+                            }}
+                          >
+                            <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </StaggerItem>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* ================= STEP 3: AGE ================= */}
+          {step === 3 && (
+            <View className="w-full">
+              <StaggerItem delay={0}>
+                <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>
+                  How old are you?
+                </Text>
+              </StaggerItem>
+              <StaggerItem delay={50}>
+                <Text className="text-base leading-6 mb-6" style={{ color: theme.textSecondary }}>
+                  Your age helps us tailor hormonal patterns, cycle forecasts, and personalized health recommendations.
+                </Text>
+              </StaggerItem>
+
+              <StaggerItem delay={110}>
+                <SingleWheelPickerCard
+                  items={AGES_LIST}
+                  selectedValue={selectedAge}
+                  onSelect={setSelectedAge}
+                  unitText="years"
+                />
+              </StaggerItem>
+            </View>
+          )}
+
+          {/* ================= STEP 4: PRIMARY GOAL ================= */}
+          {step === 4 && (
             <View className="w-full">
               <StaggerItem delay={0}>
                 <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>What is your current primary goal?</Text>
@@ -747,7 +1000,7 @@ export default function OnboardingSetupScreen({
           {/* ================= BRANCH A: CYCLE & TTC ================= */}
           {(selectedStage === 'cycle' || selectedStage === 'ttc') && (
             <>
-              {step === 2 && (
+              {step === 5 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How many days does your period usually last?</Text>
@@ -767,7 +1020,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 3 && (
+              {step === 6 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How many days does your cycle usually last?</Text>
@@ -789,7 +1042,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 4 && (
+              {step === 7 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>When did your last period start?</Text>
@@ -809,7 +1062,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 5 && (
+              {step === 8 && (
                 <View className="w-full">
                   <CompletionStep stage={selectedStage} />
                 </View>
@@ -820,7 +1073,7 @@ export default function OnboardingSetupScreen({
           {/* ================= BRANCH B: PREGNANCY ================= */}
           {selectedStage === 'pregnancy' && (
             <>
-              {step === 2 && (
+              {step === 5 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How would you like to calculate your pregnancy?</Text>
@@ -866,7 +1119,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 3 && (
+              {step === 6 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>
@@ -894,7 +1147,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 4 && (
+              {step === 7 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Tell us about your baby</Text>
@@ -958,7 +1211,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 5 && (
+              {step === 8 && (
                 <View className="w-full">
                   <CompletionStep stage="pregnancy" />
                 </View>
@@ -969,7 +1222,7 @@ export default function OnboardingSetupScreen({
           {/* ================= BRANCH C: PERIMENOPAUSE ================= */}
           {selectedStage === 'perimenopause' && (
             <>
-              {step === 2 && (
+              {step === 5 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>How are your periods shifting?</Text>
@@ -1015,7 +1268,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 3 && (
+              {step === 6 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Which symptoms are you noticing most?</Text>
@@ -1077,7 +1330,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 4 && (
+              {step === 7 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>When did these shifts begin?</Text>
@@ -1123,7 +1376,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 5 && (
+              {step === 8 && (
                 <View className="w-full">
                   <CompletionStep stage="perimenopause" />
                 </View>
@@ -1134,7 +1387,7 @@ export default function OnboardingSetupScreen({
           {/* ================= BRANCH D: POSTMENOPAUSE ================= */}
           {selectedStage === 'postmenopause' && (
             <>
-              {step === 2 && (
+              {step === 5 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Time since your last period?</Text>
@@ -1180,7 +1433,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 3 && (
+              {step === 6 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Top wellness priorities?</Text>
@@ -1242,7 +1495,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 4 && (
+              {step === 7 && (
                 <View className="w-full">
                   <StaggerItem delay={0}>
                     <Text className="text-[32px] font-extrabold leading-[38px] tracking-tight mb-2" style={{ color: theme.textPrimary }}>Hormone Therapy (HRT)</Text>
@@ -1281,7 +1534,7 @@ export default function OnboardingSetupScreen({
                 </View>
               )}
 
-              {step === 5 && (
+              {step === 8 && (
                 <View className="w-full">
                   <CompletionStep stage="postmenopause" />
                 </View>
@@ -1309,7 +1562,7 @@ export default function OnboardingSetupScreen({
             {!submitting && <View className="absolute right-1.5 h-[49px] w-[49px] items-center justify-center rounded-full" style={{ backgroundColor: isDarkMode ? '#DCEAE5' : '#FFFFFF' }}><Ionicons name="arrow-forward" size={19} color="#101B1A" /></View>}
           </TouchableOpacity>
 
-          {step > 1 && step < TOTAL_STEPS && (
+          {step > 4 && step < TOTAL_STEPS && (
             <TouchableOpacity activeOpacity={0.7} className="py-2 items-center justify-center" onPress={handleNextStep}>
               <Text className="text-sm font-semibold" style={{ color: theme.textSecondary }}>I'm not sure, skip this</Text>
             </TouchableOpacity>

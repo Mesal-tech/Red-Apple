@@ -80,6 +80,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     setAuthError(null);
     try {
+      await clearAppSessionSafe();
       const response = await loginWithEmail(email, password);
       await getActiveHealthModeSafe();
       setUser(response.user);
@@ -137,6 +138,7 @@ export function AuthProvider({ children }) {
   const loginGoogle = async (idToken) => {
     setAuthError(null);
     try {
+      await clearAppSessionSafe();
       const response = await loginWithGoogle(idToken);
       await getActiveHealthModeSafe();
       setUser(response.user);
@@ -154,6 +156,7 @@ export function AuthProvider({ children }) {
   const loginApple = async (identityToken, fullName = null) => {
     setAuthError(null);
     try {
+      await clearAppSessionSafe();
       const response = await loginWithApple(identityToken, fullName);
       await getActiveHealthModeSafe();
       setUser(response.user);
@@ -173,6 +176,7 @@ export function AuthProvider({ children }) {
       await logoutUser();
     } finally {
       clearGoogleAuthSession();
+      await clearAppSessionSafe();
       setUser(null);
       setAccessToken(null);
       setAuthError(null);
@@ -180,7 +184,15 @@ export function AuthProvider({ children }) {
   };
 
   const deleteAccount = async () => {
-    return deleteAccountUser();
+    try {
+      return await deleteAccountUser();
+    } finally {
+      clearGoogleAuthSession();
+      await clearAppSessionSafe();
+      setUser(null);
+      setAccessToken(null);
+      setAuthError(null);
+    }
   };
 
   /**

@@ -23,6 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ConfirmationModal from '../components/ConfirmationModal';
+import AppearanceScreen from './AppearanceScreen';
 import notificationService from '../services/notificationService';
 import { clearAppSessionSafe, getStoredProfileMetricsSafe, getHealthProfileSafe } from '../utils/storage';
 
@@ -110,8 +111,10 @@ export default function ProfileSettingsSection({
   embedded = true,
 }) {
   const { user, logout, deleteAccount } = useAuth();
-  const { isDarkMode, setDarkMode, theme } = useTheme();
+  const { isDarkMode, setDarkMode, theme, themeMode, useSystemTheme, setUseSystemTheme } = useTheme();
   const darkMode = isDarkMode;
+
+  const [showAppearanceModal, setShowAppearanceModal] = useState(false);
 
   let toast = null;
   try {
@@ -191,10 +194,6 @@ export default function ProfileSettingsSection({
     }
     loadSettings();
   }, []);
-
-  const handleToggleDarkMode = (val) => {
-    setDarkMode(val);
-  };
 
   const handleToggleNotification = async (key, val, setter) => {
     setter(val);
@@ -301,8 +300,8 @@ export default function ProfileSettingsSection({
 
   const handleConfirmDeleteAccount = async () => {
     try {
-      await deleteAccount();
       setShowDeleteModal(false);
+      await deleteAccount();
       if (onSignOut) {
         await onSignOut();
       } else {
@@ -555,31 +554,41 @@ export default function ProfileSettingsSection({
 
           <View style={{ height: 1, backgroundColor: theme.divider, marginLeft: 60 }} />
 
-          {/* Dark mode */}
-          <View
+          {/* Appearance */}
+          <TouchableOpacity
+            activeOpacity={0.7}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingVertical: 13,
+              paddingVertical: 14,
               paddingHorizontal: 18,
             }}
+            onPress={() => {
+              if (navigation?.navigate) {
+                navigation.navigate('Appearance');
+              } else {
+                setShowAppearanceModal(true);
+              }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open appearance settings"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ width: 28, alignItems: 'center' }}>
-                <Ionicons name="moon" size={20} color={isDarkMode ? '#38BDF8' : '#1F2937'} />
+                <Ionicons name="color-palette-outline" size={20} color={isDarkMode ? '#38BDF8' : '#DC2626'} />
               </View>
               <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginLeft: 14 }}>
-                Dark mode
+                Appearance
               </Text>
             </View>
-            <Switch
-              value={isDarkMode}
-              onValueChange={handleToggleDarkMode}
-              trackColor={{ false: '#E2E8F0', true: colors.primary }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 13, color: theme.textSecondary, textTransform: 'capitalize' }}>
+                {themeMode === 'system' ? 'System' : themeMode === 'dark' ? 'Dark' : 'Light'}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Section 3: Support & Account */}
@@ -1455,6 +1464,17 @@ export default function ProfileSettingsSection({
             </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* APPEARANCE MODAL */}
+      <Modal
+        visible={showAppearanceModal}
+        transparent={false}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowAppearanceModal(false)}
+      >
+        <AppearanceScreen onBack={() => setShowAppearanceModal(false)} />
       </Modal>
 
       {/* 7. LOG OUT CONFIRMATION MODAL */}
