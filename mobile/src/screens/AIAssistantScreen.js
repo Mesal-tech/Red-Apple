@@ -65,6 +65,8 @@ export default function AIAssistantScreen({ navigation, route, healthContext = {
   const { user } = useAuth();
   const { isDarkMode, theme } = useTheme();
   const [messages, setMessages] = useState([]);
+  const [chatRestored, setChatRestored] = useState(false);
+  const handledEntrySeed = useRef(null);
   const [inputText, setInputText] = useState('');
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -91,11 +93,25 @@ export default function AIAssistantScreen({ navigation, route, healthContext = {
           scrollViewRef.current?.scrollToEnd({ animated: false });
         }, 120);
       }
-    });
+    }).finally(() => { if (isMounted) setChatRestored(true); });
     return () => {
       isMounted = false;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    const seed = route?.params?.entrySeed;
+    if (!chatRestored || !seed || handledEntrySeed.current === seed) return;
+    const openings = {
+      gentle_checkin: { content: 'Hey, I’m here if you’d like a gentle check-in.', replies: ['I’m doing okay', 'I have a question', 'Just looking around'] },
+      playful_checkin: { content: 'Dr. Red reporting in 🍎 Want a quick check-in?', replies: ['Let’s do it', 'I have a question', 'Maybe later'] },
+      streak_win: { content: 'Nice to see you back. What would feel helpful today?', replies: ['A quick check-in', 'Ask Dr. Red', 'Explore the app'] },
+    };
+    const opening = openings[seed] || openings.gentle_checkin;
+    handledEntrySeed.current = seed;
+    setMessages((current) => [...current, { id: `entry_${Date.now()}`, role: 'assistant', content: opening.content, suggestedQuickReplies: opening.replies }]);
+    navigation?.setParams?.({ entrySeed: undefined });
+  }, [chatRestored, route?.params?.entrySeed, navigation]);
 
   useEffect(() => {
     let isMounted = true;

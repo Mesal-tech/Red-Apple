@@ -24,6 +24,7 @@ import AppBottomSheet from '../components/AppBottomSheet';
 import ConfirmationModal from '../components/ConfirmationModal';
 import AppointmentsListModal from './AppointmentsListModal';
 import StreamVideoCallModal from './StreamVideoCallModal';
+import DoctorRedVoiceModal from '../components/DoctorRedVoiceModal';
 import PaystackCheckoutModal from '../components/PaystackCheckoutModal';
 import { initializeConsultationPayment } from '../services/paymentService';
 import * as telemedService from '../services/telemedicineService';
@@ -205,6 +206,8 @@ export default function DoctorCareScreen({
   const [showAppointmentsModal, setShowAppointmentsModal] = useState(false);
   const [activeVideoCallBooking, setActiveVideoCallBooking] = useState(null);
   const [showVideoCallModal, setShowVideoCallModal] = useState(false);
+  const [showDoctorRedVideoCallModal, setShowDoctorRedVideoCallModal] = useState(false);
+  const [doctorRedCallMessages, setDoctorRedCallMessages] = useState([]);
 
   // Dynamic 7-day horizontal date strip
   const upcomingDateStrip = useMemo(() => {
@@ -848,27 +851,38 @@ export default function DoctorCareScreen({
                   Talk with Dr. Red
                 </Text>
                 <Text className="text-sm font-semibold mt-0.5" style={{ color: isDarkMode ? '#C7B9D2' : '#4B3C5C' }} numberOfLines={2}>
-                  Your AI health companion is here to help.
+                  Talk by voice with an audio-reactive orb. No camera needed.
                 </Text>
               </View>
               <View
                 className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
                 style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.8)' }}
               >
-                <View className="w-2 h-2 rounded-full bg-emerald-500" />
-                <Text className="text-xs font-bold" style={{ color: isDarkMode ? '#FFFFFF' : '#1F2937' }}>Ready</Text>
+                <View className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8B5CF6' }} />
+                <Text className="text-xs font-bold" style={{ color: isDarkMode ? '#FFFFFF' : '#1F2937' }}>Voice call</Text>
               </View>
             </View>
             <TouchableOpacity
               activeOpacity={0.88}
               className="w-full h-12 rounded-full items-center justify-center flex-row"
               style={{ backgroundColor: '#584988' }}
+              onPress={() => setShowDoctorRedVideoCallModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Start a voice call with Dr. Red"
+            >
+              <Ionicons name="radio" size={17} color="#FFFFFF" />
+              <Text className="text-sm font-extrabold text-white ml-2">Start voice call</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.88}
+              className="w-full h-11 rounded-full items-center justify-center flex-row mt-2"
+              style={{ backgroundColor: isDarkMode ? '#382A46' : 'rgba(255,255,255,0.72)' }}
               onPress={onOpenAIAssistant}
               accessibilityRole="button"
-              accessibilityLabel="Talk with Dr. Red"
+              accessibilityLabel="Open Dr. Red chat"
             >
-              <Ionicons name="chatbubble-ellipses" size={17} color="#FFFFFF" />
-              <Text className="text-sm font-extrabold text-white ml-2">Start a conversation</Text>
+              <Ionicons name="chatbubble-ellipses" size={16} color={isDarkMode ? '#E8D5FF' : '#584988'} />
+              <Text className="text-sm font-extrabold ml-2" style={{ color: isDarkMode ? '#E8D5FF' : '#584988' }}>Continue in chat</Text>
             </TouchableOpacity>
           </View>
 
@@ -1723,6 +1737,38 @@ export default function DoctorCareScreen({
           onClose={() => setShowVideoCallModal(false)}
         />
       )}
+
+      <DoctorRedVoiceModal
+        visible={showDoctorRedVideoCallModal}
+        onClose={() => setShowDoctorRedVideoCallModal(false)}
+        callMode
+        user={user}
+        healthContext={{
+          userName: user?.name || '',
+          activeMode: user?.pregnancy_mode ? 'pregnancy' : (user?.health_profile?.stage || 'cycle'),
+          medicalProfile: {
+            reproductiveGoal: user?.health_profile?.reproductiveGoal || 'track_cycle',
+            birthControl: user?.health_profile?.birthControl || 'None reported',
+            knownConditions: user?.health_profile?.knownConditions || user?.health_profile?.conditions || [],
+            medications: user?.health_profile?.medications || [],
+            allergies: user?.health_profile?.allergies || [],
+            notes: user?.health_profile?.notes || '',
+          },
+          cycle: {
+            currentCycleDay: user?.health_profile?.currentCycleDay,
+            cycleLength: user?.health_profile?.cycleLength,
+            phaseName: user?.health_profile?.phaseName,
+            nextPeriodDate: user?.health_profile?.nextPeriodDate,
+            ovulationDate: user?.health_profile?.ovulationDate,
+          },
+          pregnancy: {
+            week: user?.health_profile?.pregnancyWeek || user?.health_profile?.currentWeek,
+            dueDate: user?.health_profile?.dueDate,
+          },
+        }}
+        messages={doctorRedCallMessages}
+        setMessages={setDoctorRedCallMessages}
+      />
 
       {/* ========================================================================= */}
       {/* MODAL: PAYSTACK TELEMEDICINE CHECKOUT                                     */}

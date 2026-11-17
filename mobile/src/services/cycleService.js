@@ -294,7 +294,6 @@ export const cycleService = {
     try {
       await recordStreakActivity({
         activityType: 'cycle_log',
-        date: newLog.date,
       });
     } catch (_) {}
 

@@ -23,7 +23,7 @@ export async function scheduleLocalNotification(title, body, triggerSeconds = 5,
     body,
     trigger: { seconds },
     data,
-    channelId: data?.type === 'appointment' ? 'appointments' : 'cycle',
+    channelId: data?.type === 'appointment' ? 'appointments' : 'reminders',
   });
 }
 

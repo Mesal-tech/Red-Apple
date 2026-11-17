@@ -2,7 +2,7 @@ import { createExpressApp } from './server';
 
 import { userStore } from './data/user.store';
 
-import { cronWorker } from './services/cronWorker.service';
+import { notificationDispatcher } from './notifications/notification.service';
 import { createServer } from 'http';
 import { attachGeminiLiveProxy } from './services/geminiLiveProxy.service';
 
@@ -15,9 +15,16 @@ if (require.main === module) {
   userStore.init().then(() => {
     server.listen(PORT, () => {
       console.log(`[Express] Red Apple Backend API running on port ${PORT}`);
-      cronWorker.start();
+      notificationDispatcher.start();
     });
   });
+
+  const shutdown = async () => {
+    await notificationDispatcher.stop();
+    server.close(() => process.exit(0));
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 }
 
 export { app };

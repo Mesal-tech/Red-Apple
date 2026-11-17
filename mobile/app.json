@@ -102,6 +102,14 @@
       ],
       "expo-apple-authentication",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Red Apple to use a photo you choose as your profile avatar.",
+          "cameraPermission": "Red Apple needs camera access for HD telemedicine video consultations with certified specialists.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

@@ -15,6 +15,7 @@ import {
 } from '../services/authService';
 import { clearGoogleAuthSession } from '../services/googleAuth';
 import { getActiveHealthModeSafe, clearAppSessionSafe } from '../utils/storage';
+import notificationService from '../services/notificationService';
 
 const AuthContext = createContext(null);
 
@@ -173,6 +174,7 @@ export function AuthProvider({ children }) {
    */
   const logout = async () => {
     try {
+      await notificationService.unregister();
       await logoutUser();
     } finally {
       clearGoogleAuthSession();

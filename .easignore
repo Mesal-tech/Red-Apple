@@ -5,31 +5,87 @@ node_modules/
 dist/
 **/dist/
 web-build/
+coverage/
+**/coverage/
+*.tsbuildinfo
 *.log
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
 .DS_Store
+Thumbs.db
+Desktop.ini
 .env
 *.env
 .env*
 !.env.example
 backend/data/
+.git
 
-# Generated Android build outputs under the Expo app
-mobile/android/.gradle/
-mobile/andriod/.gradle-cache/
-mobile/android/build/
-mobile/android/app/build/
+# EAS builds the mobile package from the monorepo; other projects are not inputs.
+/backend/
+/landing/
+/admin-web/
+/docs/
+/infra/
+/.github/
+/Red Apple pre-seed Pitch (3).pdf
+
+# Local editor and operating-system state
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local caches and generated build output
+.cache/
+**/.cache/
+.turbo/
+**/.turbo/
+.gradle/
+**/.gradle/
+.gradle-user/
+**/.gradle-user/
+mobile/.gradle-cache/
+**/.gradle-cache/
+mobile/android/app/.cxx/
+mobile/.eas-archive-inspect/
+mobile/.expo-archive-inspect/
+android/.gradle/
+android/**/build/
 mobile/android/**/build/
-mobile/android/**/.cxx/
+ios/Pods/
+ios/build/
+ios/DerivedData/
+**/DerivedData/
+mobile/.expo_test_dist/
+**/.expo_test_dist/
 
-# Downloaded app binaries
+# Machine-specific Android and iOS signing/build files
+local.properties
+**/local.properties
+*.keystore
+*.jks
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.cer
+*.p8
+*.key
+*.pem
+
+# Local databases and temporary files
+*.sqlite
+*.sqlite3
+*.tmp
+*.temp
+*.bak
+
+# Mobile binaries & builds
 *.apk
 *.aab
 *.ipa
 
-# Local signing credentials
-mobile/redapple-release.jks
-mobile/redapple-release.keystore
-mobile/redapple-release.p12
-
-# The mobile build needs its public EXPO_PUBLIC_* values at bundle time.
+# This file contains EXPO_PUBLIC_* values only; these are public app config.
 !mobile/.env

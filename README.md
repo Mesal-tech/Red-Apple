@@ -14,12 +14,13 @@ Red Apple is a women's health platform for cycle and fertility tracking, pregnan
 - [Testing and CI](#testing-and-ci)
 - [Data and security](#data-and-security)
 - [Project documentation](#project-documentation)
+- [Notification upgrade](#notification-upgrade)
 
 ## Repository structure
 
 | Directory | Purpose | Main technologies |
 | --- | --- | --- |
-| `mobile/` | iOS, Android, and web client for users | React Native, Expo SDK 57, NativeWind |
+| `mobile/` | iOS, Android, and web client for users | React Native, Expo SDK 58, NativeWind |
 | `backend/` | REST API and real-time voice proxy | Node.js, Express, TypeScript, Prisma, PostgreSQL |
 | `landing/` | Public marketing and information website | React, TypeScript, Vite, Tailwind CSS |
 | `admin-web/` | Internal operations dashboard | React, TypeScript, Vite, Tailwind CSS |
@@ -43,7 +44,7 @@ Each app has its own `package.json` and lockfile. Install dependencies from the 
 
 - Node.js 20.19+ or 22.12+ and npm (Node 22 LTS is recommended; CI currently uses Node 20)
 - PostgreSQL for backend data
-- Expo SDK 57 / React Native 0.86 for the mobile client
+- Expo SDK 58 / React Native 0.88 for the mobile client
 - React 19 and Vite for the landing and admin web apps
 - Prisma 7 for backend database access and schema management
 
@@ -163,6 +164,10 @@ When you change `backend/prisma/schema.prisma`, create and commit a migration fr
 
 Values prefixed with `EXPO_PUBLIC_` are bundled into the client and must not contain private secrets.
 
+### Dr. Red voice calls
+
+The telemedicine card opens a separate voice call UI with a locally rendered, audio-reactive particle orb. It uses the existing server-proxied Gemini Live voice session and Dr. Red health tool, with transcript captions, microphone mute, connection state, elapsed time, and hang-up controls. The orb is a visualizer rather than a face or human lip-sync avatar. It uses Expo GL and does not use the camera or join a Stream appointment room. The app requires a rebuilt native development or release build for the GL renderer and audio module.
+
 ### Admin dashboard
 
 The admin Vite config proxies `/api` to the local backend. Resend credentials can be entered in the dashboard's email settings for local/internal use. The dashboard keeps that key in browser storage and sends it from the browser, so do not treat a Vite environment variable or a browser-stored key as a protected production secret.
@@ -237,6 +242,14 @@ The backend test scripts may require a reachable development database and config
 - [Software Configuration Document](docs/SCD.md)
 - [UML diagrams](docs/UML.md)
 - [Internal Knowledge Base](docs/KB.md)
+- [Notification upgrade architecture](docs/notifications/ARCHITECTURE.md)
+- [Notification operations runbook](docs/notifications/RUNBOOK.md)
+- [Notification privacy notes](docs/notifications/PRIVACY.md)
+- [Notification production actions](docs/notifications/HUMAN_ACTIONS.md)
+
+## Notification upgrade
+
+The notification system uses a PostgreSQL-backed outbox, Expo Push Service, and an in-process dispatcher. Review the [architecture](docs/notifications/ARCHITECTURE.md) and [runbook](docs/notifications/RUNBOOK.md) before operating it. Production rollout requires the environment-specific migration, EAS push credentials, and a physical-device smoke check listed in [human actions](docs/notifications/HUMAN_ACTIONS.md).
 
 ## Contributing
 

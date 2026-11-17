@@ -72,41 +72,34 @@ class CycleStore {
     const endDate = logData.endDate ? new Date(`${logData.endDate}T00:00:00.000Z`) : null;
 
     // Check for existing log for user on this date
-    const existing = await prisma.cycleLog.findFirst({
-      where: {
-        user_id: logData.user_id,
-        start_date: targetDate,
-      },
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.cycleLog.findFirst({ where: { user_id: logData.user_id, start_date: targetDate } });
+      const saved = existing
+        ? await tx.cycleLog.update({
+          where: { log_id: existing.log_id },
+          data: {
+            end_date: endDate,
+            flow_intensity: logData.flowIntensity || existing.flow_intensity,
+            is_period_day: logData.isPeriodDay !== undefined ? logData.isPeriodDay : existing.is_period_day,
+            symptoms: logData.symptoms || (existing.symptoms as any),
+            notes: logData.notes !== undefined ? logData.notes : existing.notes,
+          },
+        })
+        : await tx.cycleLog.create({
+          data: {
+            log_id: `log_${uuidv4().substring(0, 8)}`,
+            user_id: logData.user_id,
+            start_date: targetDate,
+            end_date: endDate,
+            flow_intensity: logData.flowIntensity || 'Medium',
+            is_period_day: logData.isPeriodDay !== undefined ? logData.isPeriodDay : true,
+            symptoms: logData.symptoms || [],
+            notes: logData.notes || null,
+          },
+        });
+      await tx.checkInActivity.create({ data: { user_id: logData.user_id, kind: 'cycle_log' } });
+      return mapPrismaCycleLog(saved);
     });
-
-    if (existing) {
-      const updated = await prisma.cycleLog.update({
-        where: { log_id: existing.log_id },
-        data: {
-          end_date: endDate,
-          flow_intensity: logData.flowIntensity || existing.flow_intensity,
-          is_period_day: logData.isPeriodDay !== undefined ? logData.isPeriodDay : existing.is_period_day,
-          symptoms: logData.symptoms || (existing.symptoms as any),
-          notes: logData.notes !== undefined ? logData.notes : existing.notes,
-        },
-      });
-      return mapPrismaCycleLog(updated);
-    }
-
-    const created = await prisma.cycleLog.create({
-      data: {
-        log_id: `log_${uuidv4().substring(0, 8)}`,
-        user_id: logData.user_id,
-        start_date: targetDate,
-        end_date: endDate,
-        flow_intensity: logData.flowIntensity || 'Medium',
-        is_period_day: logData.isPeriodDay !== undefined ? logData.isPeriodDay : true,
-        symptoms: logData.symptoms || [],
-        notes: logData.notes || null,
-      },
-    });
-
-    return mapPrismaCycleLog(created);
   }
 
   public async getLogsByUser(userId: string): Promise<CycleLog[]> {

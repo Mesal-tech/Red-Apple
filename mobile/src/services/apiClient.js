@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { File, UploadType } from 'expo-file-system';
 import { getAuthSessionSafe } from '../utils/storage';
+import { userFriendlyError } from '../utils/userFriendlyErrors';
 
 export const ACCESS_TOKEN_KEY = '@red_apple_access_token';
 export const REFRESH_TOKEN_KEY = '@red_apple_refresh_token';
@@ -17,6 +19,12 @@ export function getBaseApiUrl() {
     return cachedWorkingBaseUrl;
   }
 
+  // Use the explicitly configured API first so a stale Metro host or tunnel cannot override it.
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && (!envUrl.includes('localhost') && !envUrl.includes('127.0.0.1') || Platform.OS === 'web')) {
+    return envUrl.replace(/\/$/, '');
+  }
+
   // 1. Detect developer machine host IP dynamically when running through Expo Go or Metro bundler
   const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost || '';
   if (hostUri) {
@@ -26,19 +34,13 @@ export function getBaseApiUrl() {
     }
   }
 
-  // 2. Check explicit env variable
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl && (!envUrl.includes('localhost') && !envUrl.includes('127.0.0.1') || Platform.OS === 'web')) {
-    return envUrl.replace(/\/$/, '');
-  }
-
-  // 3. Official host bridge for Android emulator
+  // 2. Official host bridge for Android emulator
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:5001/api';
   }
 
   // 4. Fallback to active developer host IP on Wi-Fi
-  return 'http://192.168.1.234:5001/api';
+  return 'http://192.168.18.20:5001/api';
 }
 
 /**
@@ -65,8 +67,10 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
     }
   }
 
+  const { isMultipart = false, ...fetchOptions } = options;
+  const isFormData = isMultipart || (typeof FormData !== 'undefined' && options.body instanceof FormData);
   const headers = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     Accept: 'application/json',
     ...(options.headers || {}),
   };
@@ -91,7 +95,7 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
 
     try {
       const response = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers,
         signal: controller.signal,
       });
@@ -103,7 +107,11 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
       try {
         data = text ? JSON.parse(text) : {};
       } catch (parseErr) {
-        throw new Error(`Invalid server response from ${cleanEndpoint}: ${text.slice(0, 100)}`);
+        const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, status: response.status, kind: 'service' }));
+        error.status = response.status;
+        error.endpoint = cleanEndpoint;
+        error.userMessage = error.message;
+        throw error;
       }
 
       if (!response.ok) {
@@ -111,9 +119,12 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
           (typeof data.error === 'string' ? data.error : data.error?.message) ||
           data.message ||
           `Request failed with status ${response.status}`;
-        const error = new Error(errorMessage);
+        const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, status: response.status, serverMessage: errorMessage, code: data.error?.code }));
         error.status = response.status;
         error.data = data;
+        error.endpoint = cleanEndpoint;
+        error.serverMessage = errorMessage;
+        error.userMessage = error.message;
         throw error;
       }
 
@@ -123,6 +134,13 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
     } catch (netErr) {
       clearTimeout(timeoutId);
       lastError = netErr;
+      if (netErr.name === 'AbortError') {
+        const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, kind: 'timeout' }));
+        error.endpoint = cleanEndpoint;
+        error.kind = 'timeout';
+        error.userMessage = error.message;
+        throw error;
+      }
       // If it was a valid HTTP server response error (e.g. 401, 403, 404, 409), server is reached
       if (netErr.status) {
         throw netErr;
@@ -131,7 +149,121 @@ export async function apiRequest(endpoint, options = {}, timeoutMs = 12000) {
     }
   }
 
-  throw new Error(
-    `Cannot reach Red Apple backend at ${primaryBase}. Please ensure the backend server is running and accessible.`
-  );
+  console.warn('[ApiClient] Request could not be completed', {
+    endpoint: cleanEndpoint,
+    method: options.method || 'GET',
+    reason: lastError?.name || 'network_error',
+    detail: lastError?.message?.slice(0, 180) || 'No network error detail was provided.',
+  });
+  const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, kind: 'network' }));
+  error.endpoint = cleanEndpoint;
+  error.kind = 'network';
+  error.userMessage = error.message;
+  error.cause = lastError;
+  throw error;
+}
+
+/** Upload a device file using Expo's native multipart implementation. */
+export async function uploadFileRequest(endpoint, asset, timeoutMs = 60000) {
+  if (Platform.OS === 'web') {
+    const form = new FormData();
+    if (asset.file) form.append('avatar', asset.file, asset.fileName || 'avatar.jpg');
+    else form.append('avatar', { uri: asset.uri, type: asset.mimeType, name: asset.fileName || 'avatar.jpg' });
+    return apiRequest(endpoint, { method: 'POST', body: form, isMultipart: true }, timeoutMs);
+  }
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const session = await getAuthSessionSafe();
+  if (!session.accessToken) {
+    const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, status: 401 }));
+    error.status = 401;
+    error.endpoint = cleanEndpoint;
+    error.userMessage = error.message;
+    throw error;
+  }
+
+  const candidateBases = [getBaseApiUrl()];
+  if (Platform.OS === 'android') {
+    for (const fallback of [
+      'http://10.0.2.2:5001/api',
+      'http://127.0.0.1:5001/api',
+      'http://192.168.1.234:5001/api',
+    ]) {
+      if (!candidateBases.includes(fallback)) candidateBases.push(fallback);
+    }
+  }
+
+  const file = new File(asset.uri);
+  let lastError = null;
+  for (const base of candidateBases) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await file.upload(`${base}${cleanEndpoint}`, {
+        httpMethod: 'POST',
+        uploadType: UploadType.MULTIPART,
+        fieldName: 'avatar',
+        mimeType: asset.mimeType,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        signal: controller.signal,
+        sessionType: 'foreground',
+      });
+      clearTimeout(timeoutId);
+
+      let data;
+      try {
+        data = response.body ? JSON.parse(response.body) : {};
+      } catch {
+        const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, status: response.status, kind: 'service' }));
+        error.status = response.status;
+        error.endpoint = cleanEndpoint;
+        error.userMessage = error.message;
+        throw error;
+      }
+
+      if (response.status < 200 || response.status >= 300) {
+        const serverMessage = typeof data.error === 'string' ? data.error : data.error?.message;
+        const error = new Error(userFriendlyError({
+          endpoint: cleanEndpoint,
+          status: response.status,
+          serverMessage,
+          code: data.error?.code,
+        }));
+        error.status = response.status;
+        error.endpoint = cleanEndpoint;
+        error.serverMessage = serverMessage;
+        error.userMessage = error.message;
+        throw error;
+      }
+
+      cachedWorkingBaseUrl = base;
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.status) throw error;
+      if (error.name === 'AbortError' || controller.signal.aborted) {
+        const timeoutError = new Error(userFriendlyError({ endpoint: cleanEndpoint, kind: 'timeout' }));
+        timeoutError.endpoint = cleanEndpoint;
+        timeoutError.kind = 'timeout';
+        timeoutError.userMessage = timeoutError.message;
+        throw timeoutError;
+      }
+      lastError = error;
+    }
+  }
+
+  console.warn('[ApiClient] Native file upload could not be completed', {
+    endpoint: cleanEndpoint,
+    reason: lastError?.name || 'network_error',
+    detail: lastError?.message?.slice(0, 180) || 'No upload error detail was provided.',
+  });
+  const error = new Error(userFriendlyError({ endpoint: cleanEndpoint, kind: 'network' }));
+  error.endpoint = cleanEndpoint;
+  error.kind = 'network';
+  error.userMessage = error.message;
+  error.cause = lastError;
+  throw error;
 }

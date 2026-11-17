@@ -4,7 +4,7 @@ import {
   clearAuthSessionSafe,
   clearAppSessionSafe,
 } from '../utils/storage';
-import { apiRequest } from './apiClient';
+import { apiRequest, uploadFileRequest } from './apiClient';
 
 /**
  * Persist tokens and user record securely in storage.
@@ -155,13 +155,43 @@ export async function updateUserProfile(profileData) {
   const result = await apiRequest('/auth/profile', {
     method: 'PUT',
     body: JSON.stringify(profileData),
-  });
+  }, 45000);
 
   if (result.user) {
     await saveAuthSessionSafe(null, result.user);
   }
 
   return result.user;
+}
+
+/** Upload a user-selected avatar image to backend-managed object storage. */
+export async function uploadUserAvatar(asset) {
+  const supportedMimeTypes = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+  };
+  const originalName = asset.fileName || asset.uri || '';
+  const extension = originalName.split(/[?#]/)[0].split('.').pop()?.toLowerCase();
+  const declaredMimeType = (asset.mimeType || '').toLowerCase().replace('image/jpg', 'image/jpeg');
+  const normalizedMimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(declaredMimeType)
+    ? declaredMimeType
+    : (supportedMimeTypes[extension] || declaredMimeType || 'image/jpeg');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(normalizedMimeType)) {
+    const error = new Error('Choose a JPG, PNG, or WebP photo.');
+    error.code = 'UNSUPPORTED_IMAGE_TYPE';
+    throw error;
+  }
+  if (asset.fileSize > 5 * 1024 * 1024) {
+    const error = new Error('That photo is too large. Choose a photo smaller than 5 MB.');
+    error.code = 'PHOTO_TOO_LARGE';
+    throw error;
+  }
+
+  const fileName = asset.fileName || `avatar.${normalizedMimeType === 'image/jpeg' ? 'jpg' : normalizedMimeType.split('/')[1]}`;
+  const result = await uploadFileRequest('/auth/avatar', { ...asset, fileName, mimeType: normalizedMimeType }, 60000);
+  return result.avatarUrl;
 }
 
 /**

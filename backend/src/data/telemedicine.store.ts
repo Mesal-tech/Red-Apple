@@ -1,5 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../db/prisma';
+import { notificationService } from '../notifications/notification.service';
+import { APPOINTMENT_REMINDER_OFFSETS } from '../notifications/notification.constants';
+import { DateTime } from 'luxon';
+import { config } from '../config';
 import {
   Doctor,
   TimeSlot,
@@ -344,17 +348,11 @@ class TelemedicineStore {
     }
 
     const bookingId = `book_${uuidv4().substring(0, 10)}`;
-    let validUserId = userId;
-    let user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { user_id: userId },
     });
     if (!user) {
-      user = await prisma.user.findFirst();
-      if (user) {
-        validUserId = user.user_id;
-      } else {
-        throw new Error('User not found. Please log in first.');
-      }
+      throw new Error('User not found. Please log in first.');
     }
 
     const created = await prisma.$transaction(async (tx) => {
@@ -387,7 +385,7 @@ class TelemedicineStore {
       return tx.booking.create({
         data: {
           booking_id: bookingId,
-          user_id: validUserId,
+          user_id: userId,
           clinic_id: doctor.clinic_id,
           doctor_id: doctor.doctor_id,
           slot_id: finalSlotId || null,
@@ -397,6 +395,33 @@ class TelemedicineStore {
         },
       });
     });
+
+    const preference = await prisma.notificationPreference.findUnique({ where: { user_id: userId } });
+    const appointmentZone = preference?.timezone || config.notifications.defaultTimezone;
+    const hasExplicitOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(created.scheduled_time);
+    const appointmentDateTime = DateTime.fromISO(created.scheduled_time, { setZone: hasExplicitOffset, zone: hasExplicitOffset ? undefined : appointmentZone });
+    if (appointmentDateTime.isValid) {
+      const appointmentTime = appointmentDateTime.toJSDate();
+      for (const offset of APPOINTMENT_REMINDER_OFFSETS) {
+        const scheduledFor = new Date(appointmentTime.getTime() - offset.milliseconds);
+        if (scheduledFor <= new Date()) continue;
+        try {
+          await notificationService.enqueue({
+            userId,
+            category: 'appointments',
+            title: 'Appointment reminder',
+            body: offset.body,
+            data: { route: 'Appointments', booking_id: created.booking_id },
+            scheduledFor,
+            dedupeKey: `appointment:${created.booking_id}:${offset.key}`,
+            source: 'appointment',
+            sourceRef: created.booking_id,
+          });
+        } catch (error: any) {
+          console.warn('[telemedicine] Appointment reminder enqueue failed', { code: error?.code || 'enqueue_error' });
+        }
+      }
+    }
 
     return {
       booking_id: created.booking_id,
@@ -563,6 +588,7 @@ class TelemedicineStore {
     if (!booking) {
       throw new Error('Booking not found.');
     }
+    if (booking.user_id !== userId) throw new Error('Unauthorized: booking does not belong to the current user.');
 
     if (booking.slot_id) {
       try {
@@ -577,6 +603,10 @@ class TelemedicineStore {
       where: { booking_id: bookingId },
       data: { status: 'cancelled' },
       include: { doctor: true },
+    });
+    await prisma.notification.updateMany({
+      where: { source: 'appointment', source_ref: bookingId, status: 'pending' },
+      data: { status: 'cancelled' },
     });
 
     return {

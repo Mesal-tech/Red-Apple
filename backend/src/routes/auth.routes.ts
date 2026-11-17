@@ -13,8 +13,23 @@ import {
   resetPassword,
 } from '../controllers/auth.controller';
 import { authenticateToken } from '../middleware/auth.middleware';
+import multer from 'multer';
+import { uploadUserAvatar } from '../controllers/avatar.controller';
 
 const router = Router();
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+const parseAvatarUpload = (req: any, res: any, next: any) => {
+  avatarUpload.single('avatar')(req, res, (error: any) => {
+    if (error) {
+      error.statusCode = 400;
+      return next(error);
+    }
+    next();
+  });
+};
 
 // Public authentication routes
 router.post('/register', registerUser);
@@ -137,6 +152,7 @@ router.get('/google/callback', (req, res) => {
 // Protected routes (strictly requires valid Bearer token, zero bypass)
 router.get('/me', authenticateToken, getCurrentUser);
 router.put('/profile', authenticateToken, updateProfile);
+router.post('/avatar', authenticateToken, parseAvatarUpload, uploadUserAvatar);
 router.post('/logout', authenticateToken, logoutUser);
 router.delete('/account', authenticateToken, deleteAccount);
 

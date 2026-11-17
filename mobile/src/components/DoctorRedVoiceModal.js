@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { apiRequest, getBaseApiUrl } from '../services/apiClient';
 import { saveAIChatHistorySafe } from '../utils/storage';
+import ParticleOrb from './ParticleOrb';
 
 let cachedAudioApi = null;
 let checkedAudioApi = false;
@@ -140,6 +141,7 @@ export default function DoctorRedVoiceModal({
   user = {},
   messages = [],
   setMessages,
+  callMode = false,
 }) {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
@@ -149,6 +151,7 @@ export default function DoctorRedVoiceModal({
   const [liveText, setLiveText] = useState('');
   const [voiceStartedAt, setVoiceStartedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [isUninterruptedMode, setIsUninterruptedMode] = useState(false);
   const [hasManualAudio, setHasManualAudio] = useState(false);
@@ -306,6 +309,9 @@ export default function DoctorRedVoiceModal({
         if (isMutedRef.current || audioContext.state !== 'running') return;
         const samples = pcm16Base64ToFloat(base64Audio);
         if (!samples.length) return;
+        let energy = 0;
+        for (let index = 0; index < samples.length; index += 1) energy += samples[index] * samples[index];
+        setAudioLevel(Math.min(1, Math.sqrt(energy / samples.length) * 4));
         if (!resources.micPausedForOutput) {
           recorder.pause();
           resources.micPausedForOutput = true;
@@ -422,6 +428,9 @@ export default function DoctorRedVoiceModal({
           recorder.onAudioReady({ sampleRate: GEMINI_INPUT_RATE, bufferLength: 2048, channelCount: 1 }, ({ buffer, numFrames }) => {
             if (!mountedRef.current || isMutedRef.current || resources.micPausedForOutput || resources.waitingForManualResponse || socket.readyState !== WebSocket.OPEN) return;
             const samples = buffer.getChannelData(0).subarray(0, numFrames);
+            let energy = 0;
+            for (let index = 0; index < samples.length; index += 1) energy += samples[index] * samples[index];
+            setAudioLevel(Math.min(1, Math.sqrt(energy / Math.max(1, samples.length)) * 5));
             socket.send(JSON.stringify({ realtimeInput: { audio: { data: floatAudioToPcm16(samples, buffer.sampleRate || GEMINI_INPUT_RATE), mimeType: `audio/pcm;rate=${GEMINI_INPUT_RATE}` } } }));
             if (resources.uninterruptedMode && !resources.manualHasAudio) {
               resources.manualHasAudio = true;
@@ -575,6 +584,7 @@ export default function DoctorRedVoiceModal({
     setIsMuted(false);
     setVoiceStartedAt(null);
     setElapsedSeconds(0);
+    setAudioLevel(0);
     phaseRef.current = 'idle';
     setPhase('idle');
   }, []);
@@ -686,13 +696,46 @@ export default function DoctorRedVoiceModal({
   }, [visible]);
 
   useEffect(() => {
-    if (visible && messages.length > voiceSessionStartIndexRef.current) {
+    if (!callMode && visible && messages.length > voiceSessionStartIndexRef.current) {
       setIsTranscriptOpen(true);
     }
-  }, [messages.length, visible]);
+  }, [callMode, messages.length, visible]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen" onRequestClose={endSession} statusBarTranslucent>
+    <Modal visible={visible} animationType="slide" transparent={!callMode} presentationStyle={callMode ? 'fullScreen' : 'overFullScreen'} onRequestClose={endSession} statusBarTranslucent>
+      {callMode ? (
+        <View style={{ flex: 1, backgroundColor: '#090713', paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 14), paddingHorizontal: 22 }}>
+          <StatusBar barStyle="light-content" backgroundColor="#090713" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <View>
+              <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>Dr. Red</Text>
+              <Text style={{ color: '#BBA8D8', fontSize: 13, marginTop: 3 }}>AI health companion · voice call</Text>
+            </View>
+            <Text style={{ color: '#D6C9E8', fontSize: 15, fontVariant: ['tabular-nums'] }}>
+              {String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+            </Text>
+          </View>
+
+          <View style={{ flex: 1, minHeight: 340, alignItems: 'center', justifyContent: 'center' }}>
+            <ParticleOrb phase={phase} audioLevel={audioLevel} visible={visible} />
+            <Text style={{ color: errorMessage ? '#FF8F8F' : '#E7DDF4', fontSize: 15, fontWeight: '700', marginTop: 18 }}>
+              {phase === 'connecting' ? 'Connecting securely…' : errorMessage ? 'Connection issue' : phase === 'speaking' ? 'Dr. Red is speaking' : phase === 'thinking' ? 'Thinking…' : phase === 'listening' ? (isMuted ? 'Microphone muted' : 'Listening') : 'Ready'}
+            </Text>
+            {errorMessage ? <Text style={{ color: '#CDBFE0', fontSize: 13, textAlign: 'center', marginTop: 8 }}>{errorMessage}</Text> : null}
+            {!!errorMessage && <TouchableOpacity onPress={reconnect} accessibilityRole="button" accessibilityLabel="Reconnect to Dr. Red" style={{ marginTop: 10, padding: 8 }}><Text style={{ color: '#DCC2FF', fontWeight: '700' }}>Try again</Text></TouchableOpacity>}
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, paddingTop: 12 }}>
+            <TouchableOpacity onPress={toggleMute} disabled={phase === 'idle' || phase === 'connecting'} accessibilityRole="button" accessibilityLabel={isMuted ? 'Unmute microphone' : 'Mute microphone'} style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: isMuted ? '#5B2630' : '#231A32', alignItems: 'center', justifyContent: 'center', opacity: phase === 'idle' || phase === 'connecting' ? 0.55 : 1 }}>
+              <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={endSession} accessibilityRole="button" accessibilityLabel="Hang up Dr. Red call" style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: '#E04450', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="call" size={24} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </View>
+          <Text style={{ color: '#89799D', fontSize: 11, textAlign: 'center', marginTop: 9 }}>Audio-reactive orb · no camera is used</Text>
+        </View>
+      ) : (
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent' }}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <View style={{
@@ -765,6 +808,7 @@ export default function DoctorRedVoiceModal({
           </View>
         </View>
       </View>
+      )}
     </Modal>
   );
 }

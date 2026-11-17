@@ -40,6 +40,7 @@ export interface User {
     appointmentAlerts?: boolean;
     discreetTitles?: boolean;
     dailyLogReminder?: boolean;
+    dailyPillAlerts?: boolean;
     medicationAlerts?: boolean;
     hydrationAlerts?: boolean;
     weeklyGrowthAlerts?: boolean;

@@ -17,7 +17,7 @@ import {
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import notificationService from '../services/notificationService';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../context/ThemeContext';
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -34,6 +34,7 @@ import TermsOfUseDetailScreen from '../screens/TermsOfUseDetailScreen';
 import AppearanceScreen from '../screens/AppearanceScreen';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 /**
  * Synchronously determine if user has completed onboarding.
@@ -239,6 +240,9 @@ function MainNavigation() {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         checkPinLock();
+        if (Platform.OS !== 'web') {
+          try { require('expo-notifications').setBadgeCountAsync(0); } catch (_) {}
+        }
       }
     });
 
@@ -267,10 +271,11 @@ function MainNavigation() {
   useEffect(() => {
     let notifReceivedSub = null;
     let notifResponseSub = null;
+    let cleanupNotificationRoutes = null;
 
     if (isAuthenticated) {
       notificationService.init();
-      notificationService.requestPermissionsAndToken();
+      notificationService.registerForPush();
       notificationService.syncAllReminders({
         healthProfile: user?.health_profile,
         stage: activeMode,
@@ -279,6 +284,7 @@ function MainNavigation() {
       if (Platform.OS !== 'web') {
         try {
           const Notifications = require('expo-notifications');
+          cleanupNotificationRoutes = notificationService.initListeners(navigationRef);
           if (Notifications?.addNotificationReceivedListener) {
             notifReceivedSub = Notifications.addNotificationReceivedListener((notification) => {
               const { title, body, data } = notification.request.content;
@@ -323,6 +329,7 @@ function MainNavigation() {
     return () => {
       if (notifReceivedSub?.remove) notifReceivedSub.remove();
       if (notifResponseSub?.remove) notifResponseSub.remove();
+      if (cleanupNotificationRoutes) cleanupNotificationRoutes();
     };
   }, [isAuthenticated, user?.health_profile, activeMode]);
 
@@ -494,7 +501,7 @@ export default function AppNavigator() {
   };
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
       <ToastProvider>
         <AuthProvider>
           <MainNavigation />

@@ -17,10 +17,14 @@
     "expo-apple-authentication": "~58.0.2",
     "expo-auth-session": "~58.0.17",
     "expo-build-properties": "~58.0.12",
+    "expo-constants": "~58.0.15",
     "expo-crypto": "~58.0.7",
     "expo-dev-client": "~58.0.18",
+    "expo-device": "~58.0.5",
     "expo-file-system": "~58.0.13",
     "expo-font": "~58.0.11",
+    "expo-gl": "~58.0.4",
+    "expo-image-picker": "~58.0.10",
     "expo-linear-gradient": "~58.0.3",
     "expo-location": "~58.0.20",
     "expo-notifications": "~58.1.8",
@@ -41,7 +45,8 @@
     "react-native-web": "~0.21.4",
     "react-native-webview": "14.0.1",
     "react-native-worklets": "0.13.0",
-    "tailwindcss": "^3.4.19"
+    "tailwindcss": "^3.4.19",
+    "three": "0.162.0"
   },
   "scripts": {
     "start": "expo start",

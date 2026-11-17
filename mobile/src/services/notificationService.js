@@ -3,6 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { apiRequest } from './apiClient';
 
+let Device = null;
+try {
+  Device = require('expo-device');
+} catch (error) {
+  // Keep the app usable with an older native binary; push registration needs a rebuilt binary.
+  console.warn('[notificationService] expo-device native module is unavailable. Rebuild the app to enable push registration.');
+}
+
 let Notifications = null;
 if (Platform.OS !== 'web') {
   try {
@@ -13,12 +21,12 @@ if (Platform.OS !== 'web') {
     if (!(Platform.OS === 'android' && isExpoGo)) {
       Notifications = require('expo-notifications');
       Notifications.setNotificationHandler({
-        handleNotification: async () => ({
+        handleNotification: async (notification) => ({
           shouldShowAlert: true,
           shouldShowBanner: true,
           shouldShowList: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
+          shouldPlaySound: notification?.request?.content?.data?.category !== 'engagement',
+          shouldSetBadge: notification?.request?.content?.data?.category !== 'engagement',
           priority: Notifications?.AndroidNotificationPriority?.MAX || 'max',
         }),
       });
@@ -34,6 +42,7 @@ export const PUSH_TOKEN_KEY = '@redapple_push_token';
 
 // Listeners for in-app reactive badge updates
 const notificationListeners = new Set();
+const handledNotificationResponseIds = new Set();
 
 export const defaultNotificationSettings = {
   periodAlerts: true,
@@ -53,6 +62,7 @@ export const defaultNotificationSettings = {
 
 class NotificationService {
   privateInitialized = false;
+  reminderSyncContext = null;
 
   /**
    * Initializes notification channels and listeners on app startup
@@ -64,10 +74,17 @@ class NotificationService {
       if (Platform.OS === 'android') {
         const visibility = Notifications.AndroidNotificationVisibility?.PUBLIC || 1;
 
-        // 1. General Default Channel
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'General Health Alerts',
-          importance: Notifications.AndroidImportance.MAX,
+        await Notifications.setNotificationChannelAsync('dr-red', {
+          name: 'Dr. Red check-ins',
+          importance: Notifications.AndroidImportance.DEFAULT,
+          sound: null,
+          vibrationPattern: [],
+          showBadge: false,
+          lockscreenVisibility: visibility,
+        });
+        await Notifications.setNotificationChannelAsync('reminders', {
+          name: 'Reminders',
+          importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FA4A14',
           enableVibrate: true,
@@ -75,23 +92,9 @@ class NotificationService {
           showBadge: true,
           lockscreenVisibility: visibility,
         });
-
-        // 2. Cycle & Fertility Channel
-        await Notifications.setNotificationChannelAsync('cycle', {
-          name: 'Cycle & Ovulation Tracking',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 300, 200, 300],
-          lightColor: '#FA4A14',
-          enableVibrate: true,
-          enableLights: true,
-          showBadge: true,
-          lockscreenVisibility: visibility,
-        });
-
-        // 3. Telemedicine Appointments Channel (Max priority)
         await Notifications.setNotificationChannelAsync('appointments', {
-          name: 'Telemedicine Consultations',
-          importance: Notifications.AndroidImportance.MAX,
+          name: 'Appointments',
+          importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 500, 250, 500],
           lightColor: '#059669',
           enableVibrate: true,
@@ -100,17 +103,6 @@ class NotificationService {
           lockscreenVisibility: visibility,
         });
 
-        // 4. Medication & Habits Channel
-        await Notifications.setNotificationChannelAsync('medication', {
-          name: 'Medication & Health Habits',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250],
-          lightColor: '#2563EB',
-          enableVibrate: true,
-          enableLights: true,
-          showBadge: true,
-          lockscreenVisibility: visibility,
-        });
       }
 
       this.privateInitialized = true;
@@ -129,10 +121,10 @@ class NotificationService {
     };
   }
 
-  notifyListeners() {
+  notifyListeners(value) {
     notificationListeners.forEach((fn) => {
       try {
-        fn();
+        fn(value);
       } catch (e) {
         console.warn('[NotificationService] Listener error:', e);
       }
@@ -150,29 +142,10 @@ class NotificationService {
         return { success: true, fallback: true };
       }
 
-      // Android 13+ runtime permission
-      if (Platform.OS === 'android' && Platform.Version >= 33) {
-        try {
-          await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-          );
-        } catch (pErr) {}
-      }
+      if (!Device) return { success: true, localOnly: true, reason: 'native_module_unavailable' };
+      if (!Device.isDevice) return { success: true, localOnly: true, reason: 'physical_device_required' };
 
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync({
-          ios: {
-            allowAlert: true,
-            allowBadge: true,
-            allowSound: true,
-          },
-          android: {},
-        });
-        finalStatus = status;
-      }
+      const { status: finalStatus } = await Notifications.getPermissionsAsync();
 
       if (finalStatus !== 'granted') {
         return { success: false, reason: 'permission_denied' };
@@ -189,8 +162,9 @@ class NotificationService {
 
         const projectId =
           Constants?.expoConfig?.extra?.eas?.projectId ||
-          Constants?.easConfig?.projectId ||
-          '69965fdb-1050-4f5b-b3c3-24125f8865ad';
+          Constants?.easConfig?.projectId;
+
+        if (!projectId) throw new Error('EAS projectId is missing. Add extra.eas.projectId to the Expo app configuration.');
 
         const tokenData = await Notifications.getExpoPushTokenAsync(
           projectId ? { projectId } : undefined
@@ -201,17 +175,18 @@ class NotificationService {
           await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
           // Sync with backend API
           try {
-            await apiRequest('/notifications/register-token', {
+            await this.retryRegistration(() => apiRequest('/notifications/devices', {
               method: 'POST',
-              body: JSON.stringify({ token: pushToken }),
-            });
+              body: JSON.stringify({ token: pushToken, platform: Platform.OS, deviceName: Device.deviceName || undefined, appVersion: Constants.nativeAppVersion || undefined, osVersion: Device.osVersion || undefined }),
+            }));
+            await this.updatePreferences({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
           } catch (apiErr) {
-            console.warn('[NotificationService] Server push token registration error:', apiErr?.message);
+            console.warn('[NotificationService] Server push token registration error:', apiErr?.status || apiErr?.name || 'registration_error');
           }
           return { success: true, token: pushToken };
         }
       } catch (tokenErr) {
-        console.warn('[NotificationService] Push token acquisition warning:', tokenErr?.message);
+        console.warn('[NotificationService] Push token acquisition warning:', tokenErr?.code || tokenErr?.name || 'token_error');
       }
 
       return { success: true, localOnly: true };
@@ -219,6 +194,84 @@ class NotificationService {
       console.warn('[NotificationService] Permission request failed:', e?.message);
       return { success: false, error: e?.message };
     }
+  }
+
+  async ensurePermissions() {
+    await this.init();
+    if (!Notifications) return { status: 'unavailable' };
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    }
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === 'granted' || current.granted) return current;
+    return Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: true, allowSound: true, allowProvisional: true } });
+  }
+
+  async retryRegistration(register) {
+    let lastError;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try { return await register(); } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** attempt)));
+      }
+    }
+    throw lastError;
+  }
+
+  async unregister() {
+    try {
+      const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+      if (token) await apiRequest('/notifications/devices', { method: 'DELETE', body: JSON.stringify({ token }) });
+    } catch (error) {
+      console.warn('[NotificationService] Device unregister failed:', error?.message);
+    } finally {
+      await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+    }
+  }
+
+  async registerForPush() { return this.requestPermissionsAndToken(); }
+
+  initListeners(navigation) {
+    if (!Notifications) return () => {};
+    const handled = handledNotificationResponseIds;
+    const pending = new Set();
+    const allowedRoutes = new Set(['AIAssistant', 'Appointments']);
+    const handleResponse = async (response) => {
+      const content = response?.notification?.request?.content;
+      const data = content?.data || {};
+      const responseId = response?.notification?.request?.identifier || data.notification_id;
+      if (!responseId || handled.has(responseId) || pending.has(responseId)) return;
+      if (data.notification_id) {
+        apiRequest(`/notifications/${encodeURIComponent(data.notification_id)}/opened`, { method: 'POST' }).catch(() => {});
+      }
+      if (!allowedRoutes.has(data.route)) { handled.add(responseId); return; }
+      pending.add(responseId);
+      const startedAt = Date.now();
+      const navigateWhenReady = () => {
+        if (!navigation?.isReady?.()) {
+          if (Date.now() - startedAt < 10000) setTimeout(navigateWhenReady, 100);
+          else pending.delete(responseId);
+          return;
+        }
+        handled.add(responseId);
+        pending.delete(responseId);
+        if (data.route === 'AIAssistant') navigation.navigate('AIAssistant', { entrySeed: typeof data.seed === 'string' ? data.seed : 'gentle_checkin' });
+        else navigation.navigate('MainTabs', { screen: 'Telemed' });
+      };
+      navigateWhenReady();
+    };
+    const responseSub = Notifications.addNotificationResponseReceivedListener(handleResponse);
+    Notifications.getLastNotificationResponseAsync?.().then(handleResponse).catch(() => {});
+    return () => responseSub?.remove?.();
+  }
+
+  async getPreferences() {
+    const result = await apiRequest('/notifications/preferences');
+    return result.preferences;
+  }
+
+  async updatePreferences(patch) {
+    return apiRequest('/notifications/preferences', { method: 'PUT', body: JSON.stringify(patch) });
   }
 
   /**
@@ -252,6 +305,23 @@ class NotificationService {
       } catch (syncErr) {
         console.warn('[NotificationService] Could not sync preferences to backend:', syncErr?.message);
       }
+      try {
+        await this.updatePreferences({
+          categories: {
+            reminders: updated.periodAlerts !== false || updated.dailyPillAlerts !== false || updated.dailyLogReminder !== false,
+            appointments: updated.appointmentAlerts !== false,
+            engagement: updated.engagementAlerts !== false,
+            insights: updated.weeklyGrowthAlerts !== false,
+          },
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+      } catch (syncErr) {
+        console.warn('[NotificationService] Could not sync notification preferences:', syncErr?.message);
+      }
+
+      if (this.reminderSyncContext) {
+        await this.syncAllReminders(this.reminderSyncContext);
+      }
 
       return updated;
     } catch (err) {
@@ -275,25 +345,31 @@ class NotificationService {
     trigger,
     seconds,
     data = {},
-    channelId = 'default',
+    channelId = 'reminders',
+    recordInApp = false,
   }) {
     const finalId = identifier || id || `notif_${Date.now()}`;
     const finalTrigger = trigger || (seconds !== undefined ? { seconds } : null);
+    const currentSettings = await this.getSettings();
+    const safeTitle = title || 'Red Apple Notification';
+    const safeBody = body || '';
+    const safeData = channelId === 'appointments'
+      ? { route: 'Appointments', ...(typeof data?.bookingId === 'string' ? { booking_id: data.bookingId } : {}) }
+      : { route: 'AIAssistant', seed: 'gentle_checkin' };
 
-    // Record to local in-app notifications store so in-app listeners receive it
-    try {
+    // Scheduled reminders belong in the inbox only after they are delivered.
+    if (recordInApp) {
       await this.addInAppNotification({
         id: finalId,
-        title: title || 'Red Apple Notification',
-        body: body || '',
+        title: safeTitle || 'Red Apple Notification',
+        body: safeBody || '',
         time: 'Just now',
-        type: data?.type || 'general',
+        type: 'general',
         icon: 'notifications',
         iconBg: '#FFEBEF',
         iconColor: '#FA4A14',
       });
-      this.notifyListeners();
-    } catch (_) {}
+    }
 
     if (!Notifications) return finalId;
     await this.init();
@@ -336,12 +412,12 @@ class NotificationService {
       const scheduledId = await Notifications.scheduleNotificationAsync({
         identifier: finalId,
         content: {
-          title,
-          body,
+          title: safeTitle,
+          body: safeBody,
           sound: 'default',
           priority: Notifications.AndroidNotificationPriority?.MAX || 'max',
           channelId: channelId || 'default',
-          data,
+          data: safeData,
         },
         trigger: formattedTrigger,
       });
@@ -380,8 +456,8 @@ class NotificationService {
     await this.init();
     await this.requestPermissionsAndToken();
 
-    const title = 'Red Apple Health Alert 🌸';
-    const body = 'Notifications are active! You will receive timely alerts for your cycle, medication & appointments.';
+    const title = 'Notification test';
+    const body = 'Your notification settings are working.';
 
     // 1. Fire immediate local notification on device
     const id = await this.scheduleLocalNotification({
@@ -389,8 +465,9 @@ class NotificationService {
       title,
       body,
       trigger: { seconds: 1 },
-      channelId: 'default',
+      channelId: 'reminders',
       data: { type: 'test' },
+      recordInApp: true,
     });
 
     // 2. Also ping backend test endpoint
@@ -416,6 +493,7 @@ class NotificationService {
           ...notification,
           isRead: false,
           createdAt: notification.createdAt || new Date().toISOString(),
+          time: notification.time || this.formatTimeAgo(notification.sentAt || notification.sent_at || notification.createdAt || notification.created_at || notification.triggerTime || new Date().toISOString()),
         },
         ...filtered,
       ].slice(0, 50); // Keep last 50 notifications
@@ -438,6 +516,44 @@ class NotificationService {
         localList = JSON.parse(stored);
       }
     } catch (e) {}
+
+    // Prefer durable records that were actually dispatched; reminders are a legacy fallback.
+    try {
+      const history = await apiRequest('/notifications?limit=50', {}, 3000);
+      if (history?.success && Array.isArray(history.notifications)) {
+        const localReadMap = new Map(localList.map((item) => [item.id, item.isRead]));
+        const delivered = history.notifications
+          .filter((item) => item.status === 'sent' || item.sent_at)
+          .map((item) => {
+            const category = item.category || 'reminders';
+            const type = category === 'appointments' ? 'appointment' : category === 'reminders' ? 'reminder' : category;
+            return {
+              id: item.id,
+              title: item.title,
+              body: item.body,
+              time: this.formatTimeAgo(item.sent_at || item.created_at),
+              type,
+              isRead: Boolean(item.opened_at) || Boolean(localReadMap.get(item.id)),
+              data: item.data || {},
+              source: 'outbox',
+              icon: category === 'appointments' ? 'videocam-outline' : 'notifications-outline',
+              iconBg: category === 'appointments' ? '#E6F4EA' : '#F3F4F6',
+              iconColor: category === 'appointments' ? '#059669' : '#4B5563',
+            };
+          });
+        const merged = [...delivered];
+        for (const item of localList) {
+          if (item.source === 'legacy-reminder' || /^rem_(period|fertile|book|preg_week|meno|med|hydra|daily)_/.test(item.id || '')) continue;
+          if (!merged.some((entry) => entry.id === item.id)) {
+            merged.push({ ...item, time: item.time || this.formatTimeAgo(item.createdAt || item.created_at) });
+          }
+        }
+        await AsyncStorage.setItem(INAPP_NOTIFICATIONS_KEY, JSON.stringify(merged));
+        return merged;
+      }
+    } catch (error) {
+      // Older backend versions may not expose durable notification history.
+    }
 
     // Attempt to pull latest server-computed reminders
     try {
@@ -478,10 +594,11 @@ class NotificationService {
             id: r.id,
             title: r.title,
             body: r.body,
-            time: this.formatRelativeTime(r.triggerTime),
+            time: this.formatTimeAgo(r.sentAt || r.sent_at || r.createdAt || r.created_at || r.triggerTime),
             type: r.type,
             isRead: !!r.isRead,
             data: r.data || {},
+            source: 'legacy-reminder',
             icon,
             iconBg,
             iconColor,
@@ -503,7 +620,10 @@ class NotificationService {
         // 2. Put local-only items (e.g. test or appointment reminders created on device)
         for (const loc of localList) {
           if (!mergedMap.has(loc.id)) {
-            mergedMap.set(loc.id, loc);
+            mergedMap.set(loc.id, {
+              ...loc,
+              time: loc.time || this.formatTimeAgo(loc.sentAt || loc.sent_at || loc.createdAt || loc.created_at || loc.triggerTime),
+            });
           }
         }
 
@@ -523,21 +643,25 @@ class NotificationService {
    */
   async markAsRead(notificationId) {
     try {
-      const list = await this.getInAppNotifications();
+      const stored = await AsyncStorage.getItem(INAPP_NOTIFICATIONS_KEY);
+      const list = stored ? JSON.parse(stored) : [];
+      if (!Array.isArray(list)) throw new Error('Stored notifications are invalid');
       const updated = list.map((item) =>
         item.id === notificationId ? { ...item, isRead: true } : item
       );
       await AsyncStorage.setItem(INAPP_NOTIFICATIONS_KEY, JSON.stringify(updated));
 
-      // Sync with backend API
-      try {
-        await apiRequest('/notifications/read', {
+      // Keep the interaction local and immediate; persist remotely in the background.
+      const item = list.find((entry) => entry.id === notificationId);
+      if (item?.source === 'outbox') {
+        apiRequest(`/notifications/${encodeURIComponent(notificationId)}/opened`, { method: 'POST' }).catch(() => {});
+      } else {
+        apiRequest('/notifications/read', {
           method: 'POST',
           body: JSON.stringify({ reminderId: notificationId }),
-        });
-      } catch (e) {}
-
-      this.notifyListeners();
+        }).catch(() => {});
+      }
+      this.notifyListeners(updated);
       return updated;
     } catch (e) {
       return [];
@@ -549,16 +673,15 @@ class NotificationService {
    */
   async markAllAsRead() {
     try {
-      const list = await this.getInAppNotifications();
+      const stored = await AsyncStorage.getItem(INAPP_NOTIFICATIONS_KEY);
+      const list = stored ? JSON.parse(stored) : [];
+      if (!Array.isArray(list)) throw new Error('Stored notifications are invalid');
       const updated = list.map((item) => ({ ...item, isRead: true }));
       await AsyncStorage.setItem(INAPP_NOTIFICATIONS_KEY, JSON.stringify(updated));
 
-      // Sync with backend API
-      try {
-        await apiRequest('/notifications/read-all', { method: 'POST' });
-      } catch (e) {}
-
-      this.notifyListeners();
+      // Do not block the inbox while the server stores the read state.
+      apiRequest('/notifications/read-all', { method: 'POST' }).catch(() => {});
+      this.notifyListeners(updated);
       return updated;
     } catch (e) {
       return [];
@@ -574,26 +697,28 @@ class NotificationService {
   }
 
   /**
-   * Formats ISO timestamp to human friendly relative string
+   * Shows elapsed time from delivery, or time until a future reminder, in the device timezone.
    */
-  formatRelativeTime(isoString) {
-    if (!isoString) return 'Today';
+  formatTimeAgo(isoString) {
+    if (!isoString) return '';
     try {
-      const date = new Date(isoString);
-      const diffMs = Date.now() - date.getTime();
-      const diffMinutes = Math.floor(diffMs / 60000);
-
-      if (diffMinutes < 1) return 'Just now';
-      if (diffMinutes < 60) return `${diffMinutes}m ago`;
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours < 24) return `${diffHours}h ago`;
-      const diffDays = Math.floor(diffHours / 24);
-      if (diffDays === 1) return 'Yesterday';
-      if (diffDays < 7) return `${diffDays}d ago`;
-
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const timestamp = new Date(isoString).getTime();
+      if (Number.isNaN(timestamp)) return '';
+      const deltaMinutes = Math.floor((Date.now() - timestamp) / 60000);
+      const future = deltaMinutes < 0;
+      const minutes = Math.abs(deltaMinutes);
+      if (minutes < 1) return future ? 'in less than a minute' : 'Just now';
+      if (minutes < 60) return future ? `in ${minutes}m` : `${minutes}m ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return future ? `in ${hours}h` : `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      if (days < 30) return future ? `in ${days}d` : `${days}d ago`;
+      const months = Math.floor(days / 30);
+      if (months < 12) return future ? `in ${months}mo` : `${months}mo ago`;
+      const years = Math.floor(days / 365);
+      return future ? `in ${years}y` : `${years}y ago`;
     } catch (e) {
-      return 'Recent';
+      return '';
     }
   }
 
@@ -602,26 +727,33 @@ class NotificationService {
    * Re-schedules or cancels local device triggers according to active user preferences,
    * active life stage (cycle, pregnancy, menopause), and upcoming doctor bookings.
    */
-  async syncAllReminders({ healthProfile, bookings = [], stage = 'cycle' }) {
+  async syncAllReminders(options = {}) {
     await this.init();
+    this.reminderSyncContext = {
+      healthProfile: null,
+      bookings: [],
+      stage: 'cycle',
+      ...(this.reminderSyncContext || {}),
+      ...options,
+    };
+    const { healthProfile, bookings, stage } = this.reminderSyncContext;
     const settings = await this.getSettings();
+    const activeScheduleIds = new Set(['daily_medication', 'daily_log']);
 
     // 1. Daily Medication / Pill Reminder
-    if (settings.dailyPillAlerts || settings.medicationAlerts) {
+    if (settings.dailyPillAlerts !== false && settings.medicationAlerts !== false) {
       const hour = settings.pillReminderHour ?? 8;
       const minute = settings.pillReminderMinute ?? 0;
       await this.scheduleLocalNotification({
         identifier: 'daily_medication',
-        title: settings.discreetTitles ? 'Daily Health Routine' : 'Daily Pill & Medication Reminder',
-        body: settings.discreetTitles
-          ? 'Time for your daily wellness step.'
-          : 'Remember to take your daily vitamin or contraceptive pill.',
+        title: 'Daily medication reminder',
+        body: 'Take your prescribed vitamins or medication.',
         trigger: {
           hour,
           minute,
           repeats: true,
         },
-        channelId: 'medication',
+        channelId: 'reminders',
         data: { type: 'medication', screen: 'HomeScreen' },
       });
     } else {
@@ -634,48 +766,21 @@ class NotificationService {
       const minute = settings.dailyLogReminderMinute ?? 0;
       await this.scheduleLocalNotification({
         identifier: 'daily_log',
-        title: settings.discreetTitles ? 'Evening Wellness Check-in' : 'Daily Symptom & Cycle Log',
-        body: 'Log your energy, mood, and symptoms today to keep predictions accurate.',
+        title: 'Daily symptom and wellness check-in',
+        body: 'Take a moment to log your energy, mood, and symptoms today.',
         trigger: {
           hour,
           minute,
           repeats: true,
         },
-        channelId: 'default',
+        channelId: 'reminders',
         data: { type: 'daily_log', screen: 'HomeScreen' },
       });
     } else {
       await this.cancelNotification('daily_log');
     }
 
-    // 3. Telemedicine Appointment Reminders
-    if (settings.appointmentAlerts && Array.isArray(bookings)) {
-      const now = Date.now();
-      for (const booking of bookings) {
-        if (booking.status === 'confirmed' || booking.status === 'requested') {
-          const appointmentTime = new Date(booking.scheduled_time).getTime();
-          // Schedule 30 minutes before appointment
-          const triggerTime = appointmentTime - 30 * 60 * 1000;
-          if (triggerTime > now) {
-            const secondsUntil = Math.max(1, Math.floor((triggerTime - now) / 1000));
-            await this.scheduleLocalNotification({
-              identifier: `appointment_${booking.booking_id}`,
-              title: `Upcoming Consultation with ${booking.doctor_name}`,
-              body: `Your video appointment starts in 30 minutes. Tap to prepare and enter the room.`,
-              trigger: { seconds: secondsUntil },
-              channelId: 'appointments',
-              data: {
-                screen: 'DoctorCareScreen',
-                bookingId: booking.booking_id,
-                videoRoomUrl: booking.video_room_url,
-              },
-            });
-          }
-        }
-      }
-    }
-
-    // 4. Pregnancy Milestones (if active)
+    // 3. Pregnancy Milestones (if active)
     if (stage === 'pregnancy' && settings.weeklyGrowthAlerts) {
       const currentWeek = healthProfile?.pregnancyDetails?.currentWeek || 18;
       const milestones = [
@@ -687,6 +792,7 @@ class NotificationService {
 
       for (const m of milestones) {
         if (m.week >= currentWeek) {
+          activeScheduleIds.add(`preg_milestone_${m.week}`);
           const weeksAway = m.week - currentWeek;
           const secondsUntil = weeksAway === 0 ? 30 : Math.min(weeksAway * 7 * 24 * 3600, 2147483);
           await this.scheduleLocalNotification({
@@ -694,10 +800,29 @@ class NotificationService {
             title: m.title,
             body: m.body,
             trigger: { seconds: secondsUntil },
-            channelId: 'default',
+            channelId: 'reminders',
             data: { type: 'pregnancy_milestone', week: m.week, screen: 'PregnancyScreen' },
           });
         }
+      }
+    }
+
+    // Remove appointment and pregnancy reminders that are no longer enabled or upcoming.
+    if (Notifications?.getAllScheduledNotificationsAsync) {
+      try {
+        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        for (const item of scheduled) {
+          const id = item.identifier;
+          if (
+            typeof id === 'string' &&
+            (id.startsWith('appointment_') || id.startsWith('preg_milestone_')) &&
+            !activeScheduleIds.has(id)
+          ) {
+            await this.cancelNotification(id);
+          }
+        }
+      } catch (err) {
+        console.warn('[NotificationService] Could not remove stale reminders:', err?.message);
       }
     }
 

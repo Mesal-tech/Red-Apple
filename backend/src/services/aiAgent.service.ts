@@ -7,6 +7,7 @@ import prisma from '../db/prisma';
 import { telemedicineStore } from '../data/telemedicine.store';
 import { cycleStore } from '../data/cycle.store';
 import { config } from '../config';
+import { reminderService } from '../notifications/reminder.service';
 
 export interface DoctorBookingSummary {
   id?: string;
@@ -269,7 +270,7 @@ const getSessionUserId = (cfg: any): string | null => {
 export const getCycleHistoryTool = tool(
   async ({ days = 60 }, cfg) => {
     const userId = getSessionUserId(cfg);
-    if (!userId) return JSON.stringify({ error: 'User not authenticated' });
+    if (!userId || userId === 'anonymous_user') return JSON.stringify({ error: 'User not authenticated' });
     try {
       const logs = await cycleStore.getLogsByUser(userId);
       const cutoff = new Date();
@@ -300,7 +301,7 @@ export const getCycleHistoryTool = tool(
 export const logSymptomsTool = tool(
   async (input, cfg) => {
     const userId = getSessionUserId(cfg);
-    if (!userId) return JSON.stringify({ error: 'User not authenticated' });
+    if (!userId || userId === 'anonymous_user') return JSON.stringify({ error: 'User not authenticated' });
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       const saved = await cycleStore.saveLog({
@@ -363,13 +364,9 @@ export const findAvailableDoctorsTool = tool(
 );
 
 export const bookConsultationTool = tool(
-  async ({ doctorId, scheduledTime, reason, confirmed = true }, cfg) => {
-    let userId = getSessionUserId(cfg);
-    if (!userId || userId === 'anonymous_user') {
-      const firstUser = await prisma.user.findFirst();
-      if (firstUser) userId = firstUser.user_id;
-    }
-    if (!userId) return JSON.stringify({ error: 'User not authenticated' });
+  async ({ doctorId, scheduledTime, reason, confirmed }, cfg) => {
+    const userId = getSessionUserId(cfg);
+    if (!userId || userId === 'anonymous_user') return JSON.stringify({ error: 'User not authenticated' });
     if (confirmed === false) {
       return JSON.stringify({
         requiresConfirmation: true,
@@ -399,12 +396,12 @@ export const bookConsultationTool = tool(
   },
   {
     name: 'book_consultation',
-    description: 'Book a telemedicine doctor consultation for the user. Call this when the user confirms or asks to book an appointment with a doctor.',
+    description: 'Book a telemedicine consultation only after the user explicitly confirms the exact doctor and time. If they have not confirmed both, do not call this tool; ask first.',
     schema: z.object({
       doctorId: z.string().describe('The doctor ID to book with'),
       scheduledTime: z.string().describe('The date/time string for the appointment'),
       reason: z.string().optional().describe('Primary health reason for the consultation'),
-      confirmed: z.boolean().default(true).describe('True if user has confirmed or agreed to book this consultation'),
+      confirmed: z.boolean().describe('Must be true only after the user explicitly confirms this exact doctor and appointment time.'),
     }),
   }
 );
@@ -412,26 +409,9 @@ export const bookConsultationTool = tool(
 export const setReminderTool = tool(
   async ({ message, remindAt, type = 'general' }, cfg) => {
     const userId = getSessionUserId(cfg);
-    if (!userId) return JSON.stringify({ error: 'User not authenticated' });
+    if (!userId || userId === 'anonymous_user') return JSON.stringify({ error: 'User not authenticated. Please sign in to set a reminder.' });
     try {
-      let triggerTime: Date;
-      try {
-        triggerTime = new Date(remindAt);
-        if (isNaN(triggerTime.getTime())) {
-          triggerTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        }
-      } catch {
-        triggerTime = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      }
-      const reminder = await prisma.reminder.create({
-        data: {
-          user_id: userId,
-          type,
-          title: 'Red Apple Reminder',
-          body: message,
-          trigger_time: triggerTime,
-        },
-      });
+      const reminder = await reminderService.create(userId, { message, remindAt, type }, 'agent_tool');
       return JSON.stringify({ success: true, reminderId: reminder.reminder_id, message: 'Reminder set successfully.' });
     } catch (err: any) {
       return JSON.stringify({ error: err.message || 'Failed to create reminder' });
@@ -439,9 +419,9 @@ export const setReminderTool = tool(
   },
   {
     name: 'set_reminder',
-    description: 'Schedule a notification, medication reminder, period check-in, or appointment reminder for the user.',
+    description: 'Schedule a discreet reminder for the authenticated user. Use an ISO 8601 time with an explicit UTC offset, or a local ISO time interpreted in the user’s saved timezone. The requested time must be in the future; if invalid, ask the user to clarify.',
     schema: z.object({
-      message: z.string().describe('The reminder text to display'),
+      message: z.string().min(1).max(240).describe('A short reminder note for the user'),
       remindAt: z.string().describe('ISO 8601 date/time string when the reminder should trigger'),
       type: z.string().default('health_checkin').describe('Category of reminder'),
     }),
@@ -998,6 +978,21 @@ export function buildHealthAgentGraph() {
   return _cachedHealthGraph;
 }
 
+async function persistEscalatedTriage(userId: string | undefined, triage: TriageResult): Promise<void> {
+  if (!userId || userId === 'anonymous_user' || triage.level === 'normal') return;
+  try {
+    await prisma.triageEvent.create({ data: { user_id: userId, level: triage.level, emergency_care: Boolean(triage.emergencyCare) } });
+  } catch {
+    // Triage remains available to the caller even if audit persistence is temporarily unavailable.
+  }
+}
+
+async function recordCheckInActivity(userId: string | undefined, kind: string): Promise<void> {
+  if (!userId || userId === 'anonymous_user') return;
+  try { await prisma.checkInActivity.create({ data: { user_id: userId, kind } }); }
+  catch { /* Activity has no effect on chat or triage delivery. */ }
+}
+
 /**
  * Public agent runner function (Non-streaming path)
  */
@@ -1027,6 +1022,8 @@ export async function runHealthAgent(
     },
     configParams
   );
+  await recordCheckInActivity(healthContext?.userId, 'dr_red_chat');
+  await persistEscalatedTriage(healthContext?.userId, result.triage);
 
   return {
     reply: result.reply,
@@ -1053,7 +1050,9 @@ export async function* streamHealthAgent(
   healthContext?: HealthContext
 ): AsyncGenerator<StreamAgentEvent> {
   // 1. Triage runs FIRST!
+  await recordCheckInActivity(healthContext?.userId, 'dr_red_chat');
   const triage = evaluateTriage(userMessage, undefined, healthContext, history);
+  await persistEscalatedTriage(healthContext?.userId, triage);
   const quickReplies = getSuggestedQuickReplies(healthContext, triage);
 
   // 2. Yield metadata IMMEDIATELY so client displays advisory banner before token streaming begins

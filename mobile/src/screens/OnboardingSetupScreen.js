@@ -14,10 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
-import { requestAndScheduleNotifications } from '../utils/notifications';
+import { uploadUserAvatar } from '../services/authService';
+import { userFriendlyError } from '../utils/userFriendlyErrors';
 import {
   saveHealthProfileSafe,
   saveActiveHealthModeSafe,
@@ -583,6 +585,9 @@ export default function OnboardingSetupScreen({
 
   // Step 2: Avatar
   const [selectedAvatar, setSelectedAvatar] = useState(user?.avatar_url || AVATAR_PRESETS[0].url);
+  const [customAvatarAsset, setCustomAvatarAsset] = useState(null);
+  const [uploadedCustomAvatarUrl, setUploadedCustomAvatarUrl] = useState(null);
+  const [selectingAvatar, setSelectingAvatar] = useState(false);
 
   // Step 3: Age
   const initialAge = useMemo(() => {
@@ -628,6 +633,32 @@ export default function OnboardingSetupScreen({
     setPregnancyDate(getPregnancyDateBounds(method, today).defaultDate);
   };
 
+  const handleChooseAvatarPhoto = async () => {
+    try {
+      setSelectingAvatar(true);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showError('Allow photo library access to choose a profile photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setCustomAvatarAsset(asset);
+      setUploadedCustomAvatarUrl(null);
+      setSelectedAvatar(asset.uri);
+    } catch (error) {
+      showError(error.message || 'Could not open your photo library.');
+    } finally {
+      setSelectingAvatar(false);
+    }
+  };
+
   // Branch C: Perimenopause
   const [periCyclePattern, setPeriCyclePattern] = useState('irregular');
   const [periSymptoms, setPeriSymptoms] = useState(['hot_flashes', 'sleep']);
@@ -653,11 +684,26 @@ export default function OnboardingSetupScreen({
   };
 
   const handleNextStep = async () => {
+    if (submitting) return;
     if (step === 1 && !isChangingMode) {
       if (!username.trim() || username.trim().length < 2) {
         showError('Please enter a username (at least 2 characters).');
         return;
       }
+    }
+    if (step === 2 && customAvatarAsset && !uploadedCustomAvatarUrl) {
+      setSubmitting(true);
+      try {
+        const avatarUrl = await uploadUserAvatar(customAvatarAsset);
+        setUploadedCustomAvatarUrl(avatarUrl);
+        setSelectedAvatar(avatarUrl);
+        setStep(3);
+      } catch (error) {
+        showError(error.message || 'Could not upload your profile photo. Please try again.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
     }
     if (step < TOTAL_STEPS) {
       setStep(step + 1);
@@ -680,11 +726,16 @@ export default function OnboardingSetupScreen({
 
     try {
       const formattedDate = formatLocalDate(cyclePeriodDate);
+      let avatarUrl = selectedAvatar;
+      if (customAvatarAsset) {
+        avatarUrl = uploadedCustomAvatarUrl || await uploadUserAvatar(customAvatarAsset);
+        setUploadedCustomAvatarUrl(avatarUrl);
+      }
 
       const healthProfile = {
         stage: selectedStage,
         age: selectedAge,
-        avatarUrl: selectedAvatar,
+        avatarUrl,
         completedAt: new Date().toISOString(),
         cycleLength: cycleDays,
         periodDuration: periodDays,
@@ -717,12 +768,13 @@ export default function OnboardingSetupScreen({
       try {
         await updateProfile({
           name: username?.trim() || undefined,
-          avatar_url: selectedAvatar || undefined,
+          avatar_url: avatarUrl || undefined,
           pregnancy_mode: selectedStage === 'pregnancy',
           health_profile: healthProfile,
         });
       } catch (apiErr) {
-        console.warn('[Onboarding] Server profile warning:', apiErr.message);
+        console.warn('[Onboarding] Profile save failed:', apiErr.status || apiErr.kind || 'request_error');
+        throw apiErr;
       }
 
       // Persist local storage
@@ -730,17 +782,10 @@ export default function OnboardingSetupScreen({
       await saveActiveHealthModeSafe(selectedStage);
       await saveOnboardingStatusSafe();
 
-      // Notifications permission
-      try {
-        await requestAndScheduleNotifications();
-      } catch (notifErr) {
-        console.warn('[Onboarding] Notification error:', notifErr.message);
-      }
-
       showSuccess('Profile setup complete!');
       onComplete(healthProfile, selectedStage);
     } catch (err) {
-      showError(err.message || 'Failed to save health profile.');
+      showError(userFriendlyError(err, customAvatarAsset ? 'photo' : 'profile'));
     } finally {
       setSubmitting(false);
     }
@@ -858,13 +903,45 @@ export default function OnboardingSetupScreen({
 
               {/* Avatar Grid */}
               <View className="flex-row flex-wrap justify-between w-full" style={{ gap: 14 }}>
+                <StaggerItem delay={110} style={{ width: '22%', aspectRatio: 1 }}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose a profile photo"
+                    activeOpacity={0.8}
+                    onPress={handleChooseAvatarPhoto}
+                    disabled={selectingAvatar}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 999,
+                      borderWidth: 1.5,
+                      borderStyle: 'dashed',
+                      borderColor: isDarkMode ? theme.cardBorder : '#D1D5DB',
+                      backgroundColor: theme.inputBg,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    {selectingAvatar ? (
+                      <ActivityIndicator size="small" color={theme.textPrimary} />
+                    ) : (
+                      <>
+                        <Ionicons name="person" size={27} color={theme.textSecondary} />
+                        <View style={{ position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: isDarkMode ? '#A52B39' : '#173D36', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.background }}>
+                          <Ionicons name="add" size={15} color="#FFFFFF" />
+                        </View>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </StaggerItem>
                 {AVATAR_PRESETS.map((item, idx) => {
                   const isSelected = item.url === selectedAvatar;
                   return (
                     <StaggerItem key={item.id} delay={120 + idx * 25} style={{ width: '22%', aspectRatio: 1 }}>
                       <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => setSelectedAvatar(item.url)}
+                        onPress={() => { setSelectedAvatar(item.url); setCustomAvatarAsset(null); setUploadedCustomAvatarUrl(null); }}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -1552,13 +1629,12 @@ export default function OnboardingSetupScreen({
             style={{ backgroundColor: isDarkMode ? '#A52B39' : '#101B1A' }}
             onPress={handleNextStep}
           >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
+            <View className="flex-row items-center" style={{ gap: 8 }}>
+              {submitting && <ActivityIndicator size="small" color="#FFFFFF" />}
               <Text className="text-base font-bold text-white">
-                {step === TOTAL_STEPS ? 'Complete Setup' : 'Next'}
+                {submitting && step === 2 ? 'Uploading' : step === TOTAL_STEPS ? 'Complete Setup' : 'Next'}
               </Text>
-            )}
+            </View>
             {!submitting && <View className="absolute right-1.5 h-[49px] w-[49px] items-center justify-center rounded-full" style={{ backgroundColor: isDarkMode ? '#DCEAE5' : '#FFFFFF' }}><Ionicons name="arrow-forward" size={19} color="#101B1A" /></View>}
           </TouchableOpacity>
 

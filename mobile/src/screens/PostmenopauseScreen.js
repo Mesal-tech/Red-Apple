@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { getPostmenopauseDataSafe, savePostmenopauseDataSafe } from '../utils/storage';
 import { useTheme } from '../context/ThemeContext';
+import streakService from '../services/streakService';
 
 const NIA_MENOPAUSE_URL = 'https://www.nia.nih.gov/health/menopause/what-menopause';
 const ACOG_HORMONE_THERAPY_URL = 'https://www.acog.org/womens-health/faqs/hormone-therapy-for-menopause';
@@ -301,6 +302,7 @@ export default function PostmenopauseScreen({
     setSymptomDraft({});
     setSymptomNote('');
     persistData({ symptomLogs: updated });
+    streakService.recordStreakActivity({ activityType: 'symptom_checkin' }).catch(() => {});
   };
 
   // Add Medication Handler

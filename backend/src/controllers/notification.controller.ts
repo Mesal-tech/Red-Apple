@@ -3,6 +3,8 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { notificationService } from '../services/notification.service';
 import { userStore } from '../data/user.store';
 import prisma from '../db/prisma';
+import { deviceTokensService } from '../notifications/deviceTokens.service';
+import { notificationService as notificationOutbox } from '../notifications/notification.service';
 
 export async function getReminders(
   req: AuthenticatedRequest,
@@ -45,6 +47,9 @@ export async function registerPushToken(
       return res.status(400).json({ success: false, message: 'Push token is required.' });
     }
 
+    try { await deviceTokensService.registerDevice(userId, { token, platform: 'unknown' }); }
+    catch (error: any) { return res.status(400).json({ success: false, message: error?.message || 'Invalid Expo push token.' }); }
+
     const user = await userStore.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
@@ -83,7 +88,7 @@ export async function registerPushToken(
         create: { user_id: userId, token },
       });
     } catch (prismaErr: any) {
-      console.warn('[registerPushToken] Prisma pushToken sync notice:', prismaErr?.message);
+      console.warn('[registerPushToken] Legacy token sync notice:', { code: prismaErr?.code || 'sync_error' });
     }
 
     return res.json({
@@ -112,6 +117,7 @@ export async function updateReminderSettings(
       appointmentAlerts,
       discreetTitles,
       dailyLogReminder,
+      dailyPillAlerts,
       medicationAlerts,
       hydrationAlerts,
       weeklyGrowthAlerts,
@@ -129,6 +135,7 @@ export async function updateReminderSettings(
       ...(appointmentAlerts !== undefined && { appointmentAlerts }),
       ...(discreetTitles !== undefined && { discreetTitles }),
       ...(dailyLogReminder !== undefined && { dailyLogReminder }),
+      ...(dailyPillAlerts !== undefined && { dailyPillAlerts }),
       ...(medicationAlerts !== undefined && { medicationAlerts }),
       ...(hydrationAlerts !== undefined && { hydrationAlerts }),
       ...(weeklyGrowthAlerts !== undefined && { weeklyGrowthAlerts }),
@@ -188,6 +195,10 @@ export async function markAllRemindersRead(
     }
 
     await notificationService.markAllRemindersRead(userId);
+    await prisma.notification.updateMany({
+      where: { user_id: userId, status: 'sent', opened_at: null },
+      data: { opened_at: new Date() },
+    });
 
     return res.json({
       success: true,
@@ -209,54 +220,17 @@ export async function sendTestNotification(
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
-    const tokenSet = new Set<string>();
-    const user = await userStore.findById(userId);
-    if (user?.push_tokens) {
-      for (const t of user.push_tokens) if (t) tokenSet.add(t);
-    }
-
-    try {
-      if (prisma && (prisma as any).pushToken) {
-        const dbTokens = await (prisma as any).pushToken.findMany({
-          where: { userId },
-          select: { token: true },
-        });
-        for (const row of dbTokens) {
-          if (row.token) tokenSet.add(row.token);
-        }
-      }
-    } catch (dbErr) {
-      // Ignore if table not present
-    }
-
-    const tokens = Array.from(tokenSet);
-
     const testPayload = {
-      id: `rem_test_${Date.now()}`,
-      title: 'Red Apple Health Alert 🍎',
-      body: 'Notifications are actively working! You will receive your cycle, medication & doctor alerts on time.',
+      id: `notification_test_${Date.now()}`,
+      title: 'Notification test',
+      body: 'Your notification settings are working.',
       timestamp: new Date().toISOString(),
     };
-
-    if (tokens.length > 0) {
-      const result = await notificationService.sendExpoPush(
-        tokens,
-        testPayload.title,
-        testPayload.body,
-        { test: true, channelId: 'default' }
-      );
-      return res.json({
-        success: true,
-        message: 'Push notification dispatched to device.',
-        result,
-        testPayload,
-      });
-    }
-
+    const result = await notificationOutbox.enqueue({ userId, category: 'insights', title: testPayload.title, body: testPayload.body, data: { route: 'AIAssistant', seed: 'gentle_checkin' }, scheduledFor: new Date(), dedupeKey: testPayload.id, source: 'system' });
     return res.json({
       success: true,
-      simulated: true,
-      message: 'Test notification created (no push token registered on server yet).',
+      queued: result.status === 'pending',
+      message: result.status === 'pending' ? 'Test notification queued for delivery.' : 'Test notification was not sent because notifications are currently disabled.',
       testPayload,
     });
   } catch (error) {

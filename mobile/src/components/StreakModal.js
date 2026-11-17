@@ -7,8 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 
 /**
  * Reusable Streak Modal Component
- * Displays streak breakdown (App streak, Cycle log streak, consistency, year-to-date)
- * and includes a "Why Streaks?" educational bottom sheet.
+ * Displays the unified health check-in streak and consistency summary.
  */
 export default function StreakModal({
   visible = false,
@@ -17,12 +16,10 @@ export default function StreakModal({
 }) {
   const { isDarkMode, theme } = useTheme();
   const [streakData, setStreakData] = useState({
-    appStreak: 1,
-    cycleStreak: 1,
-    longestAppStreak: 1,
-    longestCycleStreak: 1,
-    weeksInRow: 1,
-    daysThisYear: 1,
+    appStreak: 0,
+    longestAppStreak: 0,
+    weeksInRow: 0,
+    daysThisYear: 0,
     ...(initialStreakData || {}),
   });
 
@@ -44,9 +41,7 @@ export default function StreakModal({
             setStreakData((prev) => ({
               ...prev,
               appStreak: data.appStreak ?? prev.appStreak,
-              cycleStreak: data.cycleStreak ?? prev.cycleStreak,
               longestAppStreak: data.longestAppStreak ?? prev.longestAppStreak,
-              longestCycleStreak: data.longestCycleStreak ?? prev.longestCycleStreak,
               weeksInRow: data.weeksInRow ?? prev.weeksInRow,
               daysThisYear: data.daysThisYear ?? prev.daysThisYear,
             }));
@@ -104,31 +99,17 @@ export default function StreakModal({
           className="flex-row items-center justify-around py-5 border-b"
           style={{ borderBottomColor: theme.cardBorder }}
         >
-          {/* App Streak Column */}
           <View className="items-center">
             <View className="flex-row items-center gap-1">
               <Ionicons name="flash" size={24} color="#EA580C" />
               <Text className="text-3xl font-black" style={{ color: theme.textPrimary }}>{streakData.appStreak}</Text>
             </View>
-            <Text className="text-xs font-bold mt-1" style={{ color: theme.textSecondary }}>App Streak</Text>
+            <Text className="text-xs font-bold mt-1" style={{ color: theme.textSecondary }}>Health Check-in Streak</Text>
             <Text className="text-[11px] font-semibold text-orange-600 mt-0.5">
               {streakData.longestAppStreak} Best
             </Text>
           </View>
 
-          <View className="w-[1px] h-12" style={{ backgroundColor: theme.cardBorder }} />
-
-          {/* Cycle Streak Column */}
-          <View className="items-center">
-            <View className="flex-row items-center gap-1">
-              <Ionicons name="water" size={24} color="#0284C7" />
-              <Text className="text-3xl font-black" style={{ color: theme.textPrimary }}>{streakData.cycleStreak}</Text>
-            </View>
-            <Text className="text-xs font-bold mt-1" style={{ color: theme.textSecondary }}>Cycle Log Streak</Text>
-            <Text className="text-[11px] font-semibold text-sky-600 mt-0.5">
-              {streakData.longestCycleStreak} Best
-            </Text>
-          </View>
         </View>
 
         <View className="py-4 items-center gap-1">
@@ -136,7 +117,7 @@ export default function StreakModal({
             {streakData.weeksInRow} {streakData.weeksInRow === 1 ? 'week' : 'weeks'} in a row
           </Text>
           <Text className="text-[11px]" style={{ color: theme.textMuted }}>
-            {streakData.daysThisYear} days in Red Apple this year
+            {streakData.daysThisYear} check-in days this year
           </Text>
         </View>
       </AppBottomSheet>
@@ -156,7 +137,7 @@ export default function StreakModal({
           </View>
           <Text className="text-lg font-black mb-2" style={{ color: theme.textPrimary }}>Why Streaks?</Text>
           <Text className="text-xs text-center leading-relaxed mb-6" style={{ color: theme.textSecondary }}>
-            Having a Streak means you’re consistently taking charge of your reproductive and bodily health. It serves as a gentle daily reminder to check in with your body, log your cycle, and stay informed.
+            A check-in streak counts a day when you log your cycle or symptoms, complete a daily check-in, or chat with Dr. Red. Opening the app alone does not count.
           </Text>
           <TouchableOpacity
             activeOpacity={0.8}

@@ -10,6 +10,7 @@ datasource db {
 model User {
   user_id        String    @id @default(uuid()) @map("user_id")
   name           String    @db.VarChar(120)
+  first_name     String?   @map("first_name") @db.VarChar(80)
   email          String?   @unique @db.VarChar(160)
   phone          String?   @unique @db.VarChar(20)
   password_hash  String    @map("password_hash")
@@ -26,6 +27,11 @@ model User {
   payments          Payment[]
   reminders         Reminder[]
   push_tokens       PushToken[]
+  device_tokens     DeviceToken[]
+  notification_preference NotificationPreference?
+  notifications     Notification[]
+  triage_events     TriageEvent[]
+  checkin_activities CheckInActivity[]
 
   @@map("users")
 }
@@ -189,11 +195,130 @@ model Reminder {
   body         String
   trigger_time DateTime @map("trigger_time")
   sent         Boolean  @default(false)
+  timezone     String?  @db.VarChar(100)
+  recurrence_rule String? @map("recurrence_rule") @db.VarChar(100)
+  last_enqueued_for DateTime? @map("last_enqueued_for")
+  enabled      Boolean  @default(true)
   created_at   DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
   @@map("reminders")
+}
+
+model DeviceToken {
+  id                String   @id @default(uuid())
+  user_id           String   @map("user_id")
+  expo_push_token   String   @unique @map("expo_push_token")
+  platform          String   @db.VarChar(20)
+  device_name       String?  @map("device_name") @db.VarChar(120)
+  app_version       String?  @map("app_version") @db.VarChar(40)
+  os_version        String?  @map("os_version") @db.VarChar(40)
+  last_seen_at      DateTime @default(now()) @map("last_seen_at")
+  disabled_at       DateTime? @map("disabled_at")
+  disabled_reason   String?  @map("disabled_reason") @db.VarChar(80)
+  created_at        DateTime @default(now()) @map("created_at")
+  updated_at        DateTime @updatedAt @map("updated_at")
+
+  user       User                   @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([user_id])
+  @@index([disabled_at])
+  @@map("device_tokens")
+}
+
+model NotificationPreference {
+  user_id             String   @id @map("user_id")
+  enabled             Boolean  @default(true)
+  timezone            String   @default("Africa/Lagos") @db.VarChar(100)
+  quiet_hours_start   String   @default("21:00") @map("quiet_hours_start") @db.VarChar(5)
+  quiet_hours_end     String   @default("08:00") @map("quiet_hours_end") @db.VarChar(5)
+  tone                String   @default("gentle") @db.VarChar(20)
+  discreet_mode       Boolean  @default(true) @map("discreet_mode")
+  categories          Json     @default("{\"reminders\":true,\"appointments\":true,\"engagement\":true,\"insights\":true}")
+  max_per_day         Int      @default(3) @map("max_per_day")
+  updated_at          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model Notification {
+  id                String   @id @default(uuid())
+  user_id           String   @map("user_id")
+  category          String   @db.VarChar(40)
+  tier              String?  @db.VarChar(40)
+  title             String   @db.VarChar(120)
+  body              String   @db.VarChar(240)
+  data              Json     @default("{}")
+  scheduled_for     DateTime @map("scheduled_for")
+  status            String   @default("pending") @db.VarChar(20)
+  attempts          Int      @default(0)
+  next_attempt_at   DateTime? @map("next_attempt_at")
+  locked_at         DateTime? @map("locked_at")
+  locked_by         String?  @map("locked_by") @db.VarChar(120)
+  sent_at           DateTime? @map("sent_at")
+  opened_at         DateTime? @map("opened_at")
+  dedupe_key        String   @unique @map("dedupe_key") @db.VarChar(255)
+  source            String   @db.VarChar(40)
+  source_ref        String?  @map("source_ref") @db.VarChar(255)
+  suppressed_reason String?  @map("suppressed_reason") @db.VarChar(80)
+  last_error        String?  @map("last_error") @db.VarChar(240)
+  created_at        DateTime @default(now()) @map("created_at")
+
+  user       User                   @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([status, scheduled_for])
+  @@index([user_id, created_at])
+  @@index([user_id, category, created_at])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id                  String   @id @default(uuid())
+  notification_id     String   @map("notification_id")
+  device_token_id     String   @map("device_token_id")
+  expo_ticket_id      String?  @map("expo_ticket_id") @db.VarChar(120)
+  ticket_status       String   @map("ticket_status") @db.VarChar(30)
+  receipt_status      String?  @map("receipt_status") @db.VarChar(30)
+  receipt_checked_at  DateTime? @map("receipt_checked_at")
+  error_code          String?  @map("error_code") @db.VarChar(80)
+  created_at          DateTime @default(now()) @map("created_at")
+
+  notification Notification @relation(fields: [notification_id], references: [id], onDelete: Cascade)
+  device_token DeviceToken @relation(fields: [device_token_id], references: [id], onDelete: Cascade)
+
+  @@unique([notification_id, device_token_id])
+  @@index([receipt_checked_at, created_at])
+  @@map("notification_deliveries")
+}
+
+model TriageEvent {
+  id             String   @id @default(uuid())
+  user_id        String   @map("user_id")
+  level          String   @db.VarChar(30)
+  emergency_care Boolean  @default(false) @map("emergency_care")
+  created_at     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@map("triage_events")
+}
+
+model CheckInActivity {
+  id         String   @id @default(uuid())
+  user_id    String   @map("user_id")
+  kind       String   @db.VarChar(30)
+  created_at DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@map("checkin_activities")
 }
 
 model PushToken {

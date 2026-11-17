@@ -35,6 +35,8 @@ backend/data/
 **/.turbo/
 .gradle/
 **/.gradle/
+.gradle-user/
+**/.gradle-user/
 mobile/.gradle-cache/
 **/.gradle-cache/
 android/.gradle/

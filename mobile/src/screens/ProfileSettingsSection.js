@@ -162,6 +162,9 @@ export default function ProfileSettingsSection({
   const [weeklyGrowthAlerts, setWeeklyGrowthAlerts] = useState(true);
   const [hydrationAlerts, setHydrationAlerts] = useState(false);
   const [dailyLogReminder, setDailyLogReminder] = useState(true);
+  const [appointmentAlerts, setAppointmentAlerts] = useState(true);
+  const [notificationPrefs, setNotificationPrefs] = useState({ enabled: true, tone: 'gentle', quiet_hours_start: '21:00', quiet_hours_end: '08:00', categories: { reminders: true, appointments: true, engagement: true, insights: true } });
+  const [deviceTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [isTestingNotification, setIsTestingNotification] = useState(false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -176,7 +179,13 @@ export default function ProfileSettingsSection({
           setWeeklyGrowthAlerts(notifSettings.weeklyGrowthAlerts !== false);
           setHydrationAlerts(notifSettings.hydrationAlerts === true);
           setDailyLogReminder(notifSettings.dailyLogReminder !== false);
+          setAppointmentAlerts(notifSettings.appointmentAlerts !== false);
         }
+
+        try {
+          const preferences = await notificationService.getPreferences();
+          if (preferences) setNotificationPrefs((current) => ({ ...current, ...preferences }));
+        } catch (_) {}
 
         const hp = await getHealthProfileSafe();
         const metrics = await getStoredProfileMetricsSafe();
@@ -196,16 +205,68 @@ export default function ProfileSettingsSection({
   }, []);
 
   const handleToggleNotification = async (key, val, setter) => {
-    setter(val);
-    try {
-      if (typeof notificationService.updateSettings === 'function') {
-        await notificationService.updateSettings({ [key]: val });
-      } else if (typeof notificationService.updateSetting === 'function') {
-        await notificationService.updateSetting(key, val);
-      }
-    } catch (e) {
-      console.warn('[ProfileSettingsSection] Failed to update notification setting:', e);
+    const save = async () => {
+      setter(val);
+      try {
+        if (typeof notificationService.updateSettings === 'function') {
+          await notificationService.updateSettings(key === 'periodAlerts'
+            ? { periodAlerts: val, fertileWindowAlerts: val }
+            : { [key]: val });
+        } else if (typeof notificationService.updateSetting === 'function') await notificationService.updateSetting(key, val);
+      } catch (e) { console.warn('[ProfileSettingsSection] Failed to update notification setting:', e); }
+    };
+    if (val && Platform.OS !== 'web') {
+      try {
+        const Notifications = require('expo-notifications');
+        const permission = await Notifications.getPermissionsAsync();
+        if (permission.status !== 'granted' && !permission.granted) {
+          Alert.alert('Get helpful reminders', 'Red Apple can send the health reminders you choose, with their full details.', [
+            { text: 'Not now', style: 'cancel', onPress: save },
+            { text: 'Continue', onPress: async () => {
+              const result = await notificationService.ensurePermissions();
+              if (result.status === 'granted' || result.granted) await notificationService.registerForPush();
+              else Alert.alert('Notifications are off', 'You can enable them in your device settings.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]);
+              await save();
+            } },
+          ]);
+          return;
+        }
+      } catch (_) {}
     }
+    await save();
+  };
+
+  const saveNotificationPreference = async (patch) => {
+    const update = patch.categories ? { ...patch, categories: { ...notificationPrefs.categories, ...patch.categories } } : patch;
+    setNotificationPrefs((current) => ({ ...current, ...update }));
+    try { await notificationService.updatePreferences(update); }
+    catch (error) { console.warn('[ProfileSettingsSection] Preference sync failed:', error?.message); }
+    if (update.enabled === false) await notificationService.cancelAllNotifications();
+    if (update.enabled === true) {
+      await notificationService.syncAllReminders({});
+      await notificationService.registerForPush();
+    }
+  };
+
+  const handleMasterNotificationsToggle = async (enabled) => {
+    if (!enabled || Platform.OS === 'web') return saveNotificationPreference({ enabled });
+    try {
+      const Notifications = require('expo-notifications');
+      const permission = await Notifications.getPermissionsAsync();
+      if (permission.status !== 'granted' && !permission.granted) {
+        Alert.alert('Get helpful reminders', 'Red Apple can send the health reminders you choose, with their full details.', [
+          { text: 'Not now', style: 'cancel', onPress: () => saveNotificationPreference({ enabled }) },
+          { text: 'Continue', onPress: async () => {
+            const result = await notificationService.ensurePermissions();
+            if (result.status === 'granted' || result.granted) await notificationService.registerForPush();
+            else Alert.alert('Notifications are off', 'You can enable them in your device settings.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]);
+            await saveNotificationPreference({ enabled });
+          } },
+        ]);
+        return;
+      }
+    } catch (_) {}
+    await saveNotificationPreference({ enabled });
   };
 
   const handleTestNotification = async () => {
@@ -216,8 +277,8 @@ export default function ProfileSettingsSection({
       } else {
         await notificationService.scheduleLocalNotification({
           id: `test_${Date.now()}`,
-          title: 'Red Apple Health Alert 🌸',
-          body: 'Your cycle insights and reminders are up to date.',
+          title: 'Notification test',
+          body: 'Your notification settings are working.',
           trigger: { seconds: 1 },
         });
       }
@@ -1146,6 +1207,35 @@ export default function ProfileSettingsSection({
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.divider }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>Notifications</Text>
+                  <Text style={{ fontSize: 11.5, color: theme.textSecondary, marginTop: 2 }}>Pause or resume all notifications</Text>
+                </View>
+                <Switch value={notificationPrefs.enabled} onValueChange={handleMasterNotificationsToggle} accessibilityLabel="Enable notifications" trackColor={{ false: '#E2E8F0', true: colors.primary }} thumbColor="#FFFFFF" />
+              </View>
+              <View style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.divider }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 }}>Dr. Red’s tone</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {['gentle', 'cheeky'].map((tone) => <TouchableOpacity key={tone} onPress={() => saveNotificationPreference({ tone })} accessibilityRole="button" accessibilityLabel={`Set ${tone} notification tone`} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: notificationPrefs.tone === tone ? colors.primary : theme.card, borderWidth: 1, borderColor: theme.cardBorder }}><Text style={{ color: notificationPrefs.tone === tone ? '#FFFFFF' : theme.textPrimary, fontWeight: '700' }}>{tone === 'gentle' ? 'Gentle' : 'Playful'}</Text></TouchableOpacity>)}
+                </View>
+              </View>
+              <View style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.divider }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>Quiet hours</Text>
+                <Text style={{ fontSize: 11.5, color: theme.textSecondary, marginTop: 2 }}>Times use {deviceTimezone}.</Text>
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
+                  {[['quiet_hours_start', 'Start'], ['quiet_hours_end', 'End']].map(([key, label]) => <View key={key} style={{ flex: 1 }}><Text style={{ fontSize: 11, color: theme.textSecondary, marginBottom: 4 }}>{label}</Text><TextInput value={notificationPrefs[key]} onChangeText={(value) => setNotificationPrefs((current) => ({ ...current, [key]: value }))} onEndEditing={() => saveNotificationPreference({ [key]: notificationPrefs[key] })} keyboardType="numbers-and-punctuation" placeholder="21:00" accessibilityLabel={`Quiet hours ${label.toLowerCase()}`} style={{ color: theme.textPrimary, backgroundColor: theme.card, borderColor: theme.cardBorder, borderWidth: 1, borderRadius: 10, padding: 10 }} /></View>)}
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, color: theme.textSecondary, paddingVertical: 10 }}>Device timezone: {deviceTimezone}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.divider }}>
+                <View style={{ flex: 1, marginRight: 12 }}><Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>Appointment reminders</Text><Text style={{ fontSize: 11.5, color: theme.textSecondary, marginTop: 2 }}>Get reminders before booked appointments.</Text></View>
+                <Switch value={appointmentAlerts} onValueChange={(value) => handleToggleNotification('appointmentAlerts', value, setAppointmentAlerts)} accessibilityLabel="Appointment reminders" trackColor={{ false: '#E2E8F0', true: colors.primary }} thumbColor="#FFFFFF" />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.divider }}>
+                <View style={{ flex: 1, marginRight: 12 }}><Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>Dr. Red check-ins</Text><Text style={{ fontSize: 11.5, color: theme.textSecondary, marginTop: 2 }}>Occasional gentle nudges from Dr. Red.</Text></View>
+                <Switch value={notificationPrefs.categories?.engagement !== false} onValueChange={(engagement) => saveNotificationPreference({ categories: { engagement } })} accessibilityLabel="Dr. Red check-ins" trackColor={{ false: '#E2E8F0', true: colors.primary }} thumbColor="#FFFFFF" />
+              </View>
               {/* Period Alerts */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.divider }}>
                 <View style={{ flex: 1, marginRight: 12 }}>

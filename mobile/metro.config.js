@@ -12,6 +12,7 @@ config.resolver.nodeModulesPaths = [
 config.resolver.extraNodeModules = {
   '@stream-io/react-native-webrtc': path.resolve(__dirname, 'node_modules/@stream-io/react-native-webrtc'),
   '@stream-io/video-react-native-sdk': path.resolve(__dirname, 'node_modules/@stream-io/video-react-native-sdk'),
+  three: path.resolve(__dirname, 'node_modules/three'),
 };
 
 // Polyfill MessageQueue before InitializeCore runs in Bridgeless dev client

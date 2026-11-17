@@ -2,8 +2,6 @@ import {
   getStreakDataSafe,
   saveStreakDataSafe,
   getCycleLogsSafe,
-  getHealthProfileSafe,
-  saveHealthProfileSafe,
 } from '../utils/storage';
 import { apiRequest } from './apiClient';
 
@@ -149,31 +147,56 @@ export async function getStreakData() {
   const todayStr = formatLocalDate();
   let stored = await getStreakDataSafe();
 
-  // If no stored streak data exists, backfill from past cycle logs and profile
-  if (!stored || !Array.isArray(stored.activeDates)) {
-    const cycleLogs = (await getCycleLogsSafe()) || [];
-    const cycleDateList = cycleLogs
-      .map((l) => l.date || (l.startDate ? l.startDate.split('T')[0] : null))
-      .filter(Boolean);
+  // The backend's CheckInActivity ledger is the canonical source shared with engagement notifications.
+  try {
+    const response = await apiRequest('/notifications/streak', {}, 3000);
+    const remote = response?.success && response.streak;
+    if (remote && Array.isArray(remote.activeDates)) {
+      const canonical = {
+        activeDates: remote.activeDates,
+        longestAppStreak: remote.longestStreak,
+        lastRestoredMonth: remote.lastRestoredMonth,
+        streakDefinition: 'health_checkin_v2',
+      };
+      await saveStreakDataSafe(canonical);
+      return {
+        appStreak: remote.currentStreak,
+        longestAppStreak: remote.longestStreak,
+        lastActiveDate: remote.lastActiveDate,
+        activeDates: remote.activeDates,
+        daysThisYear: remote.daysThisYear,
+        weeksInRow: remote.weeksInRow,
+        weeklyDays: getWeekDaysWithStatus(remote.activeDates),
+        freezeAvailable: remote.lastRestoredMonth !== todayStr.substring(0, 7),
+        lastRestoredMonth: remote.lastRestoredMonth,
+      };
+    }
+  } catch (_) {
+    // Use the same qualifying activity definition from the local cache while offline.
+  }
 
-    // Initial check-in for today so user starts on streak 1 on first use
-    const initialActive = Array.from(new Set([...cycleDateList, todayStr]));
-    const initialCycle = Array.from(new Set(cycleDateList));
+  // Discard the old app-open-based dates once and seed offline cache from real cycle logs.
+  if (!stored || !Array.isArray(stored.activeDates) || stored.streakDefinition !== 'health_checkin_v2') {
+    const cycleLogs = (await getCycleLogsSafe()) || [];
+    const initialActive = Array.from(new Set(cycleLogs
+      .map((log) => log.created_at || log.logged_at
+        ? formatLocalDate(new Date(log.created_at || log.logged_at))
+        : log.date || (log.startDate ? log.startDate.split('T')[0] : null))
+      .filter(Boolean))).sort();
+    const initialStats = computeStreakStats(initialActive);
 
     stored = {
       activeDates: initialActive,
-      cycleDates: initialCycle,
-      longestAppStreak: initialActive.length,
-      longestCycleStreak: initialCycle.length,
-      lastRestoredMonth: null,
+      longestAppStreak: initialStats.longestStreak,
+      lastRestoredMonth: stored?.lastRestoredMonth || null,
       freezeAvailable: true,
+      streakDefinition: 'health_checkin_v2',
     };
     await saveStreakDataSafe(stored);
   }
 
   // Calculate fresh deterministic stats
   const appStats = computeStreakStats(stored.activeDates);
-  const cycleStats = computeStreakStats(stored.cycleDates);
   const weeklyDays = getWeekDaysWithStatus(stored.activeDates);
 
   const currentMonth = todayStr.substring(0, 7); // "YYYY-MM"
@@ -182,12 +205,8 @@ export async function getStreakData() {
   return {
     appStreak: appStats.currentStreak,
     longestAppStreak: Math.max(stored.longestAppStreak || 0, appStats.longestStreak),
-    lastActiveDate: appStats.lastActiveDate || todayStr,
+    lastActiveDate: appStats.lastActiveDate,
     activeDates: stored.activeDates || [],
-    cycleStreak: cycleStats.currentStreak,
-    longestCycleStreak: Math.max(stored.longestCycleStreak || 0, cycleStats.longestStreak),
-    lastCycleDate: cycleStats.lastActiveDate,
-    cycleDates: stored.cycleDates || [],
     daysThisYear: appStats.daysThisYear,
     weeksInRow: appStats.weeksInRow,
     weeklyDays,
@@ -197,78 +216,60 @@ export async function getStreakData() {
 }
 
 /**
- * Record a user health activity (app check-in, water, vitals, cycle log).
- * Synchronously computes updated streak and persists offline-first,
- * then asynchronously syncs to backend.
+ * Record a qualifying health check-in locally; backend-owned activities are recorded by their
+ * domain services and manual check-ins use the streak activity API.
  */
 export async function recordStreakActivity({
-  activityType = 'app_open',
-  date = null,
+  activityType,
 } = {}) {
-  const activityDate = date ? formatLocalDate(new Date(date)) : formatLocalDate();
-  const current = await getStreakData();
-
-  const updatedActiveDates = Array.from(new Set([...(current.activeDates || []), activityDate])).sort();
-  let updatedCycleDates = current.cycleDates || [];
-
-  if (activityType === 'cycle_log') {
-    updatedCycleDates = Array.from(new Set([...updatedCycleDates, activityDate])).sort();
+  const qualifyingKinds = new Set(['cycle_log', 'symptom_checkin', 'daily_checkin', 'dr_red_chat']);
+  if (!qualifyingKinds.has(activityType)) return getStreakData();
+  const activityDate = formatLocalDate();
+  let current = await getStreakDataSafe();
+  if (!current || !Array.isArray(current.activeDates) || current.streakDefinition !== 'health_checkin_v2') {
+    const cycleLogs = (await getCycleLogsSafe()) || [];
+    const activeDates = Array.from(new Set(cycleLogs
+      .map((log) => log.created_at || log.logged_at
+        ? formatLocalDate(new Date(log.created_at || log.logged_at))
+        : log.date || (log.startDate ? log.startDate.split('T')[0] : null))
+      .filter(Boolean))).sort();
+    const stats = computeStreakStats(activeDates);
+    current = {
+      activeDates,
+      longestAppStreak: stats.longestStreak,
+      streakDefinition: 'health_checkin_v2',
+    };
   }
 
+  const updatedActiveDates = Array.from(new Set([...(current.activeDates || []), activityDate])).sort();
   const appStats = computeStreakStats(updatedActiveDates);
-  const cycleStats = computeStreakStats(updatedCycleDates);
 
   const longestAppStreak = Math.max(current.longestAppStreak || 0, appStats.longestStreak);
-  const longestCycleStreak = Math.max(current.longestCycleStreak || 0, cycleStats.longestStreak);
 
   const updatedStreakPayload = {
     activeDates: updatedActiveDates,
-    cycleDates: updatedCycleDates,
     longestAppStreak,
-    longestCycleStreak,
     lastRestoredMonth: current.lastRestoredMonth,
+    streakDefinition: 'health_checkin_v2',
   };
 
   // 1. Save locally for zero-latency UI
   await saveStreakDataSafe(updatedStreakPayload);
 
-  // 2. Also keep health_profile in sync
-  try {
-    const healthProfile = (await getHealthProfileSafe()) || {};
-    await saveHealthProfileSafe({
-      ...healthProfile,
-      streak: {
-        appStreak: appStats.currentStreak,
-        longestAppStreak,
-        cycleStreak: cycleStats.currentStreak,
-        longestCycleStreak,
-        daysThisYear: appStats.daysThisYear,
-        weeksInRow: appStats.weeksInRow,
-        lastActiveDate: activityDate,
-      },
-    });
-  } catch (_) {}
-
-  // 3. Asynchronously sync to backend profile
-  syncStreakToBackend({
-    appStreak: appStats.currentStreak,
-    longestAppStreak,
-    cycleStreak: cycleStats.currentStreak,
-    longestCycleStreak,
-    daysThisYear: appStats.daysThisYear,
-    activeDates: updatedActiveDates,
-    cycleDates: updatedCycleDates,
-  }).catch(() => {});
+  // Cycle logs and Dr. Red chats are recorded by their backend services. The local-only menopause
+  // symptom check-in uses this authenticated event endpoint so all sources enter the same ledger.
+  if (activityType === 'symptom_checkin' || activityType === 'daily_checkin') {
+    apiRequest('/notifications/streak/activity', {
+      method: 'POST',
+      body: JSON.stringify({ kind: activityType }),
+    }).catch(() => {});
+  }
 
   return {
     appStreak: appStats.currentStreak,
     longestAppStreak,
     lastActiveDate: activityDate,
     activeDates: updatedActiveDates,
-    cycleStreak: cycleStats.currentStreak,
-    longestCycleStreak,
-    lastCycleDate: cycleStats.lastActiveDate,
-    cycleDates: updatedCycleDates,
     daysThisYear: appStats.daysThisYear,
     weeksInRow: appStats.weeksInRow,
     weeklyDays: getWeekDaysWithStatus(updatedActiveDates),
@@ -276,68 +277,13 @@ export async function recordStreakActivity({
   };
 }
 
-/**
- * Restore streak if user had a streak of 7+ days and hasn't restored this month.
- */
 export async function restoreStreak() {
-  const current = await getStreakData();
-  const todayStr = formatLocalDate();
-  const currentMonth = todayStr.substring(0, 7);
-
-  if (current.lastRestoredMonth === currentMonth) {
-    return {
-      success: false,
-      message: 'You have already restored a streak this month.',
-    };
-  }
-
-  if (current.longestAppStreak < 7) {
-    return {
-      success: false,
-      message: 'A streak of 7 or more days is required for monthly restoration.',
-    };
-  }
-
-  // Restore active dates by synthesizing yesterday and today
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = formatLocalDate(yesterday);
-
-  const restoredDates = Array.from(
-    new Set([...current.activeDates, yesterdayStr, todayStr])
-  ).sort();
-
-  const updatedPayload = {
-    activeDates: restoredDates,
-    cycleDates: current.cycleDates,
-    longestAppStreak: Math.max(current.longestAppStreak, current.appStreak + 1),
-    longestCycleStreak: current.longestCycleStreak,
-    lastRestoredMonth: currentMonth,
-  };
-
-  await saveStreakDataSafe(updatedPayload);
-  return {
-    success: true,
-    message: 'Streak successfully restored!',
-    streak: await getStreakData(),
-  };
-}
-
-/**
- * Sync streak to backend profile API
- */
-async function syncStreakToBackend(streakData) {
   try {
-    await apiRequest('/auth/profile', {
-      method: 'PUT',
-      body: JSON.stringify({
-        health_profile: {
-          streak: streakData,
-        },
-      }),
-    });
-  } catch (err) {
-    // Offline or network error handled gracefully
+    const response = await apiRequest('/notifications/streak/restore', { method: 'POST' });
+    if (response?.success) return { ...response, streak: await getStreakData() };
+    return { success: false, message: response?.message || 'Could not restore the streak.' };
+  } catch (_) {
+    return { success: false, message: 'Connect to the internet to restore your streak.' };
   }
 }
 

@@ -14,6 +14,9 @@ import paymentRoutes from './routes/payment.routes';
 import aiRoutes from './routes/ai.routes';
 import partnerRoutes from './routes/partner.routes';
 import { errorHandler } from './middleware/error.middleware';
+import { authenticateToken, requireRole } from './middleware/auth.middleware';
+import { notificationDispatcher } from './notifications/notification.service';
+import prisma from './db/prisma';
 
 export function createExpressApp(): Application {
   const app = express();
@@ -38,6 +41,16 @@ export function createExpressApp(): Application {
   app.use('/api/pregnancy', pregnancyRoutes);
   app.use('/api/telemedicine', telemedicineRoutes);
   app.use('/api/notifications', notificationRoutes);
+  app.get('/api/admin/notifications/health', authenticateToken, requireRole('admin'), async (_req, res, next) => {
+    try {
+      const [pending, oldest] = await Promise.all([
+        prisma.notification.count({ where: { status: 'pending' } }),
+        prisma.notification.findFirst({ where: { status: 'pending' }, orderBy: { created_at: 'asc' }, select: { created_at: true } }),
+      ]);
+      const worker = notificationDispatcher.getStatus();
+      res.json({ success: true, workerEnabled: worker.enabled, workerHeartbeatAt: worker.lastHeartbeatAt, queueDepth: pending, oldestPendingAgeMs: oldest ? Date.now() - oldest.created_at.getTime() : 0 });
+    } catch (error) { next(error); }
+  });
   app.use('/api/campaigns', campaignRoutes);
   app.use('/api/emails', emailRoutes);
   app.use('/api/payments', paymentRoutes);

@@ -1,4 +1,3 @@
-import https from 'https';
 import { userStore } from '../data/user.store';
 import { telemedicineStore } from '../data/telemedicine.store';
 import { calculateFertilityPrediction } from '../utils/cycleCalculators';
@@ -25,75 +24,6 @@ export interface AppReminder {
 
 export class NotificationService {
   /**
-   * Dispatches push notifications to Expo Push service
-   */
-  public async sendExpoPush(
-    tokens: string[],
-    title: string,
-    body: string,
-    data?: Record<string, any>
-  ): Promise<any> {
-    const validTokens = tokens.filter(
-      (t) => typeof t === 'string' && (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken'))
-    );
-
-    if (validTokens.length === 0) {
-      return { success: false, message: 'No valid Expo push tokens found.' };
-    }
-
-    const messages = validTokens.map((token) => ({
-      to: token,
-      sound: 'default',
-      title,
-      body,
-      data: data || {},
-      priority: 'high',
-      channelId: (data?.channelId as string) || 'default',
-    }));
-
-    const postData = JSON.stringify(messages);
-
-    return new Promise((resolve) => {
-      const req = https.request(
-        {
-          hostname: 'exp.host',
-          port: 443,
-          path: '/--/api/v2/push/send',
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-Encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData),
-          },
-        },
-        (res) => {
-          let responseData = '';
-          res.on('data', (chunk) => {
-            responseData += chunk;
-          });
-          res.on('end', () => {
-            try {
-              const parsed = JSON.parse(responseData);
-              resolve({ success: true, tickets: parsed.data });
-            } catch (e) {
-              resolve({ success: false, raw: responseData });
-            }
-          });
-        }
-      );
-
-      req.on('error', (err) => {
-        console.warn('[NotificationService] Expo push dispatch error:', err.message);
-        resolve({ success: false, error: err.message });
-      });
-
-      req.write(postData);
-      req.end();
-    });
-  }
-
-  /**
    * Computes dynamic, clinically accurate reminders for a given user
    */
   public async computeUserReminders(userId: string): Promise<AppReminder[]> {
@@ -101,12 +31,11 @@ export class NotificationService {
     const reminders: AppReminder[] = [];
 
     const settings = user?.notification_settings || {};
-    const discreet = settings.discreetTitles ?? false;
     const periodAlertsEnabled = settings.periodAlerts !== false;
     const fertileAlertsEnabled = settings.fertileWindowAlerts !== false;
     const appointmentAlertsEnabled = settings.appointmentAlerts !== false;
     const dailyLogEnabled = settings.dailyLogReminder !== false;
-    const medicationEnabled = settings.medicationAlerts !== false;
+    const medicationEnabled = settings.dailyPillAlerts !== false && settings.medicationAlerts !== false;
     const hydrationEnabled = settings.hydrationAlerts === true;
     const stage = user?.health_profile?.stage || (user?.pregnancy_mode ? 'pregnancy' : 'cycle');
 
@@ -132,10 +61,8 @@ export class NotificationService {
         reminders.push({
           id: `rem_period_${userId}_${prediction.daysUntilNextPeriod}`,
           type: 'period_alert',
-          title: discreet ? 'Cycle Timing Alert' : `Period Expected ${daysText.charAt(0).toUpperCase() + daysText.slice(1)}`,
-          body: discreet
-            ? 'Open Red Apple to view your health calendar update.'
-            : `Your next period is predicted to start ${daysText}. Ensure supplies are ready.`,
+          title: `Period Expected ${daysText.charAt(0).toUpperCase() + daysText.slice(1)}`,
+          body: `Your next period is predicted to start ${daysText}. Ensure supplies are ready.`,
           triggerTime: new Date(Date.now() + Math.max(prediction.daysUntilNextPeriod, 0) * 24 * 3600 * 1000).toISOString(),
           priority: 'high',
           data: { screen: 'HomeScreen', prediction },
@@ -147,10 +74,8 @@ export class NotificationService {
         reminders.push({
           id: `rem_fertile_${userId}`,
           type: 'fertile_window',
-          title: discreet ? 'Active Cycle Phase' : 'Fertile Window Active',
-          body: discreet
-            ? 'Your tracked phase is active today. Tap to check your insights.'
-            : `You are in your fertile window today. Peak estimated ovulation: ${prediction.estimatedOvulationDate}.`,
+          title: 'Fertile Window Active',
+          body: `You are in your fertile window today. Peak estimated ovulation: ${prediction.estimatedOvulationDate}.`,
           triggerTime: new Date().toISOString(),
           priority: 'normal',
           data: { screen: 'HomeScreen', phase: 'fertile' },
@@ -185,7 +110,7 @@ export class NotificationService {
       reminders.push({
         id: `rem_meno_${userId}_${new Date().toISOString().split('T')[0]}`,
         type: 'menopause_wellness',
-        title: discreet ? 'Daily Wellness Check' : 'Menopause Wellness Insight',
+        title: 'Menopause Wellness Insight',
         body: 'Log vasomotor symptoms, sleep quality, and remember calcium & vitamin D intake today.',
         triggerTime: new Date().toISOString(),
         priority: 'normal',
@@ -224,10 +149,8 @@ export class NotificationService {
       reminders.push({
         id: `rem_med_${userId}_${new Date().toISOString().split('T')[0]}`,
         type: 'medication',
-        title: discreet ? 'Daily Health Routine' : 'Daily Pill & Medication Reminder',
-        body: discreet
-          ? 'Time for your daily wellness step.'
-          : 'Remember to take your prescribed vitamins or medication for optimal reproductive wellness.',
+        title: 'Daily Pill & Medication Reminder',
+        body: 'Remember to take your prescribed vitamins or medication for optimal reproductive wellness.',
         triggerTime: new Date().toISOString(),
         priority: 'normal',
         data: { screen: 'HomeScreen' },

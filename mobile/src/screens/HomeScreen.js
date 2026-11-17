@@ -324,7 +324,7 @@ export default function HomeScreen({
   };
 
   // Streak state
-  const [streakCount, setStreakCount] = useState(1);
+  const [streakCount, setStreakCount] = useState(0);
 
   // Partner Sync state
   const reloadPartnerStatus = async () => {
@@ -391,8 +391,13 @@ export default function HomeScreen({
     reloadNotifications();
     let unsub;
     if (typeof notificationService?.subscribe === 'function') {
-      unsub = notificationService.subscribe(() => {
-        reloadNotifications();
+      unsub = notificationService.subscribe((items) => {
+        if (Array.isArray(items)) {
+          setNotificationsList(items);
+          setUnreadNotificationsCount(items.filter((n) => !n.isRead).length);
+        } else {
+          reloadNotifications();
+        }
       });
     }
     return () => {
@@ -463,9 +468,6 @@ export default function HomeScreen({
 
   useEffect(() => {
     loadCycleData();
-    if (typeof streakService?.recordStreakActivity === 'function') {
-      streakService.recordStreakActivity({ activityType: 'app_open' }).catch(() => { });
-    }
   }, [user?.id, healthProfile?.lastPeriodDate, user?.health_profile?.lastPeriodDate]);
 
   const handleRefresh = async () => {
@@ -1479,11 +1481,11 @@ export default function HomeScreen({
               borderColor: theme.cardBorder,
             }}
             onPress={async () => {
-              if (typeof notificationService?.markAllAsRead === 'function') {
-                await notificationService.markAllAsRead();
-              }
               setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
               setUnreadNotificationsCount(0);
+              if (typeof notificationService?.markAllAsRead === 'function') {
+                void notificationService.markAllAsRead();
+              }
               showToastSuccess && showToastSuccess('All marked as read');
             }}
             accessibilityLabel="Mark all as read"
@@ -1574,11 +1576,11 @@ export default function HomeScreen({
                   }}
                   onPress={async () => {
                     if (!notif.isRead && typeof notificationService?.markAsRead === 'function') {
-                      await notificationService.markAsRead(notif.id);
                       setNotificationsList((prev) =>
                         prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
                       );
                       setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+                      void notificationService.markAsRead(notif.id);
                     }
                   }}
                 >
@@ -1634,6 +1636,11 @@ export default function HomeScreen({
                     >
                       {notif.body}
                     </Text>
+                    {!!notif.time && (
+                      <Text style={{ fontSize: 11, color: theme.textSecondary, marginTop: 5 }}>
+                        {notif.time}
+                      </Text>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
