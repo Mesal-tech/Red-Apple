@@ -42,6 +42,7 @@ model CycleLog {
   start_date     DateTime  @map("start_date") @db.Date
   end_date       DateTime? @map("end_date") @db.Date
   flow_intensity String?   @map("flow_intensity") @db.VarChar(20)
+  feeling        String?   @db.VarChar(40)
   symptoms       Json?     @default("[]")
   notes          String?
   is_period_day  Boolean   @default(false) @map("is_period_day")

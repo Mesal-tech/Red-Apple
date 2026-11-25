@@ -182,9 +182,109 @@ export function computeLocalCycleStats(logs = [], baselineCycleLength = 28, base
   };
 }
 
+/** Build observations from logged dates only; these are descriptive, not diagnoses. */
+export function computeCycleInsights(logs = [], baselineCycleLength = 28) {
+  const byDate = new Map();
+  logs.forEach((log) => {
+    const date = String(log.date || log.startDate || '').split('T')[0];
+    if (date) byDate.set(date, { ...byDate.get(date), ...log, date });
+  });
+  const sorted = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const periodDates = sorted.filter((log) => log.isPeriodDay === true || (log.isPeriodDay == null && log.flowIntensity && log.flowIntensity !== 'None'));
+  const starts = periodDates.filter((log, index) => {
+    if (!index) return true;
+    const previous = new Date(`${periodDates[index - 1].date}T00:00:00Z`);
+    const current = new Date(`${log.date}T00:00:00Z`);
+    return (current - previous) / 86400000 > 1;
+  }).map((log) => log.date);
+  const lengths = starts.slice(1).map((date, index) =>
+    Math.round((new Date(`${date}T00:00:00Z`) - new Date(`${starts[index]}T00:00:00Z`)) / 86400000)
+  ).filter((days) => days >= 18 && days <= 45);
+  const insights = [];
+  if (lengths.length) {
+    const average = Math.round(lengths.reduce((sum, days) => sum + days, 0) / lengths.length);
+    insights.push({ id: 'average', title: `Your average cycle is ${average} days`, detail: `Based on ${lengths.length} cycle${lengths.length === 1 ? '' : 's'} you logged.` });
+    const latestStart = starts[starts.length - 1];
+    const elapsed = latestStart ? Math.floor((Date.now() - new Date(`${latestStart}T00:00:00Z`).getTime()) / 86400000) + 1 : 0;
+    if (elapsed > average + 7) {
+      insights.push({ id: 'current-variation', title: 'This cycle is longer than your recent average so far', detail: `It has been ${elapsed} days since your last logged period. If you have had a period since then, add it to keep this observation up to date.` });
+    }
+    const recent = lengths.slice(-3);
+    if (recent.length === 3 && recent[0] < recent[1] && recent[1] < recent[2]) {
+      insights.unshift({ id: 'lengthening', title: 'Your last three cycles have been getting longer', detail: `They measured ${recent.join(', ')} days. Cycle lengths can vary; this is a pattern in your logs.` });
+    } else if (lengths.length >= 2) {
+      const range = Math.max(...lengths) - Math.min(...lengths);
+      if (range >= 7) insights.push({ id: 'variation', title: 'Your cycle lengths have varied', detail: `Your logged cycles ranged from ${Math.min(...lengths)} to ${Math.max(...lengths)} days.` });
+    }
+  }
+  const symptomCycles = new Map();
+  sorted.forEach((log) => {
+    const day = new Date(`${log.date}T00:00:00Z`);
+    starts.forEach((start, cycleIndex) => {
+      const startDay = new Date(`${start}T00:00:00Z`);
+      const delta = (startDay - day) / 86400000;
+      if (delta >= 1 && delta <= 5) {
+        const loggedSignals = [...(log.symptoms || [])];
+        if (log.feeling && !['okay', 'normal'].includes(String(log.feeling).toLowerCase())) loggedSignals.push(`mood: ${log.feeling}`);
+        loggedSignals.forEach((symptom) => {
+          const label = String(symptom).replace(/\s*\(intensity\s+\d+\/10\)/i, '');
+          const key = label.toLowerCase();
+          const entry = symptomCycles.get(key) || { label, cycles: new Set() };
+          entry.cycles.add(cycleIndex);
+          symptomCycles.set(key, entry);
+        });
+      }
+    });
+  });
+  const recurring = [...symptomCycles.values()].filter((item) => item.cycles.size >= 2).sort((a, b) => b.cycles.size - a.cycles.size)[0];
+  if (recurring) insights.push({ id: 'symptom', title: recurring.label.startsWith('mood:') ? `You often logged feeling ${recurring.label.slice(6).toLowerCase()} before your period` : `You logged ${recurring.label.toLowerCase()} before your period more than once`, detail: `This has appeared in ${recurring.cycles.size} logged cycles. It’s an observation from your entries, not a medical conclusion.` });
+  if (!insights.length) insights.push({ id: 'getting-started', title: 'Your patterns will appear here', detail: `Log period dates and symptoms to learn about your own cycle. Your profile estimate is ${baselineCycleLength} days.` });
+  return insights.slice(0, 3);
+}
+
+/** Estimate a user's cycle settings from their period-day entries when enough data exists. */
+export function getPersonalizedCycleProfile(logs = [], fallback = {}) {
+  const baselineCycleLength = Number(fallback.cycleLength || 28);
+  const baselinePeriodDuration = Number(fallback.periodDuration || 5);
+  const periodDates = [...new Set(logs
+    .filter((log) => log.isPeriodDay === true)
+    .map((log) => String(log.date || log.startDate || '').split('T')[0])
+    .filter(Boolean))].sort();
+  const starts = periodDates.filter((date, index) => {
+    if (!index) return true;
+    return (new Date(`${date}T00:00:00Z`) - new Date(`${periodDates[index - 1]}T00:00:00Z`)) / 86400000 > 1;
+  });
+  const lengths = starts.slice(1).map((date, index) =>
+    (new Date(`${date}T00:00:00Z`) - new Date(`${starts[index]}T00:00:00Z`)) / 86400000
+  ).filter((days) => days >= 18 && days <= 45).slice(-6);
+  const sortedLengths = [...lengths].sort((a, b) => a - b);
+  const median = sortedLengths.length
+    ? sortedLengths[Math.floor(sortedLengths.length / 2)]
+    : baselineCycleLength;
+  const periodRuns = [];
+  let run = 0;
+  periodDates.forEach((date, index) => {
+    const previous = periodDates[index - 1];
+    run = previous && (new Date(`${date}T00:00:00Z`) - new Date(`${previous}T00:00:00Z`)) / 86400000 === 1 ? run + 1 : 1;
+    if (!periodDates[index + 1] || (new Date(`${periodDates[index + 1]}T00:00:00Z`) - new Date(`${date}T00:00:00Z`)) / 86400000 > 1) periodRuns.push(run);
+  });
+  const observedPeriodRuns = periodRuns.slice(-4);
+  const averagePeriodDuration = observedPeriodRuns.length
+    ? Math.round(observedPeriodRuns.reduce((sum, days) => sum + days, 0) / observedPeriodRuns.length)
+    : baselinePeriodDuration;
+  return {
+    cycleLength: lengths.length >= 2 ? Math.round(median) : baselineCycleLength,
+    periodDuration: observedPeriodRuns.length >= 1 ? averagePeriodDuration : baselinePeriodDuration,
+    lastPeriodDate: starts[starts.length - 1] || fallback.lastPeriodDate || null,
+    observedCycleCount: lengths.length,
+  };
+}
+
 export const cycleService = {
   computeLocalFertilityPrediction,
   computeLocalCycleStats,
+  computeCycleInsights,
+  getPersonalizedCycleProfile,
 
   /**
    * Fetches fertility predictions from the backend API,
@@ -286,6 +386,18 @@ export const cycleService = {
       notes: logData.notes || '',
       logged_at: new Date().toISOString(),
     };
+
+    if (newLog.isPeriodDay) {
+      try {
+        const profile = await getHealthProfileSafe();
+        const priorDate = profile?.lastPeriodDate ? new Date(`${String(profile.lastPeriodDate).split('T')[0]}T00:00:00Z`) : null;
+        const thisDate = new Date(`${newLog.date}T00:00:00Z`);
+        const gap = priorDate ? Math.floor((thisDate - priorDate) / 86400000) : Number.POSITIVE_INFINITY;
+        if (!priorDate || gap >= Number(profile?.periodDuration || 5)) {
+          await saveHealthProfileSafe({ ...(profile || {}), lastPeriodDate: newLog.date });
+        }
+      } catch (_) {}
+    }
 
     // 1. Immediately persist to local storage
     await addCycleLogSafe(newLog);

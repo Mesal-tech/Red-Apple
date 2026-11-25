@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, useWindowDimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useTheme } from '../context/ThemeContext';
+import ResponsiveScreenFrame from '../components/ResponsiveScreenFrame';
+import { BREAKPOINTS } from '../utils/responsive';
 import HomeScreen from '../screens/HomeScreen';
 import LearnScreen from '../screens/LearnScreen';
 import DoctorCareScreen from '../screens/DoctorCareScreen';
@@ -12,17 +14,71 @@ import PartnerClinicsScreen from '../screens/PartnerClinicsScreen';
 
 const Tab = createBottomTabNavigator();
 
-function CustomTabBar({ state, descriptors, navigation }) {
+const wideNavigation = [
+  { name: 'Home', label: 'Home', icon: 'home-outline', section: 'Overview' },
+  { name: 'AICompanion', label: 'AI Companion', icon: 'sparkles-outline', section: 'Care' },
+  { name: 'Telemed', label: 'Doctor Care', icon: 'medkit-outline', section: 'Care' },
+  { name: 'Clinics', label: 'Partner Clinics', icon: 'location-outline', section: 'Explore' },
+  { name: 'Learn', label: 'Learn & Insights', icon: 'book-outline', section: 'Explore' },
+];
+
+export function WideAppSidebar({ navigation, currentRoute, user }) {
+  const { theme, isDarkMode } = useTheme();
+  const userName = user?.name?.trim() || user?.full_name?.trim() || 'Your profile';
+  const avatarUrl = user?.avatar_url || user?.photo_url || user?.profile_image_url || user?.profile_picture_url || user?.profile_picture;
+  const initials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'RA';
+  return (
+    <View style={{ width: 248, flexShrink: 0, height: '100%', backgroundColor: theme.background, paddingHorizontal: 14, paddingTop: 28, paddingBottom: 16, borderRightWidth: 1, borderRightColor: theme.cardBorder }}>
+      <TouchableOpacity onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, marginBottom: 40 }}>
+        {isDarkMode ? (
+          <Image source={require('../../assets/logo_white.png')} resizeMode="contain" style={{ width: 34, height: 34 }} />
+        ) : (
+          <Image source={require('../../assets/logo_red.png')} resizeMode="contain" style={{ width: 34, height: 34 }} />
+        )}
+        <View>
+          <Text style={{ color: theme.textPrimary, fontSize: 15, fontWeight: '700', letterSpacing: -0.3 }}>Red Apple</Text>
+          <Text style={{ color: theme.textMuted, fontSize: 10, marginTop: 2 }}>HEALTH</Text>
+        </View>
+      </TouchableOpacity>
+      {['Overview', 'Care', 'Explore'].map((section) => (
+        <View key={section} style={{ marginBottom: 24 }}>
+          <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: 10, marginBottom: 8 }}>{section}</Text>
+          {wideNavigation.filter((item) => item.section === section).map((item) => {
+            const active = currentRoute === item.name;
+            return (
+              <TouchableOpacity key={item.name} onPress={() => navigation.navigate('MainTabs', { screen: item.name })} activeOpacity={0.78} accessibilityRole="button" accessibilityState={{ selected: active }}
+                style={{ minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 11, borderRadius: 11, marginBottom: 3, backgroundColor: active ? theme.subtleSurface : 'transparent' }}>
+                <Ionicons name={item.icon} size={18} color={active ? '#D84440' : theme.textMuted} />
+                <Text style={{ color: active ? theme.textPrimary : theme.textSecondary, fontSize: 13, fontWeight: active ? '600' : '400' }}>{item.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
+      <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8} accessibilityState={{ selected: currentRoute === 'Profile' }} style={{ marginTop: 'auto', flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: theme.cardBorder, borderRadius: 12, padding: 11, backgroundColor: currentRoute === 'Profile' ? theme.subtleSurface : 'transparent' }}>
+        <View style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: isDarkMode ? '#3F151B' : '#FCE9E7' }}>
+          {avatarUrl ? <Image source={{ uri: avatarUrl }} resizeMode="cover" style={{ width: '100%', height: '100%' }} /> : <Text style={{ color: isDarkMode ? '#FDA4AF' : '#D84440', fontSize: 12, fontWeight: '800' }}>{initials}</Text>}
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: theme.textPrimary, fontSize: 12, fontWeight: '600' }}>{userName}</Text>
+          <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 10, marginTop: 2 }}>Account & settings</Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function CustomTabBar({ state, descriptors, navigation, isWide }) {
   const { isDarkMode, theme } = useTheme();
   const currentRoute = state.routes[state.index];
   const descriptor = descriptors[currentRoute.key];
 
   // Overlay / hide the floating bottom bar on AI Companion and Partner Clinics screens
-  if (
+  if (isWide || (
     descriptor?.options?.tabBarStyle?.display === 'none' ||
     currentRoute?.name === 'AICompanion' ||
     currentRoute?.name === 'Clinics'
-  ) {
+  )) {
     return null;
   }
 
@@ -146,17 +202,25 @@ function CustomTabBar({ state, descriptors, navigation }) {
 }
 
 export default function MainTabNavigator({
+  navigation,
+  user,
   onSignOut,
   initialMode = 'cycle',
   healthProfile = null,
   onRedoSetup,
 }) {
   const { theme } = useTheme();
+  const { width } = useWindowDimensions();
+  const isWide = width >= BREAKPOINTS.tablet;
+  const mainTabRoute = navigation.getState()?.routes?.find((route) => route.name === 'MainTabs');
+  const currentRoute = mainTabRoute?.state?.routes?.[mainTabRoute?.state?.index]?.name;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View style={{ flex: 1, flexDirection: isWide ? 'row' : 'column', backgroundColor: theme.background }}>
+      {isWide && <WideAppSidebar navigation={navigation} currentRoute={currentRoute} user={user} />}
+      <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
       <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} />}
+        tabBar={(props) => <CustomTabBar {...props} isWide={isWide} />}
         screenOptions={{
           headerShown: false,
           sceneContainerStyle: { backgroundColor: theme.background },
@@ -164,46 +228,55 @@ export default function MainTabNavigator({
       >
         <Tab.Screen name="Home">
           {(props) => (
-            <HomeScreen
-              {...props}
-              onSignOut={onSignOut}
-              initialMode={initialMode}
-              healthProfile={healthProfile}
-              onRedoSetup={onRedoSetup}
-              onOpenAIAssistant={() => props.navigation.navigate('AICompanion')}
-            />
+            <ResponsiveScreenFrame>
+              <HomeScreen
+                {...props}
+                onSignOut={onSignOut}
+                initialMode={initialMode}
+                healthProfile={healthProfile}
+                onRedoSetup={onRedoSetup}
+                onOpenAIAssistant={() => props.navigation.navigate('AICompanion')}
+              />
+            </ResponsiveScreenFrame>
           )}
         </Tab.Screen>
 
-        <Tab.Screen name="Learn" component={LearnScreen} />
+        <Tab.Screen name="Learn">
+          {(props) => <ResponsiveScreenFrame><LearnScreen {...props} /></ResponsiveScreenFrame>}
+        </Tab.Screen>
 
         <Tab.Screen name="Clinics">
           {(props) => (
-            <PartnerClinicsScreen
-              {...props}
-              onBookDoctor={(doc) => props.navigation.navigate('Telemed', { selectedDoctor: doc })}
-            />
+            <ResponsiveScreenFrame>
+              <PartnerClinicsScreen
+                {...props}
+                onBookDoctor={(doc) => props.navigation.navigate('Telemed', { selectedDoctor: doc })}
+              />
+            </ResponsiveScreenFrame>
           )}
         </Tab.Screen>
 
         <Tab.Screen name="Telemed">
           {(props) => (
-            <DoctorCareScreen
-              {...props}
-              onNavigateHome={() => props.navigation.navigate('Home')}
-              onOpenAIAssistant={() => props.navigation.navigate('AICompanion')}
-            />
+            <ResponsiveScreenFrame>
+              <DoctorCareScreen
+                {...props}
+                onNavigateHome={() => props.navigation.navigate('Home')}
+                onOpenAIAssistant={() => props.navigation.navigate('AICompanion')}
+              />
+            </ResponsiveScreenFrame>
           )}
         </Tab.Screen>
 
         <Tab.Screen
           name="AICompanion"
-          component={AIAssistantScreen}
+          children={(props) => <ResponsiveScreenFrame><AIAssistantScreen {...props} /></ResponsiveScreenFrame>}
           options={{
             tabBarStyle: { display: 'none' },
           }}
         />
       </Tab.Navigator>
+      </View>
     </View>
   );
 }

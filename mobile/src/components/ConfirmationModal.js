@@ -7,14 +7,12 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Platform,
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
  * Reusable Confirmation Modal Component
@@ -57,6 +55,7 @@ export default function ConfirmationModal({
   children = null,
 }) {
   const { isDarkMode, theme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const [internalLoading, setInternalLoading] = useState(false);
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -149,7 +148,7 @@ export default function ConfirmationModal({
         {/* Modal Dialog Card */}
         <Animated.View
           style={{
-            width: Math.min(SCREEN_WIDTH - 48, 380),
+            width: Math.min(windowWidth - 48, 380),
             backgroundColor: theme.card,
             borderRadius: 28,
             borderWidth: isDarkMode ? 1 : 0,

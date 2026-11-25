@@ -230,7 +230,7 @@ export function App() {
   }, [handleSendEmail]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col selection:bg-red-500 selection:text-white">
+    <div className="min-h-screen bg-zinc-50 flex flex-col selection:bg-red-500 selection:text-white lg:flex-row">
       {/* Header */}
       <Header
         currentView={currentView}
@@ -239,8 +239,18 @@ export function App() {
         sentCount={sentCount}
       />
 
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="hidden h-[76px] items-center justify-between border-b border-zinc-200 bg-white px-8 lg:flex">
+        <div>
+          <p className="text-xs font-medium text-zinc-500">Red Apple Health / Admin</p>
+          <h1 className="mt-1 text-lg font-semibold tracking-tight text-zinc-900">{({ overview: 'Overview', articles: 'Education Articles', doctors: 'Doctors & Telemedicine', compose: 'Email Campaigns', inbox: 'Inbox', sent: 'Sent Email' } as Record<AdminView, string>)[currentView]}</h1>
+        </div>
+        <button type="button" onClick={() => setCurrentView('compose')} className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700">
+          <Edit3 className="h-4 w-4" /> New campaign
+        </button>
+      </div>
       {/* Main Workspace */}
-      <main className="flex-1 mx-auto w-full max-w-7xl px-2.5 sm:px-6 lg:px-8 py-3 sm:py-5 flex flex-col">
+      <main className="flex-1 mx-auto w-full max-w-7xl px-2.5 sm:px-6 lg:mx-0 lg:max-w-none lg:px-8 lg:py-7 py-3 sm:py-5 flex flex-col">
         {currentView === 'compose' && (
           <>
             {/* Mobile Tab Switcher */}
@@ -367,6 +377,7 @@ export function App() {
           </div>
         </div>
       </footer>
+      </div>
 
       {/* Modals & Toasts */}
       <ApiKeyModal

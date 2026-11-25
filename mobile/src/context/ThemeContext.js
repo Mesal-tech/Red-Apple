@@ -7,6 +7,7 @@ export const THEME_STORAGE_KEY = '@red_apple_theme_preference';
 export const lightTheme = {
   isDark: false,
   background: '#F8F9FA',
+  backgroundSecondary: '#FFFFFF',
   card: '#FFFFFF',
   cardBorder: '#F1F5F9',
   textPrimary: '#1E293B',
@@ -23,18 +24,19 @@ export const lightTheme = {
 
 export const darkTheme = {
   isDark: true,
-  background: '#141817',
-  card: '#202624',
-  cardBorder: '#35403D',
-  divider: '#303936',
+  background: '#101010',
+  backgroundSecondary: '#1B1B1B',
+  card: '#1B1B1B',
+  cardBorder: '#333333',
+  divider: '#2A2A2A',
   textPrimary: '#FFFFFF',
-  textSecondary: '#B8C1BE',
-  textMuted: '#89938F',
-  subtleSurface: '#1B211F',
-  modalBg: '#202624',
-  inputBg: '#202624',
-  inputBorder: '#3B4743',
-  skeleton: '#303936',
+  textSecondary: '#B3B3B3',
+  textMuted: '#858585',
+  subtleSurface: '#202020',
+  modalBg: '#1B1B1B',
+  inputBg: '#202020',
+  inputBorder: '#3A3A3A',
+  skeleton: '#303030',
   destructive: '#CE3C38',
   statusBar: 'light-content',
 };
@@ -59,6 +61,10 @@ export function ThemeProvider({ children }) {
   const systemColorScheme = useColorScheme();
   const [themeMode, setThemeMode] = useState('system');
   const [isLoaded, setIsLoaded] = useState(false);
+  const effectiveSystemScheme = systemColorScheme ?? Appearance.getColorScheme() ?? 'light';
+  const effectiveSystemDark = effectiveSystemScheme === 'dark';
+  const isDarkMode = themeMode === 'system' ? effectiveSystemDark : themeMode === 'dark';
+  const theme = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
     async function loadStoredTheme() {
@@ -105,11 +111,6 @@ export function ThemeProvider({ children }) {
   const toggleDarkMode = useCallback(() => {
     setDarkMode(!isDarkMode);
   }, [isDarkMode, setDarkMode]);
-
-  const effectiveSystemScheme = systemColorScheme ?? Appearance.getColorScheme() ?? 'light';
-  const effectiveSystemDark = effectiveSystemScheme === 'dark';
-  const isDarkMode = themeMode === 'system' ? effectiveSystemDark : themeMode === 'dark';
-  const theme = isDarkMode ? darkTheme : lightTheme;
 
   const contextValue = {
     isDarkMode,

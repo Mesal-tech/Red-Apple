@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  Dimensions,
   Alert,
   ActivityIndicator,
   StatusBar,
@@ -24,13 +23,12 @@ import WebSidebar from '../components/WebSidebar';
 import AppBottomSheet from '../components/AppBottomSheet';
 import { DoctorDashboardSkeleton } from '../components/DoctorCareSkeleton';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'web' ? 6 : (StatusBar.currentHeight || 40);
 
 export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView }) {
   const { user } = useAuth();
   const { width: windowWidth } = useWindowDimensions();
-  const isLargeScreen = (Platform.OS === 'web' && windowWidth >= 768) || windowWidth >= 1024;
+  const isLargeScreen = windowWidth >= 820;
   const doctorName = user?.name || 'Consulting Doctor';
   const doctorEmail = user?.email || 'doctor@redapple.health';
 
@@ -225,7 +223,7 @@ export default function DoctorDashboardScreen({ onSignOut, onPreviewPatientView 
         />
       )}
 
-      <View className={isLargeScreen ? 'flex-1 bg-[#FAF7F7]' : 'flex-1'}>
+      <View className={isLargeScreen ? 'flex-1 bg-[#FAF7F7]' : 'flex-1'} style={isLargeScreen ? { maxWidth: 1440 } : undefined}>
         {/* ========================================================================= */}
         {/* 1. TOP HEADER: DOCTOR IDENTITY & QUICK CONTROLS                           */}
         {/* ========================================================================= */}

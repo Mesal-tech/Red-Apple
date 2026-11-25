@@ -19,7 +19,9 @@ const timezoneSchema = z.string().refine((value) => {
 
 const notificationConfigSchema = z.object({
   expoAccessToken: z.string().default(''),
-  enabled: boolEnv(true),
+  // Keep production bootable when the deployment has not configured Expo yet.
+  // Notifications can be explicitly enabled once EXPO_ACCESS_TOKEN is set.
+  enabled: boolEnv(process.env.NODE_ENV !== 'production'),
   workerEnabled: boolEnv(true),
   dispatchIntervalMs: z.coerce.number().int().min(1000).default(15000),
   batchSize: z.coerce.number().int().min(1).max(500).default(50),

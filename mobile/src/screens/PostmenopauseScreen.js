@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Alert,
-  Linking,
   Text,
   View,
   TouchableOpacity,
@@ -15,6 +14,8 @@ import { colors } from '../theme/colors';
 import { getPostmenopauseDataSafe, savePostmenopauseDataSafe } from '../utils/storage';
 import { useTheme } from '../context/ThemeContext';
 import streakService from '../services/streakService';
+import StageEducationSection from '../components/StageEducationSection';
+import EducationArticleModals from '../components/EducationArticleModals';
 
 const NIA_MENOPAUSE_URL = 'https://www.nia.nih.gov/health/menopause/what-menopause';
 const ACOG_HORMONE_THERAPY_URL = 'https://www.acog.org/womens-health/faqs/hormone-therapy-for-menopause';
@@ -156,6 +157,8 @@ export default function PostmenopauseScreen({
   greetingDisplayName = '',
   healthProfile = {},
   onOpenSetupWizard,
+  isPerimenopause = false,
+  navigation,
 }) {
   const { isDarkMode, theme } = useTheme();
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'symptoms' | 'assessments' | 'lifestyle' | 'meds' | 'screenings' | 'learn'
@@ -215,8 +218,21 @@ export default function PostmenopauseScreen({
 
   // Educational Reader State
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [isReadingArticle, setIsReadingArticle] = useState(false);
 
   const postmenopauseDetails = healthProfile?.postmenopauseDetails || {};
+  const transitionFeatureArticle = isPerimenopause ? {
+    ...EDU_ARTICLES[0],
+    id: 'perimenopause-feature',
+    title: 'Navigating the menopause transition',
+    category: 'MENOPAUSE TRANSITION',
+    summary: 'Understand changing cycles and symptoms, and prepare for conversations with your care team.',
+    content: 'The menopause transition can bring changes in cycle timing, bleeding, sleep, and mood. Experiences vary, so keeping a simple record can help you notice patterns and discuss them with a clinician. Seek medical advice for new or concerning symptoms, including very heavy bleeding or bleeding after menopause.',
+  } : EDU_ARTICLES[0];
+  const openEducationArticle = (article) => {
+    setSelectedArticle(article);
+    setIsReadingArticle(false);
+  };
   const yearsSinceLastPeriod = profile.yearsSinceLastPeriod || postmenopauseDetails.yearsSinceLastPeriod;
   const hrtStatus = profile.onHRT || ({
     taking_hrt: 'Taking HRT',
@@ -618,61 +634,27 @@ export default function PostmenopauseScreen({
     >
       {activeTab === 'dashboard' ? (
         <>
-          {/* Education feature and topic cards, following the Cycle screen layout */}
-          <View className="mx-4 mb-5">
-            <TouchableOpacity
-              activeOpacity={0.92}
-              className="rounded-[28px] p-5 mb-5 overflow-hidden border"
-              style={{
-                minHeight: 190,
-                backgroundColor: isDarkMode ? '#2B2334' : '#80658E',
-                borderColor: isDarkMode ? '#44374F' : '#80658E',
+          <View style={{ marginHorizontal: 16, marginBottom: 20 }}>
+            <StageEducationSection
+              content={{
+                feature: {
+                  title: isPerimenopause ? 'Menopause transition' : 'Life after menopause',
+                  summary: transitionFeatureArticle.summary,
+                  bullets: isPerimenopause
+                    ? ['Notice changes in your cycle', 'Keep a symptom record', 'Know when to speak with a clinician']
+                    : ['Understand common changes', 'Support long-term wellbeing', 'Bring questions to your care team'],
+                  actionLabel: 'Read insight',
+                  icon: isPerimenopause ? 'sync-outline' : 'leaf-outline',
+                  article: transitionFeatureArticle,
+                  railTitle: isPerimenopause ? 'Menopause transition topics' : 'Explore topics',
+                },
+                articles: EDU_ARTICLES.slice(1, 5),
               }}
-              onPress={() => setSelectedArticle(EDU_ARTICLES[0])}
-            >
-              <View className="absolute right-4 top-5 w-24 h-24 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.13)' }}>
-                <Ionicons name="flower-outline" size={58} color="rgba(255,255,255,0.88)" />
-              </View>
-              <View className="pr-24">
-                <Text className="text-[21px] font-black leading-7 mb-3" style={{ color: '#FFFFFF' }}>Life after menopause</Text>
-                <Text className="text-[13px] font-semibold leading-5 mb-4" style={{ color: 'rgba(255,255,255,0.9)' }}>
-                  Understand common changes and find questions to bring to your care team.
-                </Text>
-                <View className="self-start rounded-full px-4 py-2" style={{ backgroundColor: '#FFFFFF' }}>
-                  <Text className="text-xs font-extrabold" style={{ color: '#1F2937' }}>Read insight</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-black" style={{ color: theme.textPrimary }}>Explore topics</Text>
-              <TouchableOpacity onPress={() => setActiveTab('learn')}>
-                <Text className="text-[13px] font-bold" style={{ color: '#DC2626' }}>See all</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 8 }}>
-              {EDU_ARTICLES.slice(1).map((article) => (
-                <TouchableOpacity
-                  key={article.id}
-                  activeOpacity={0.88}
-                  style={{ width: 148, marginRight: 12 }}
-                  onPress={() => setSelectedArticle(article)}
-                >
-                  <View
-                    className="rounded-[22px] items-center justify-center border mb-2"
-                    style={{
-                      height: 126,
-                      backgroundColor: isDarkMode ? theme.card : article.iconBg,
-                      borderColor: theme.cardBorder,
-                    }}
-                  >
-                    <Ionicons name={article.icon} size={42} color={isDarkMode ? '#F87171' : article.iconColor} />
-                  </View>
-                  <Text className="text-[10px] font-extrabold tracking-wider uppercase mb-1" style={{ color: isDarkMode ? '#F87171' : article.iconColor }} numberOfLines={1}>{article.category}</Text>
-                  <Text className="text-sm font-extrabold leading-5" style={{ color: theme.textPrimary }} numberOfLines={2}>{article.title}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+              onSelectArticle={openEducationArticle}
+              onSeeAll={() => setActiveTab('learn')}
+              theme={theme}
+              isDarkMode={isDarkMode}
+            />
           </View>
         </>
       ) : (
@@ -1084,7 +1066,7 @@ export default function PostmenopauseScreen({
                   activeOpacity={0.88}
                   className="rounded-3xl border p-4 mb-1"
                   style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}
-                  onPress={() => setSelectedArticle(article)}
+                  onPress={() => openEducationArticle(article)}
                 >
                   <View className="flex-row items-center">
                     <View className="w-[58px] h-[58px] rounded-2xl items-center justify-center mr-3" style={{ backgroundColor: isDarkMode ? '#3A2529' : article.iconBg }}>
@@ -1104,46 +1086,23 @@ export default function PostmenopauseScreen({
         </View>
       )}
 
-      {/* Article Modal Reader */}
-      <Modal
-        visible={!!selectedArticle}
-        animationType="slide"
-        onRequestClose={() => setSelectedArticle(null)}
-      >
-        <View className="flex-1" style={{ backgroundColor: theme.background }}>
-          <View
-            className="flex-row items-center justify-between px-4 pt-12 pb-3 border-b"
-            style={{ borderBottomColor: theme.cardBorder }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.7}
-              className="w-10 h-10 rounded-full items-center justify-center"
-              style={{ backgroundColor: isDarkMode ? '#2B2B2B' : '#F3F4F6' }}
-              onPress={() => setSelectedArticle(null)}
-            >
-              <Ionicons name="close" size={24} color={theme.textPrimary} />
-            </TouchableOpacity>
-            <Text className="text-xs font-extrabold text-red-600 uppercase">{selectedArticle?.category}</Text>
-            <View style={{ width: 40 }} />
-          </View>
-
-          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48, backgroundColor: theme.background }}>
-            <Text className="text-2xl font-black mb-2 leading-7" style={{ color: theme.textPrimary }}>{selectedArticle?.title}</Text>
-            <Text className="text-xs font-semibold mb-4" style={{ color: theme.textMuted }}>{selectedArticle?.readTime}</Text>
-            <Text className="text-base font-normal leading-6" style={{ color: isDarkMode ? '#D1D5DB' : '#374151' }}>{selectedArticle?.content}</Text>
-            {selectedArticle?.sourceUrl ? (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                className="mt-6 pt-4 border-t"
-                style={{ borderTopColor: theme.cardBorder }}
-                onPress={() => Linking.openURL(selectedArticle.sourceUrl)}
-              >
-                <Text className="text-xs font-bold" style={{ color: '#DC2626' }}>Further reading: {selectedArticle.sourceLabel}</Text>
-              </TouchableOpacity>
-            ) : null}
-          </ScrollView>
-        </View>
-      </Modal>
+      <EducationArticleModals
+        article={selectedArticle}
+        isReading={isReadingArticle}
+        onReadFull={() => setIsReadingArticle(true)}
+        onClosePreview={() => setSelectedArticle(null)}
+        onCloseReader={() => setIsReadingArticle(false)}
+        onAskDrRed={(article) => {
+          const title = article?.title || 'this article';
+          setIsReadingArticle(false);
+          setSelectedArticle(null);
+          navigation?.navigate?.('AICompanion', {
+            initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you help me understand how this relates to menopause?`,
+            autoSend: true,
+            timestamp: Date.now(),
+          });
+        }}
+      />
 
       {/* Add Medication Modal */}
       <Modal

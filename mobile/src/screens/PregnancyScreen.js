@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useTheme } from '../context/ThemeContext';
 import * as pregnancyService from '../services/pregnancyService';
-import ArticleCarousel, { DEFAULT_PREGNANCY_ARTICLES } from '../components/ArticleCarousel';
+import { DEFAULT_PREGNANCY_ARTICLES } from '../components/ArticleCarousel';
 import AppBottomSheet from '../components/AppBottomSheet';
+import PregnancyFetus3D from '../components/PregnancyFetus3D';
+import StageEducationSection from '../components/StageEducationSection';
+import EducationArticleModals from '../components/EducationArticleModals';
 
 const WEEKS_IN_PREGNANCY = 40;
-const RING_SIZE = 116;
-const RING_RADIUS = 48;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 function formatDueDate(dateValue) {
   if (!dateValue) return 'Not set';
@@ -40,6 +41,8 @@ export default function PregnancyScreen({
   const { isDarkMode, theme } = useTheme();
   const [pregnancy, setPregnancy] = useState({ current_week: currentWeek });
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const [selectedEducationArticle, setSelectedEducationArticle] = useState(null);
+  const [isReadingEducationArticle, setIsReadingEducationArticle] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -66,6 +69,17 @@ export default function PregnancyScreen({
     timestamp: Date.now(),
   });
 
+  const openPregnancyProgress = () => setSelectedArticle({
+    pregnancyProgress: true,
+    category: 'YOUR PREGNANCY JOURNEY',
+    title: `Week ${week} of your pregnancy`,
+    summary: `${trimester} · ${Math.round(progress * 100)}% through your 40-week journey.`,
+    fullContent: `${pregnancy.weekly_milestone_description || 'Your baby is growing every day. Keep checking in with your care team and take time to notice how you feel.'}\n\nEstimated due date: ${dueDate}${Number.isFinite(daysUntilDue) && daysUntilDue >= 0 ? ` (${daysUntilDue} days to go)` : ''}.`,
+    icon: 'heart-outline',
+    iconBg: '#FFF0EA',
+    iconColor: '#C66767',
+  });
+
   const cardStyle = {
     backgroundColor: theme.card,
     borderColor: theme.cardBorder,
@@ -85,141 +99,69 @@ export default function PregnancyScreen({
           <Text style={{ color: theme.textPrimary, fontSize: 23, fontWeight: '900', letterSpacing: -0.4 }}>Pregnancy wellness</Text>
           <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '500', marginTop: 3 }}>Your journey at a glance</Text>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Pregnancy care options"
-          onPress={onBookDoctor}
-          style={{ width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder }}
-        >
-          <Ionicons name="medical-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={[cardStyle, { padding: 20, marginBottom: 14 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
-          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.subtleSurface, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-            <Ionicons name="heart-outline" size={21} color={colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.textPrimary, fontSize: 16, fontWeight: '900' }}>Your pregnancy progress</Text>
-            <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '600', marginTop: 2 }}>A little progress, week by week</Text>
-          </View>
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ alignItems: 'center', width: RING_SIZE }}>
-            <View style={{ width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' }}>
-              <Svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} style={{ position: 'absolute' }}>
-                <Circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" stroke={theme.cardBorder} strokeWidth="8" />
-                <Circle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RING_RADIUS}
-                  fill="none"
-                  stroke={colors.primary}
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-                  strokeDashoffset={RING_CIRCUMFERENCE * (1 - progress)}
-                  rotation="-90"
-                  origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-                />
-              </Svg>
-              <Text style={{ color: theme.textPrimary, fontSize: 24, fontWeight: '900' }}>{week}</Text>
-              <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '700', marginTop: -2 }}>of 40 weeks</Text>
-            </View>
-          </View>
-
-          <View style={{ flex: 1, marginLeft: 18 }}>
-            <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 0.7 }}>CURRENT TRIMESTER</Text>
-            <Text style={{ color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 4 }}>{trimester}</Text>
-            <View style={{ height: 1, backgroundColor: theme.cardBorder, marginVertical: 11 }} />
-            <Text style={{ color: theme.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 0.7 }}>ESTIMATED DUE DATE</Text>
-            <Text style={{ color: theme.textPrimary, fontSize: 14, fontWeight: '800', marginTop: 4 }}>{dueDate}</Text>
-            {Number.isFinite(daysUntilDue) && daysUntilDue >= 0 ? (
-              <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600', marginTop: 2 }}>{daysUntilDue} days to go</Text>
-            ) : null}
-          </View>
-        </View>
-      </View>
-
-      <View style={[cardStyle, { flexDirection: 'row', alignItems: 'center', padding: 18, marginBottom: 14, overflow: 'hidden' }]}>
-        <View style={{ flex: 1, paddingRight: 4 }}>
-          <Text style={{ color: theme.textPrimary, fontSize: 19, fontWeight: '900', lineHeight: 25 }}>How are you feeling today?</Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '500', lineHeight: 19, marginTop: 5 }}>Check in with yourself and get pregnancy-aware guidance.</Text>
-          <TouchableOpacity
-            accessibilityRole="button"
-            onPress={openDrRed}
-            activeOpacity={0.85}
-            style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', backgroundColor: '#584988', borderRadius: 999, paddingHorizontal: 15, paddingVertical: 10, marginTop: 14 }}
-          >
-            <Ionicons name="sparkles" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Talk with Dr. Red</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={{ width: 66, height: 66, borderRadius: 33, alignItems: 'center', justifyContent: 'center', backgroundColor: isDarkMode ? '#3A1E22' : '#FFF1F4', marginLeft: 8 }}>
-          <Ionicons name="happy-outline" size={33} color={colors.primary} />
-        </View>
       </View>
 
       <TouchableOpacity
-        activeOpacity={0.9}
+        activeOpacity={0.92}
+        onPress={openPregnancyProgress}
         accessibilityRole="button"
-        accessibilityLabel="Read pregnancy educational insights"
-        onPress={() => navigation?.navigate?.('Learn')}
-        style={[cardStyle, { padding: 18, marginBottom: 14 }]}
+        accessibilityLabel={`Your pregnancy journey, week ${week} of 40, ${trimester}. Tap for details.`}
+        style={{ height: 326, marginBottom: 14, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: '#FFFFFFAA' }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.subtleSurface, marginRight: 10 }}>
-            <Ionicons name="book-outline" size={18} color={colors.primary} />
+        <LinearGradient
+          colors={['#F8D4C7', '#F2A7A6', '#E78F9B']}
+          start={{ x: 0.06, y: 0 }}
+          end={{ x: 0.94, y: 1 }}
+          style={{ flex: 1, overflow: 'hidden' }}
+        >
+          <View style={{ position: 'absolute', top: -44, right: -28, width: 150, height: 150, borderRadius: 75, backgroundColor: '#FFFFFF22' }} />
+          <View style={{ position: 'absolute', top: 22, left: 18, zIndex: 2 }}>
+            <Text style={{ color: '#713C4A', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }}>YOUR JOURNEY</Text>
+            <Text style={{ color: '#713C4A', fontSize: 12, fontWeight: '700', marginTop: 4 }}>{Math.round(progress * 100)}% complete</Text>
+            <Text style={{ color: '#713C4A', fontSize: 10, fontWeight: '700', marginTop: 3 }}>{week <= 8 ? 'Embryonic stage' : 'Fetal development'}</Text>
           </View>
-          <Text style={{ color: theme.textPrimary, fontSize: 15, fontWeight: '900', flex: 1 }}>Educational insight</Text>
-          <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800' }}>WEEK {week}</Text>
-        </View>
-        <Text style={{ color: theme.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 5 }}>
-          {pregnancy.weekly_milestone_title || 'Your baby is growing every day'}
-        </Text>
-        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 6 }}>
-          {pregnancy.weekly_milestone_description || 'Keep checking in with your care team and take time to notice how you feel.'}
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14 }}>
-          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800', marginRight: 5 }}>Explore pregnancy guides</Text>
-          <Ionicons name="arrow-forward" size={14} color={colors.primary} />
-        </View>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 18, paddingBottom: 58 }}>
+            <PregnancyFetus3D key={`pregnancy-card-${week}`} week={week} style={{ width: '88%', height: 210 }} />
+          </View>
+          <Svg width="100%" height="56" viewBox="0 0 360 56" preserveAspectRatio="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 70 }}>
+            <Path d="M0 10 Q180 92 360 10" fill="none" stroke="#FFFFFF" strokeOpacity="0.8" strokeWidth="2" />
+          </Svg>
+          <View style={{ position: 'absolute', left: 12, right: 12, bottom: 12, minHeight: 68, borderRadius: 36, backgroundColor: '#FFFFFFE8', flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingRight: 9 }}>
+            <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FBE1D7', marginRight: 10 }}>
+              <Ionicons name="heart" size={21} color="#C86D78" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#382C31', fontSize: 13, fontWeight: '900' }}>Your Pregnancy Journey</Text>
+              <Text style={{ color: '#72636A', fontSize: 11, fontWeight: '600', marginTop: 3 }}>Week {week} · {trimester}</Text>
+            </View>
+            <View style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' }}>
+              <Ionicons name="arrow-forward" size={20} color="#382C31" />
+            </View>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
 
-      <Text style={{ color: theme.textPrimary, fontSize: 20, fontWeight: '900', letterSpacing: -0.3, marginTop: 4, marginBottom: 10, paddingHorizontal: 2 }}>
-        Pregnancy insights
-      </Text>
-      <ArticleCarousel
-        articles={pregnancyInsights}
-        onSelectArticle={setSelectedArticle}
+      <StageEducationSection
+        content={{
+          feature: pregnancyInsights[0] ? {
+            title: 'Pregnancy, week ' + week,
+            summary: pregnancyInsights[0].summary,
+            actionLabel: 'Read insight',
+            icon: pregnancyInsights[0].icon || 'heart-outline',
+            article: pregnancyInsights[0],
+            railTitle: 'More for your pregnancy',
+          } : null,
+          articles: pregnancyInsights.slice(1),
+        }}
+        onSelectArticle={(article) => {
+          setSelectedEducationArticle(article);
+          setIsReadingEducationArticle(false);
+        }}
+        theme={theme}
+        isDarkMode={isDarkMode}
       />
 
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={onBookDoctor}
-          style={[cardStyle, { flex: 1, minHeight: 112, padding: 15, justifyContent: 'space-between' }]}
-        >
-          <Ionicons name="calendar-outline" size={21} color={colors.primary} />
-          <View>
-            <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '800' }}>Find pregnancy care</Text>
-            <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 3 }}>Book a specialist visit</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={() => navigation?.navigate?.('Learn')}
-          style={[cardStyle, { flex: 1, minHeight: 112, padding: 15, justifyContent: 'space-between' }]}
-        >
-          <Ionicons name="book-outline" size={21} color={colors.primary} />
-          <View>
-            <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '800' }}>Pregnancy guides</Text>
-            <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 3 }}>Explore trusted articles</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+
     </ScrollView>
     <AppBottomSheet
       visible={!!selectedArticle}
@@ -238,7 +180,20 @@ export default function PregnancyScreen({
             <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '600' }}>{selectedArticle.readTime}</Text>
           </View>
           <Text style={{ color: theme.textPrimary, fontSize: 21, lineHeight: 27, fontWeight: '900', marginBottom: 10 }}>{selectedArticle.title}</Text>
+          {selectedArticle.pregnancyProgress ? (
+            <View style={{ height: 280, borderRadius: 24, overflow: 'hidden', backgroundColor: '#F8E3DB', marginBottom: 14 }}>
+              <PregnancyFetus3D key={`pregnancy-detail-${week}`} week={week} style={{ flex: 1 }} />
+              <View style={{ position: 'absolute', left: 0, right: 0, bottom: 12, alignItems: 'center' }}>
+                <Text style={{ color: '#713C4A', fontSize: 12, fontWeight: '800' }}>Week {week} · {trimester}</Text>
+              </View>
+            </View>
+          ) : null}
           <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 22, marginBottom: 14 }}>{selectedArticle.summary}</Text>
+          {selectedArticle.pregnancyProgress ? (
+            <Text style={{ color: theme.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 12 }}>
+              Educational illustration of typical development, not a scan or a medical assessment. Individual development varies.
+            </Text>
+          ) : null}
           <Text style={{ color: theme.textPrimary, fontSize: 14, lineHeight: 23 }}>{selectedArticle.fullContent || selectedArticle.summary}</Text>
           <TouchableOpacity
             onPress={() => setSelectedArticle(null)}
@@ -250,6 +205,23 @@ export default function PregnancyScreen({
         </View>
       ) : null}
     </AppBottomSheet>
+    <EducationArticleModals
+      article={selectedEducationArticle}
+      isReading={isReadingEducationArticle}
+      onReadFull={() => setIsReadingEducationArticle(true)}
+      onClosePreview={() => setSelectedEducationArticle(null)}
+      onCloseReader={() => setIsReadingEducationArticle(false)}
+      onAskDrRed={(article) => {
+        const title = article?.title || 'this article';
+        setIsReadingEducationArticle(false);
+        setSelectedEducationArticle(null);
+        navigation?.navigate?.('AICompanion', {
+          initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my pregnancy?`,
+          autoSend: true,
+          timestamp: Date.now(),
+        });
+      }}
+    />
     </>
   );
 }

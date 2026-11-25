@@ -8,12 +8,12 @@ import {
   RefreshControl,
   Image,
   Alert,
-  Dimensions,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path, Circle, Line, Polygon, Rect, G, Defs, LinearGradient, Stop, Ellipse, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Polygon, Rect, G, Defs, Ellipse, Text as SvgText } from 'react-native-svg';
 import { colors } from '../theme/colors';
 import PregnancyScreen from './PregnancyScreen';
 import PostmenopauseScreen from './PostmenopauseScreen';
@@ -34,10 +34,10 @@ import partnerService from '../services/partnerService';
 import AppBottomSheet from '../components/AppBottomSheet';
 import StreakModal from '../components/StreakModal';
 import PartnerSyncModal from '../components/PartnerSyncModal';
+import EducationArticleModals from '../components/EducationArticleModals';
+import StageEducationSection from '../components/StageEducationSection';
 import { getUserBookings } from '../services/telemedicineService';
 import notificationService from '../services/notificationService';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
  * Curated Clinical Articles for Cycle & Period Insights
@@ -127,6 +127,40 @@ const CYCLE_ARTICLES_DATA = [
     thumbnail: 'https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&w=800&q=80',
   },
 ];
+
+function NotificationEmptyIllustration({ theme, isDarkMode }) {
+  return (
+    <View style={{ width: 176, height: 142, alignItems: 'center', justifyContent: 'center', marginBottom: 18 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={{ position: 'absolute', width: 128, height: 128, borderRadius: 64, backgroundColor: isDarkMode ? '#271B21' : '#FFF0F1', top: 5 }} />
+      <View style={{ position: 'absolute', width: 110, height: 78, borderRadius: 18, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder, left: 20, top: 34, padding: 12, justifyContent: 'flex-end' }}>
+        <View style={{ width: 56, height: 5, borderRadius: 4, backgroundColor: isDarkMode ? '#444444' : '#E4E7EC', marginBottom: 7 }} />
+        <View style={{ width: 78, height: 5, borderRadius: 4, backgroundColor: isDarkMode ? '#383838' : '#EEF0F3' }} />
+      </View>
+      <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: isDarkMode ? '#3B2024' : '#FFE2E3', borderWidth: 4, borderColor: theme.modalBg, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }], marginTop: 4 }}>
+        <Ionicons name="notifications-outline" size={29} color={colors.primary} />
+      </View>
+      <View style={{ position: 'absolute', right: 12, top: 18, width: 30, height: 30, borderRadius: 15, backgroundColor: isDarkMode ? '#202020' : '#FFFFFF', borderWidth: 1, borderColor: theme.cardBorder, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="checkmark" size={16} color={colors.primary} />
+      </View>
+      <View style={{ position: 'absolute', left: 17, bottom: 20, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }} />
+    </View>
+  );
+}
+
+function HomeContentRail({ wide, children, style }) {
+  const { width } = useWindowDimensions();
+  return (
+    <View style={[{
+      width: '100%',
+      flexDirection: wide ? 'row' : 'column',
+      flexWrap: wide && width < 1200 ? 'wrap' : 'nowrap',
+      alignItems: 'stretch',
+      gap: wide ? 14 : 0,
+    }, style]}>
+      {children}
+    </View>
+  );
+}
 
 /**
  * Top Header matching the aesthetic reference:
@@ -272,6 +306,7 @@ export default function HomeScreen({
 }) {
   const { user, updateProfile } = useAuth();
   const { isDarkMode, theme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   let showToastSuccess = null;
   try {
     const toast = useToast();
@@ -302,6 +337,10 @@ export default function HomeScreen({
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [partnerStatus, setPartnerStatus] = useState(null);
   const [isPartnerCardDismissed, setIsPartnerCardDismissed] = useState(false);
+  const isWideHome = windowWidth >= 820;
+  const homeCardWidth = isWideHome
+    ? (windowWidth >= 1200 ? '31.5%' : '48%')
+    : '100%';
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [notificationsList, setNotificationsList] = useState([]);
 
@@ -407,6 +446,7 @@ export default function HomeScreen({
 
   // Real cycle data states
   const [cachedProfile, setCachedProfile] = useState(healthProfile || user?.health_profile || null);
+  const [cycleInsights, setCycleInsights] = useState(() => cycleService.computeCycleInsights([], 28));
   const activeCycleProfile = useMemo(() => {
     return {
       cycleLength: Number(
@@ -449,18 +489,25 @@ export default function HomeScreen({
         setCachedProfile(storedProfile);
       }
 
-      const cycleLen = Number(storedProfile?.cycleLength || activeCycleProfile.cycleLength || 28);
-      const periodDur = Number(storedProfile?.periodDuration || activeCycleProfile.periodDuration || 5);
-      const lastPeriod = storedProfile?.lastPeriodDate || activeCycleProfile.lastPeriodDate;
+      const fallbackProfile = {
+        cycleLength: Number(storedProfile?.cycleLength || activeCycleProfile.cycleLength || 28),
+        periodDuration: Number(storedProfile?.periodDuration || activeCycleProfile.periodDuration || 5),
+        lastPeriodDate: storedProfile?.lastPeriodDate || activeCycleProfile.lastPeriodDate,
+      };
+      const history = await cycleService.getCycleHistory();
+      const personalized = cycleService.getPersonalizedCycleProfile(history?.logs || [], fallbackProfile);
+      const cycleLen = personalized.cycleLength;
+      const periodDur = personalized.periodDuration;
 
       if (typeof cycleService?.getFertilityPrediction === 'function') {
         const pred = await cycleService.getFertilityPrediction({
           cycleLength: cycleLen,
           periodDuration: periodDur,
-          lastPeriodDate: lastPeriod,
+          lastPeriodDate: personalized.lastPeriodDate,
         });
         if (pred) setCyclePrediction(pred);
       }
+      setCycleInsights(cycleService.computeCycleInsights(history?.logs || [], cycleLen));
     } catch (err) {
       console.warn('[HomeScreen] Error loading cycle data:', err);
     }
@@ -468,6 +515,8 @@ export default function HomeScreen({
 
   useEffect(() => {
     loadCycleData();
+    const unsubscribe = navigation?.addListener?.('focus', loadCycleData);
+    return unsubscribe;
   }, [user?.id, healthProfile?.lastPeriodDate, user?.health_profile?.lastPeriodDate]);
 
   const handleRefresh = async () => {
@@ -546,13 +595,14 @@ export default function HomeScreen({
           onBookDoctor={() => navigation?.navigate('Telemed')}
           onOpenDoctorPage={() => navigation?.navigate('Telemed')}
           healthProfile={user?.health_profile}
+          isPerimenopause={activeHealthMode === 'perimenopause'}
           greetingDisplayName={user?.name?.trim()?.split(/\s+/)?.[0] || ''}
           navigation={navigation}
         />
       ) : (
         <ScrollView
           className="flex-1 px-5"
-          contentContainerStyle={{ paddingBottom: 110 }}
+          contentContainerStyle={{ width: '100%', alignItems: 'stretch', paddingBottom: 110 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -564,11 +614,18 @@ export default function HomeScreen({
             />
           }
         >
+          {isWideHome && (
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 8, marginBottom: 12, paddingHorizontal: 2 }}>
+              <Text style={{ color: theme.textPrimary, fontSize: 21, fontWeight: '800', letterSpacing: -0.4 }}>Your health</Text>
+            </View>
+          )}
+          <View style={{ width: '100%' }}>
           {/* BENTO CARD 1: Reproductive Wellness */}
           <TouchableOpacity
             activeOpacity={0.92}
             className="rounded-[32px] p-5 pb-6 mb-3.5 shadow-xs"
             style={{
+              width: '100%',
               backgroundColor: theme.card,
               borderWidth: 1,
               borderColor: theme.cardBorder,
@@ -633,9 +690,12 @@ export default function HomeScreen({
             </View>
           </TouchableOpacity>
 
+          </View>
+          <HomeContentRail wide={isWideHome}>
           {/* CARD 1: DAILY WELLNESS & DR. RED AI SYMPTOM CHECK-IN */}
           <View
             style={{
+              width: isWideHome ? homeCardWidth : '100%',
               backgroundColor: theme.card,
               borderRadius: 32,
               padding: 20,
@@ -725,11 +785,35 @@ export default function HomeScreen({
               </Svg>
             </View>
           </View>
+          {/* PERSONAL CYCLE OBSERVATIONS */}
+          <View style={{ width: isWideHome ? homeCardWidth : '100%', backgroundColor: theme.card, borderRadius: 28, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: theme.cardBorder }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: isDarkMode ? '#342B4E' : '#F1EAFE', alignItems: 'center', justifyContent: 'center', marginRight: 11 }}>
+                <Ionicons name="sparkles-outline" size={19} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.textPrimary, fontSize: 17, fontWeight: '900' }}>Your cycle insights</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>Patterns from what you’ve logged</Text>
+              </View>
+            </View>
+            {cycleInsights.slice(0, 2).map((insight, index) => (
+              <View key={insight.id} style={{ paddingVertical: 11, borderTopWidth: index ? 1 : 0, borderTopColor: theme.cardBorder }}>
+                <Text style={{ color: theme.textPrimary, fontSize: 14, fontWeight: '800', lineHeight: 20 }}>{insight.title}</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 4 }}>{insight.detail}</Text>
+              </View>
+            ))}
+            <TouchableOpacity onPress={() => navigation?.navigate('CycleCalendar')} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, alignSelf: 'flex-start' }} accessibilityRole="button" accessibilityLabel="View cycle history and log symptoms">
+              <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '800', marginRight: 5 }}>View history & log symptoms</Text>
+              <Ionicons name="arrow-forward" size={15} color={colors.primary} />
+            </TouchableOpacity>
+            <Text style={{ color: theme.textMuted, fontSize: 10, lineHeight: 15, marginTop: 10 }}>These are observations from your entries, not medical advice. Predictions are estimates.</Text>
+          </View>
 
           {/* CARD 2: PARTNER RHYTHM & MOMENTS SYNC */}
           {!isPartnerCardDismissed && (
             <View
               style={{
+                width: isWideHome ? homeCardWidth : '100%',
                 backgroundColor: isDarkMode ? '#241B1E' : '#FDF0F5',
                 borderRadius: 32,
                 padding: 20,
@@ -900,11 +984,13 @@ export default function HomeScreen({
               </TouchableOpacity>
             </View>
           )}
+          </HomeContentRail>
 
           {/* CARD 3: TELEMEDICINE SPECIALIST & VIRTUAL CLINIC */}
           <TouchableOpacity
             activeOpacity={0.92}
             style={{
+              width: '100%',
               backgroundColor: isDarkMode ? '#172722' : '#F0FDF9',
               borderRadius: 32,
               padding: 20,
@@ -1010,9 +1096,8 @@ export default function HomeScreen({
               </View>
             </View>
           </TouchableOpacity>
-
           {/* ========================================================================= */}
-          {/* SECTION: EDUCATIONAL PERIOD & CYCLE INSIGHTS (MATCHING REFERENCE UI)       */}
+          {/* SECTION: EDUCATIONAL PERIOD & CYCLE INSIGHTS                               */}
           {/* ========================================================================= */}
 
           {/* Section Headline */}
@@ -1030,373 +1115,24 @@ export default function HomeScreen({
             Your late period
           </Text>
 
-          {/* HERO EDUCATIONAL FEATURE CARD: Perimenopause periods (Dusty Purple / Lavender) */}
-          <TouchableOpacity
-            activeOpacity={0.92}
-            style={{
-              backgroundColor: isDarkMode ? '#281E2F' : '#94759F',
-              borderRadius: 32,
-              padding: 22,
-              marginBottom: 20,
-              shadowColor: '#94759F',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: isDarkMode ? 0.35 : 0.22,
-              shadowRadius: 10,
-              elevation: 4,
-              position: 'relative',
-              overflow: 'hidden',
-              minHeight: 215,
-              borderWidth: isDarkMode ? 1 : 0,
-              borderColor: isDarkMode ? '#3D2847' : 'transparent',
+          <StageEducationSection
+            content={{
+              feature: {
+                title: 'Perimenopause periods',
+                summary: 'Understand new cycle shifts, rethink period products, and know when to get support.',
+                bullets: ['Understand new cycle shifts', 'Rethink your period products', 'Know when to get help for period issues'],
+                actionLabel: 'Be prepared',
+                icon: 'water-outline',
+                article: CYCLE_ARTICLES_DATA[0],
+                railTitle: 'Based on your current cycle',
+              },
+              articles: CYCLE_ARTICLES_DATA.filter((article) => article.id !== 'art_perimenopause'),
             }}
-            onPress={() => handleOpenEduArticle(CYCLE_ARTICLES_DATA[0])}
-          >
-            {/* Realistic Period Products Vector Illustration on the Right */}
-            <View
-              style={{
-                position: 'absolute',
-                right: -6,
-                top: 0,
-                bottom: 0,
-                width: 155,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              pointerEvents="none"
-            >
-              <Svg width={155} height={215} viewBox="0 0 155 215">
-                {/* 1. Tilted Menstrual Cup at top right */}
-                <G transform="translate(68, 52) rotate(-22)">
-                  {/* Cup Body */}
-                  <Path
-                    d="M -22 -18 C -24 6, -12 28, 0 35 C 12 28, 24 6, 22 -18 Z"
-                    fill="#C5B2D6"
-                    stroke="#FFFFFF"
-                    strokeWidth="1.6"
-                  />
-                  {/* Outer Rim Lip */}
-                  <Ellipse cx="0" cy="-18" rx="22" ry="5.5" fill="#DDD0E8" stroke="#FFFFFF" strokeWidth="1.5" />
-                  {/* Inner Rim Depth */}
-                  <Ellipse cx="0" cy="-18" rx="17" ry="3.5" fill="#B299C2" />
-                  {/* Measuring lines on silicone */}
-                  <Line x1="-12" y1="-2" x2="-2" y2="-2" stroke="#FFFFFF" strokeWidth="1.3" opacity={0.65} />
-                  <Line x1="-14" y1="8" x2="-2" y2="8" stroke="#FFFFFF" strokeWidth="1.3" opacity={0.65} />
-                  {/* Stem */}
-                  <Path d="M -2.5 35 L -2 46 C -2 48, 2 48, 2 46 L 2.5 35 Z" fill="#DDD0E8" stroke="#FFFFFF" strokeWidth="1" />
-                </G>
-
-                {/* 2. White Tampon with Purple/Magenta Band tilted below */}
-                <G transform="translate(98, 98) rotate(-16)">
-                  {/* Tampon Cylinder Body */}
-                  <Rect x="-6" y="-30" width="12" height="38" rx="6" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1" />
-                  {/* Magenta Band */}
-                  <Rect x="-6" y="-12" width="12" height="5" fill="#D946EF" opacity={0.9} />
-                  {/* Pull String */}
-                  <Path d="M 0 8 C 4 16, -2 24, 2 32" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" fill="none" opacity={0.95} />
-                </G>
-
-                {/* 3. Folded Mint-Green Sanitary Pad Wrapper at bottom right */}
-                <G transform="translate(76, 156) rotate(-10)">
-                  {/* Pad Wrapper Body */}
-                  <Rect
-                    x="-44"
-                    y="-24"
-                    width="88"
-                    height="54"
-                    rx="8"
-                    fill="#A3D9C9"
-                    stroke="#7BBFA9"
-                    strokeWidth="1.5"
-                  />
-                  {/* Crimped/Heat-sealed border edges */}
-                  <Line x1="-44" y1="-24" x2="-44" y2="30" stroke="#75B6A1" strokeWidth="2.5" strokeDasharray="3 2" />
-                  <Line x1="44" y1="-24" x2="44" y2="30" stroke="#75B6A1" strokeWidth="2.5" strokeDasharray="3 2" />
-                  {/* Quilted embossing pattern */}
-                  <Line x1="-32" y1="-12" x2="32" y2="-12" stroke="#BCEAE0" strokeWidth="1" opacity={0.8} />
-                  <Line x1="-32" y1="2" x2="32" y2="2" stroke="#BCEAE0" strokeWidth="1" opacity={0.8} />
-                  <Line x1="-32" y1="16" x2="32" y2="16" stroke="#BCEAE0" strokeWidth="1" opacity={0.8} />
-                  {/* Adhesive peel tab */}
-                  <Rect x="-12" y="-24" width="24" height="8" rx="2" fill="#E6F8F3" />
-                </G>
-              </Svg>
-            </View>
-
-            {/* Left Content Column (62% width to allow graphics breathing room) */}
-            <View style={{ width: '62%', zIndex: 2 }}>
-              <Text style={{ fontSize: 23, fontWeight: '900', color: '#FFFFFF', marginBottom: 14, letterSpacing: -0.3 }}>
-                Perimenopause periods
-              </Text>
-
-              {/* Bullet 1 */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <View
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: 'rgba(255,255,255,0.22)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 9,
-                  }}
-                >
-                  <Ionicons name="sync-outline" size={13} color="#FFFFFF" />
-                </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', flex: 1, lineHeight: 17 }}>
-                  Understand new cycle shifts
-                </Text>
-              </View>
-
-              {/* Bullet 2 */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <View
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: 'rgba(255,255,255,0.22)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 9,
-                  }}
-                >
-                  <Ionicons name="wine-outline" size={13} color="#FFFFFF" />
-                </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', flex: 1, lineHeight: 17 }}>
-                  Rethink your period products
-                </Text>
-              </View>
-
-              {/* Bullet 3 */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <View
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: 'rgba(255,255,255,0.22)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 9,
-                  }}
-                >
-                  <Ionicons name="alert-circle-outline" size={14} color="#FFFFFF" />
-                </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF', flex: 1, lineHeight: 17 }}>
-                  Know when to get help for period issues
-                </Text>
-              </View>
-
-              {/* White Pill Action Button */}
-              <View
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                  borderRadius: 9999,
-                  alignSelf: 'flex-start',
-                  shadowColor: '#000000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.12,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '900', color: '#111827' }}>
-                  Be prepared
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* SUB-SECTION: Based on your current cycle */}
-          <View style={{ marginBottom: 8 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: '900',
-                color: theme.textPrimary,
-                marginBottom: 12,
-                paddingHorizontal: 2,
-              }}
-            >
-              Based on your current cycle
-            </Text>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 6 }}>
-              {CYCLE_ARTICLES_DATA.filter((art) => art.id !== 'art_perimenopause').map((art) => (
-                <TouchableOpacity
-                  key={art.id}
-                  activeOpacity={0.88}
-                  style={{ width: 148, marginRight: 12 }}
-                  onPress={() => handleOpenEduArticle(art)}
-                >
-                  {/* Graphic Thumbnail Container matching reference screenshot */}
-                  <View
-                    style={{
-                      width: 148,
-                      height: 136,
-                      borderRadius: 22,
-                      backgroundColor: isDarkMode ? '#2B2B2B' : (art.bgColor || '#EDE6F5'),
-                      borderWidth: 1,
-                      borderColor: isDarkMode ? '#363636' : (art.borderColor || '#DDD6FE'),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                      shadowColor: '#000000',
-                      shadowOffset: { width: 0, height: 1 },
-                      shadowOpacity: 0.05,
-                      shadowRadius: 3,
-                      elevation: 1,
-                    }}
-                  >
-                    {art.id === 'art_late_period' ? (
-                      /* Phone with pink LATE circle held by hand */
-                      <Svg width={148} height={136} viewBox="0 0 148 136">
-                        {/* Hand & arm from bottom right */}
-                        <Path
-                          d="M 68 136 L 68 108 C 68 98, 74 92, 82 90 L 88 136 Z"
-                          fill="#F5D0C5"
-                        />
-                        <G transform="translate(68, 64) rotate(-8)">
-                          {/* Phone shadow */}
-                          <Rect x="-27" y="-45" width="54" height="88" rx="9" fill="#D8CFE5" />
-                          {/* Phone outer body */}
-                          <Rect x="-26" y="-46" width="52" height="86" rx="8" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.5" />
-                          {/* Screen */}
-                          <Rect x="-23" y="-42" width="46" height="78" rx="6" fill="#F8FAFC" />
-                          {/* Top notch */}
-                          <Rect x="-6" y="-40" width="12" height="2.5" rx="1.2" fill="#CBD5E1" />
-                          {/* Vibrant Pink LATE Badge Circle */}
-                          <Circle cx="0" cy="-14" r="16" fill="#FF2D55" />
-                          <SvgText x="0" y="-10" fill="#FFFFFF" fontSize="8.5" fontWeight="900" textAnchor="middle" letterSpacing="0.5">
-                            LATE
-                          </SvgText>
-                          {/* 3 Pastel color swatches below */}
-                          <Rect x="-18" y="10" width="10" height="7" rx="2" fill="#E9D5FF" />
-                          <Rect x="-5" y="10" width="10" height="7" rx="2" fill="#FED7AA" />
-                          <Rect x="8" y="10" width="10" height="7" rx="2" fill="#E2E8F0" />
-                        </G>
-                        {/* Hand fingers holding phone */}
-                        <Path
-                          d="M 40 82 C 40 76, 46 76, 48 82 L 48 95 C 48 100, 42 100, 40 95 Z"
-                          fill="#F5D0C5"
-                        />
-                        <Path
-                          d="M 88 68 C 94 68, 96 72, 94 78 L 90 88 C 88 92, 84 92, 84 86 Z"
-                          fill="#F0C2B4"
-                        />
-                      </Svg>
-                    ) : art.id === 'art_cramps_no_period' ? (
-                      /* Cute ghost with BOO! speech bubble */
-                      <Svg width={148} height={136} viewBox="0 0 148 136">
-                        {/* Pink BOO Speech Bubble */}
-                        <G transform="translate(104, 38)">
-                          <Ellipse cx="0" cy="0" rx="18" ry="12" fill="#FF3B5C" />
-                          <SvgText x="0" y="3.5" fill="#FFFFFF" fontSize="8" fontWeight="900" textAnchor="middle">
-                            BOO!
-                          </SvgText>
-                          {/* Speech tail */}
-                          <Path d="M -10 6 L -16 11 L -7 9 Z" fill="#FF3B5C" />
-                        </G>
-
-                        {/* Friendly Sheet Ghost */}
-                        <G transform="translate(70, 70)">
-                          {/* Ghost body with ripples */}
-                          <Path
-                            d="M -24 16 C -24 -24, 24 -24, 24 16 C 24 24, 20 28, 16 23 C 12 18, 8 28, 4 23 C 0 18, -4 28, -8 23 C -12 18, -16 28, -20 23 C -22 21, -24 24, -24 16 Z"
-                            fill="#FFFFFF"
-                            stroke="#EAE6F3"
-                            strokeWidth="1.5"
-                          />
-                          {/* Floating wispy tail */}
-                          <Path
-                            d="M -4 23 Q 0 35, 8 36 Q 16 37, 14 42"
-                            stroke="#FFFFFF"
-                            strokeWidth="3.5"
-                            strokeLinecap="round"
-                            fill="none"
-                          />
-                          {/* Dark oval eyes */}
-                          <Ellipse cx="-8" cy="-2" rx="2.5" ry="3.5" fill="#1E293B" />
-                          <Ellipse cx="8" cy="-2" rx="2.5" ry="3.5" fill="#1E293B" />
-                          {/* Round mouth */}
-                          <Circle cx="0" cy="8" r="2.2" fill="#1E293B" />
-                        </G>
-                      </Svg>
-                    ) : art.id === 'art_remedies' ? (
-                      /* Fresh Green Parsley / Herb Leaves held by hand */
-                      <Svg width={148} height={136} viewBox="0 0 148 136">
-                        <G transform="translate(74, 58)">
-                          {/* Stems */}
-                          <Path d="M 0 30 Q -6 10, -14 -4" stroke="#4ADE80" strokeWidth="2.5" fill="none" />
-                          <Path d="M 4 30 Q 8 12, 16 -6" stroke="#4ADE80" strokeWidth="2.5" fill="none" />
-                          <Path d="M 2 30 Q 0 8, 2 -14" stroke="#22C55E" strokeWidth="2.5" fill="none" />
-
-                          {/* Leaf clusters */}
-                          <Circle cx="-16" cy="-8" r="14" fill="#16A34A" />
-                          <Circle cx="-8" cy="-20" r="13" fill="#22C55E" />
-                          <Circle cx="12" cy="-18" r="14" fill="#15803D" />
-                          <Circle cx="20" cy="-6" r="13" fill="#22C55E" />
-                          <Circle cx="2" cy="-26" r="12" fill="#4ADE80" />
-                          <Circle cx="0" cy="-12" r="14" fill="#16A34A" />
-
-                          {/* Highlights & florets */}
-                          <Circle cx="-22" cy="-4" r="7" fill="#4ADE80" opacity={0.9} />
-                          <Circle cx="-14" cy="-26" r="8" fill="#86EFAC" opacity={0.9} />
-                          <Circle cx="16" cy="-26" r="7" fill="#86EFAC" opacity={0.9} />
-                          <Circle cx="26" cy="-10" r="7" fill="#4ADE80" opacity={0.9} />
-                          <Circle cx="-2" cy="-32" r="6" fill="#BBF7D0" opacity={0.9} />
-                        </G>
-
-                        {/* Hand holding stems */}
-                        <G transform="translate(76, 92)">
-                          <Path
-                            d="M -4 6 C -4 -2, 16 -6, 26 2 L 40 40 L 10 44 Z"
-                            fill="#F5D0C5"
-                          />
-                          <Path
-                            d="M -2 4 C 4 2, 14 4, 18 10 C 18 16, 8 18, 0 14 Z"
-                            fill="#F0C2B4"
-                          />
-                        </G>
-                      </Svg>
-                    ) : (
-                      /* Calm Zen Stones */
-                      <Svg width={148} height={136} viewBox="0 0 148 136">
-                        <G transform="translate(74, 68)">
-                          <Ellipse cx="0" cy="22" rx="34" ry="14" fill="#64748B" />
-                          <Ellipse cx="0" cy="20" rx="32" ry="12" fill="#94A3B8" />
-                          <Ellipse cx="-2" cy="4" rx="25" ry="11" fill="#475569" />
-                          <Ellipse cx="-2" cy="2" rx="23" ry="9" fill="#64748B" />
-                          <Ellipse cx="2" cy="-14" rx="16" ry="8" fill="#334155" />
-                          <Ellipse cx="2" cy="-16" rx="14" ry="6.5" fill="#475569" />
-                          <Polygon points="26,-22 28,-30 30,-22 38,-20 30,-18 28,-10 26,-18 18,-20" fill="#F59E0B" />
-                        </G>
-                      </Svg>
-                    )}
-                  </View>
-
-                  {/* Title & Read Time */}
-                  <Text
-                    numberOfLines={2}
-                    style={{
-                      fontSize: 14,
-                      fontWeight: '800',
-                      color: theme.textPrimary,
-                      marginTop: 8,
-                      lineHeight: 18,
-                    }}
-                  >
-                    {art.title}
-                  </Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 3 }}>
-                    {art.readTime}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+            onSelectArticle={handleOpenEduArticle}
+            onSeeAll={() => navigation?.navigate('Learn')}
+            theme={theme}
+            isDarkMode={isDarkMode}
+          />
 
           {/* Wide See More Pill Button */}
           <TouchableOpacity
@@ -1437,87 +1173,41 @@ export default function HomeScreen({
       >
         <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
 
-        {/* Clean Edge-to-Edge Header */}
-        <View
-          style={{
-            width: '100%',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            paddingVertical: 6,
-            backgroundColor: theme.modalBg,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: isDarkMode ? '#363636' : '#F8FAFC',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: theme.cardBorder,
-            }}
-            onPress={() => setShowNotificationsModal(false)}
-          >
-            <Ionicons name="arrow-back" size={18} color={theme.textPrimary} />
-          </TouchableOpacity>
-
+        {/* The app sheet provides its own close affordance. */}
+        <View style={{ width: '100%', height: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, backgroundColor: theme.modalBg }}>
           <Text style={{ fontSize: 17, fontWeight: '800', color: theme.textPrimary }}>Notifications</Text>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: isDarkMode ? '#363636' : '#F8FAFC',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: theme.cardBorder,
-            }}
-            onPress={async () => {
+          {unreadNotificationsCount > 0 && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={{ position: 'absolute', right: 16, height: 36, justifyContent: 'center', paddingHorizontal: 8 }}
+              onPress={async () => {
               setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
               setUnreadNotificationsCount(0);
               if (typeof notificationService?.markAllAsRead === 'function') {
                 void notificationService.markAllAsRead();
               }
               showToastSuccess && showToastSuccess('All marked as read');
-            }}
-            accessibilityLabel="Mark all as read"
-          >
-            <Ionicons name="checkmark-done" size={18} color={theme.textPrimary} />
-          </TouchableOpacity>
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Mark all as read"
+            >
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Mark all read</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Seamless List (No All-Round Borders, Edge-to-Edge Full Width) */}
         <ScrollView
           style={{ width: '100%' }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ width: '100%', paddingBottom: 36 }}
+          contentContainerStyle={{ width: '100%', paddingBottom: 24, flexGrow: 1 }}
         >
           {notificationsList.length === 0 ? (
-            <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 20 }}>
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: '#F1F5F9',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 12,
-                }}
-              >
-                <Ionicons name="notifications-off-outline" size={26} color="#94A3B8" />
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#334155' }}>No notifications yet</Text>
-              <Text style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 4 }}>
-                We'll notify you when you have updates on your cycle, consultations, or medications.
+            <View style={{ flex: 1, minHeight: 420, width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: 32, paddingHorizontal: 24 }}>
+              <NotificationEmptyIllustration theme={theme} isDarkMode={isDarkMode} />
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.textPrimary, textAlign: 'center' }}>You’re all caught up</Text>
+              <Text style={{ maxWidth: 380, fontSize: 13, lineHeight: 20, color: theme.textSecondary, textAlign: 'center', marginTop: 7 }}>
+                When there’s an update about your cycle, care, or medication, you’ll find it here.
               </Text>
             </View>
           ) : (
@@ -1667,205 +1357,24 @@ export default function HomeScreen({
         }}
       />
 
-      {/* Article Preview Bottom Sheet (Matching Learn Page) */}
-      <Modal
-        visible={!!selectedEduArticle && !isFullReadingMode}
-        transparent
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setSelectedEduArticle(null)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}
-          onPress={() => setSelectedEduArticle(null)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              overflow: 'hidden',
-              maxHeight: '85%',
-            }}
-          >
-            {selectedEduArticle?.thumbnail ? (
-              <View style={{ width: '100%', height: 190, position: 'relative' }}>
-                <Image
-                  source={{ uri: selectedEduArticle.thumbnail }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={{
-                    position: 'absolute',
-                    top: 14,
-                    right: 16,
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: 'rgba(0,0,0,0.45)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  onPress={() => setSelectedEduArticle(null)}
-                >
-                  <Ionicons name="close" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                    {selectedEduArticle?.category}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
-                  onPress={() => setSelectedEduArticle(null)}
-                >
-                  <Ionicons name="close" size={18} color="#374151" />
-                </TouchableOpacity>
-              </View>
-            )}
+      <EducationArticleModals
+        article={selectedEduArticle}
+        isReading={isFullReadingMode}
+        onReadFull={() => setIsFullReadingMode(true)}
+        onClosePreview={() => setSelectedEduArticle(null)}
+        onCloseReader={() => setIsFullReadingMode(false)}
+        onAskDrRed={(article) => {
+          const title = article?.title || 'this article';
+          setIsFullReadingMode(false);
+          setSelectedEduArticle(null);
+          navigation?.navigate('AICompanion', {
+            initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my health?`,
+            autoSend: true,
+            timestamp: Date.now(),
+          });
+        }}
+      />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 36 }}>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: '#111827', lineHeight: 26, marginBottom: 6 }}>
-                {selectedEduArticle?.title}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600', marginBottom: 12 }}>
-                {selectedEduArticle?.readTime} • {selectedEduArticle?.author}
-              </Text>
-
-              <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 8 }} />
-
-              <Text style={{ fontSize: 13, color: '#374151', lineHeight: 20, marginBottom: 16 }}>
-                {selectedEduArticle?.summary}
-              </Text>
-
-              {selectedEduArticle?.bulletPoints && selectedEduArticle.bulletPoints.length > 0 && (
-                <>
-                  <Text style={{ fontSize: 12, fontWeight: '900', color: '#111827', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                    Key Takeaways
-                  </Text>
-                  {selectedEduArticle.bulletPoints.map((point, index) => (
-                    <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={{ marginRight: 8, marginTop: 1 }} />
-                      <Text style={{ fontSize: 13, color: '#4B5563', flex: 1, lineHeight: 18, fontWeight: '500' }}>
-                        {point}
-                      </Text>
-                    </View>
-                  ))}
-                </>
-              )}
-
-              {/* Read Full Article Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.primary,
-                  paddingVertical: 13,
-                  borderRadius: 50,
-                  marginTop: 16,
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 5,
-                  elevation: 2,
-                }}
-                onPress={() => setIsFullReadingMode(true)}
-              >
-                <Ionicons name="book" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Read Full Article</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Full Article Reader Page Modal (Matching Learn Page) */}
-      <Modal
-        visible={!!selectedEduArticle && isFullReadingMode}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setIsFullReadingMode(false)}
-      >
-        {selectedEduArticle && (
-          <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: 40 }}>
-            {/* Header with Back Button */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}
-                onPress={() => setIsFullReadingMode(false)}
-              >
-                <Ionicons name="arrow-back" size={20} color="#111827" />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 14, fontWeight: '900', color: '#111827' }}>Clinical Education</Text>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-              <Text style={{ fontSize: 22, fontWeight: '900', color: '#111827', lineHeight: 28, marginBottom: 6 }}>
-                {selectedEduArticle.title}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '600', marginBottom: 12 }}>
-                {selectedEduArticle.readTime} • {selectedEduArticle.author}
-              </Text>
-
-              <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
-
-              <Text style={{ fontSize: 14, color: '#334155', lineHeight: 22, marginBottom: 16 }}>
-                {selectedEduArticle.fullText}
-              </Text>
-
-              <Text style={{ fontSize: 14, color: '#334155', lineHeight: 22, marginBottom: 24 }}>
-                Consistency in learning about your reproductive wellness empowers informed health decisions and personalized care throughout each phase of life.
-              </Text>
-
-              {/* Ask Dr. Red AI about this article */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#584988',
-                  paddingVertical: 14,
-                  borderRadius: 18,
-                  shadowColor: '#584988',
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 5,
-                  elevation: 2,
-                }}
-                onPress={() => {
-                  const title = selectedEduArticle.title;
-                  setIsFullReadingMode(false);
-                  setSelectedEduArticle(null);
-                  if (navigation?.navigate) {
-                    navigation.navigate('AICompanion', {
-                      initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my cycle?`,
-                      autoSend: true,
-                      timestamp: Date.now(),
-                    });
-                  }
-                }}
-              >
-                <Ionicons name="sparkles" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Ask Dr. Red about this</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        )}
-      </Modal>
     </SafeAreaView>
   );
 }

@@ -6,7 +6,7 @@ import {
   Modal,
   ScrollView,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   PanResponder,
   Platform,
   PermissionsAndroid,
@@ -23,7 +23,6 @@ import { getAuthSessionSafe } from '../utils/storage';
 import AppBottomSheet from '../components/AppBottomSheet';
 import { useTheme } from '../context/ThemeContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Safely resolve Stream Video SDK to prevent crashes in environments without native WebRTC linking
 let StreamVideoSDK = null;
@@ -427,17 +426,30 @@ function StreamCallParticipantStage({
   ringStatus,
 }) {
   const { theme, isDarkMode } = useTheme();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [focusedSessionId, setFocusedSessionId] = useState(null);
   const floatingTileWidth = 120;
   const floatingTileHeight = 160;
   const defaultFloatingPosition = {
-    x: Math.max(12, SCREEN_WIDTH - floatingTileWidth - 16),
+    x: Math.max(12, windowWidth - floatingTileWidth - 16),
     y: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 176 : 210,
   };
   const [floatingPosition, setFloatingPosition] = useState(defaultFloatingPosition);
   const floatingPositionRef = useRef(defaultFloatingPosition);
   const dragStartRef = useRef(defaultFloatingPosition);
   const didDragRef = useRef(false);
+  useEffect(() => {
+    const minY = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 58 : 72;
+    setFloatingPosition((previous) => {
+      const next = {
+        x: Math.min(Math.max(8, windowWidth - floatingTileWidth - 8), Math.max(8, previous.x)),
+        y: Math.min(Math.max(minY, windowHeight - floatingTileHeight - 126), Math.max(minY, previous.y)),
+      };
+      floatingPositionRef.current = next;
+      dragStartRef.current = next;
+      return next;
+    });
+  }, [windowWidth, windowHeight]);
   const updateFloatingPosition = (nextPosition) => {
     floatingPositionRef.current = nextPosition;
     setFloatingPosition(nextPosition);
@@ -453,16 +465,15 @@ function StreamCallParticipantStage({
     },
     onPanResponderMove: (_event, gestureState) => {
       if (Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5) didDragRef.current = true;
-      const { width, height } = Dimensions.get('window');
       const minY = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 58 : 72;
-      const maxX = Math.max(8, width - floatingTileWidth - 8);
-      const maxY = Math.max(minY, height - floatingTileHeight - 126);
+      const maxX = Math.max(8, windowWidth - floatingTileWidth - 8);
+      const maxY = Math.max(minY, windowHeight - floatingTileHeight - 126);
       updateFloatingPosition({
         x: Math.min(maxX, Math.max(8, dragStartRef.current.x + gestureState.dx)),
         y: Math.min(maxY, Math.max(minY, dragStartRef.current.y + gestureState.dy)),
       });
     },
-  }), []);
+  }), [windowWidth, windowHeight]);
   const stageColor = isDarkMode ? theme.background : '#E7E9EE';
   const videoSurfaceColor = isDarkMode ? theme.subtleSurface : '#D3D6DC';
   const { useRemoteParticipants, useLocalParticipant } = StreamVideoSDK.useCallStateHooks();

@@ -172,21 +172,10 @@ export default function AppointmentsListModal({
       visible={visible}
       onClose={onClose}
       showHandle={true}
-      showCloseChevron={false}
       height="92%"
       maxHeight="94%"
       noPadding={true}
       scrollable={false}
-      headerLeft={
-        <TouchableOpacity
-          activeOpacity={0.75}
-          className="w-[42px] h-[42px] rounded-full bg-slate-50 border border-slate-200 items-center justify-center"
-          onPress={onClose}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={22} color="#111827" />
-        </TouchableOpacity>
-      }
       headerRight={
         <TouchableOpacity
           activeOpacity={0.75}

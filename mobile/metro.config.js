@@ -22,4 +22,23 @@ config.serializer.getPolyfills = (params) => {
   return [...polyfills, path.resolve(__dirname, 'src/utils/messageQueuePolyfill.js')];
 };
 
-module.exports = withNativeWind(config, { input: './global.css' });
+const nativeWindConfig = withNativeWind(config, { input: './global.css' });
+const nativeWindResolveRequest = nativeWindConfig.resolver.resolveRequest;
+
+// Web bundles need React Native Web's DOM implementations (including
+// unstable_createElement, used by react-native-svg) for every bare import of
+// react-native. Native bundles continue to resolve React Native normally.
+nativeWindConfig.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web' && moduleName === 'react-native') {
+    return context.resolveRequest(context, 'react-native-web', platform);
+  }
+
+  // Preserve NativeWind's resolver, which compiles the global CSS input.
+  if (nativeWindResolveRequest) {
+    return nativeWindResolveRequest(context, moduleName, platform);
+  }
+
+  return context.resolveRequest(context, moduleName, platform);
+};
+
+module.exports = nativeWindConfig;

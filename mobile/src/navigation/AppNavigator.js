@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StatusBar, AppState, Platform } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StatusBar, AppState, Platform, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
 import AppLockModal, { PIN_STORAGE_KEY } from '../components/AppLockModal';
@@ -17,14 +18,16 @@ import {
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ToastProvider } from '../context/ToastContext';
 import notificationService from '../services/notificationService';
+import ResponsiveScreenFrame from '../components/ResponsiveScreenFrame';
+import { BREAKPOINTS } from '../utils/responsive';
 import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useTheme } from '../context/ThemeContext';
+import ThemeContext, { useTheme } from '../context/ThemeContext';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import OnboardingSetupScreen from '../screens/OnboardingSetupScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignUpScreen from '../screens/SignUpScreen';
-import MainTabNavigator from './MainTabNavigator';
+import MainTabNavigator, { WideAppSidebar } from './MainTabNavigator';
 import DoctorDashboardScreen from '../screens/DoctorDashboardScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import CycleCalendarScreen from '../screens/CycleCalendarScreen';
@@ -50,6 +53,20 @@ function isUserOnboarded(user) {
   return false;
 }
 
+function ResponsiveAuthenticatedScreen({ navigation, currentRoute, isWide, user, children }) {
+  const { theme } = useTheme();
+  if (!isWide) return <ResponsiveScreenFrame>{children}</ResponsiveScreenFrame>;
+
+  return (
+    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.background }}>
+      <WideAppSidebar navigation={navigation} currentRoute={currentRoute} user={user} />
+      <View style={{ flex: 1, minWidth: 0, alignItems: 'center', backgroundColor: theme.background }}>
+        <ResponsiveScreenFrame>{children}</ResponsiveScreenFrame>
+      </View>
+    </View>
+  );
+}
+
 /**
  * Authenticated Application Stack: includes MainTabs, dedicated ProfileScreen,
  * dedicated CycleCalendarScreen and dedicated AIAssistantScreen.
@@ -61,9 +78,14 @@ function AuthenticatedAppStack({
   user,
   setSetupCompletedOverride,
 }) {
-  const { theme } = useTheme();
+  const themeContext = useTheme();
+  const { width } = useWindowDimensions();
+  const isWide = width >= BREAKPOINTS.tablet;
+  const theme = themeContext.theme;
+  const responsiveThemeContext = themeContext;
 
   return (
+    <ThemeContext.Provider value={responsiveThemeContext}>
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
@@ -75,6 +97,7 @@ function AuthenticatedAppStack({
         {(props) => (
           <MainTabNavigator
             {...props}
+            user={user}
             onSignOut={handleSignOut}
             initialMode={activeMode}
             healthProfile={user?.health_profile}
@@ -85,36 +108,50 @@ function AuthenticatedAppStack({
 
       <Stack.Screen name="Profile">
         {(props) => (
-          <ProfileScreen
-            {...props}
-            currentMode={activeMode}
-            onActiveModeChange={onActiveModeChange}
-            onSignOut={handleSignOut}
-            onBookDoctor={() => props.navigation.navigate('MainTabs', { screen: 'Telemed' })}
-          />
+          <ResponsiveAuthenticatedScreen navigation={props.navigation} currentRoute="Profile" isWide={isWide} user={user}>
+            <ProfileScreen
+              {...props}
+              wideLayout={isWide}
+              currentMode={activeMode}
+              onActiveModeChange={onActiveModeChange}
+              onSignOut={handleSignOut}
+              onBookDoctor={() => props.navigation.navigate('MainTabs', { screen: 'Telemed' })}
+            />
+          </ResponsiveAuthenticatedScreen>
         )}
       </Stack.Screen>
 
       <Stack.Screen name="CycleCalendar">
         {(props) => (
-          <CycleCalendarScreen
-            {...props}
-            onNavigateAIAssistant={(dateKey) => {
-              props.navigation.navigate('MainTabs', {
-                screen: 'AICompanion',
-                params: { selectedDateKey: dateKey },
-              });
-            }}
-          />
+          <ResponsiveAuthenticatedScreen navigation={props.navigation} currentRoute="Home" isWide={isWide} user={user}>
+            <CycleCalendarScreen
+              {...props}
+              onNavigateAIAssistant={(dateKey) => {
+                props.navigation.navigate('MainTabs', {
+                  screen: 'AICompanion',
+                  params: { selectedDateKey: dateKey },
+                });
+              }}
+            />
+          </ResponsiveAuthenticatedScreen>
         )}
       </Stack.Screen>
 
-      <Stack.Screen name="AIAssistant" component={AIAssistantScreen} />
+      <Stack.Screen name="AIAssistant">
+        {(props) => <ResponsiveAuthenticatedScreen navigation={props.navigation} currentRoute="AICompanion" isWide={isWide} user={user}><AIAssistantScreen {...props} /></ResponsiveAuthenticatedScreen>}
+      </Stack.Screen>
 
-      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyDetailScreen} />
-      <Stack.Screen name="TermsOfUse" component={TermsOfUseDetailScreen} />
-      <Stack.Screen name="Appearance" component={AppearanceScreen} />
+      <Stack.Screen name="PrivacyPolicy">
+        {(props) => <ResponsiveAuthenticatedScreen navigation={props.navigation} currentRoute="Profile" isWide={isWide} user={user}><PrivacyPolicyDetailScreen {...props} /></ResponsiveAuthenticatedScreen>}
+      </Stack.Screen>
+      <Stack.Screen name="TermsOfUse">
+        {(props) => <ResponsiveAuthenticatedScreen navigation={props.navigation} currentRoute="Profile" isWide={isWide} user={user}><TermsOfUseDetailScreen {...props} /></ResponsiveAuthenticatedScreen>}
+      </Stack.Screen>
+      <Stack.Screen name="Appearance">
+        {(props) => <ResponsiveAuthenticatedScreen navigation={props.navigation} currentRoute="Profile" isWide={isWide} user={user}><AppearanceScreen {...props} /></ResponsiveAuthenticatedScreen>}
+      </Stack.Screen>
     </Stack.Navigator>
+    </ThemeContext.Provider>
   );
 }
 
@@ -362,18 +399,20 @@ function MainNavigation() {
   // Loading Splash Screen (Zero flash of onboarding screens while checking session)
   if (authLoading || initialLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
-        <StatusBar barStyle={theme.statusBar} backgroundColor="transparent" translucent={true} />
-        <View className="w-28 h-28 items-center justify-center">
-          <Image
-            source={require('../../assets/icon.png')}
-            className="w-24 h-24 rounded-3xl"
-            resizeMode="contain"
-          />
-        </View>
-        <Text style={{ fontSize: 24, fontWeight: '900', color: theme.textPrimary, letterSpacing: -0.5, marginTop: 16 }}>Red Apple</Text>
-        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary, marginTop: 4 }}>Intelligent Women's Health</Text>
-      </View>
+      <LinearGradient
+        colors={['#F04452', '#C81E3A']}
+        start={{ x: 0.12, y: 0 }}
+        end={{ x: 0.88, y: 1 }}
+        style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}
+      >
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
+        <Image
+          source={require('../../assets/splash-wordmark.png')}
+          resizeMode="contain"
+          accessibilityLabel="Red Apple"
+          style={{ width: '90%', maxWidth: 330, height: 82 }}
+        />
+      </LinearGradient>
     );
   }
 
@@ -444,10 +483,12 @@ function MainNavigation() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {!hasOnboarded ? (
-        <OnboardingSetupScreen
-          onBack={handleSignOut}
-          onComplete={handleCompleteSetup}
-        />
+        <ResponsiveScreenFrame style={{ maxWidth: 960 }}>
+          <OnboardingSetupScreen
+            onBack={handleSignOut}
+            onComplete={handleCompleteSetup}
+          />
+        </ResponsiveScreenFrame>
       ) : (
         <AuthenticatedAppStack
           handleSignOut={handleSignOut}

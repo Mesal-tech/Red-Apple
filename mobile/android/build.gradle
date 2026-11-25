@@ -23,3 +23,36 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// react-native-audio-api launches Git Bash directly on Windows. Gradle Exec
+// tasks do not always inherit Git's Unix-tool directories, so add them to the
+// child process PATH for the dependency's binary download task.
+subprojects { subproject ->
+  if (subproject.name == 'react-native-audio-api' && System.getProperty('os.name').toLowerCase().contains('windows')) {
+    subproject.tasks.configureEach { task ->
+      if (task.name == 'downloadPrebuiltBinaries') {
+        def gitUsrBin = new File('C:/Program Files/Git/usr/bin')
+        def gitMingwBin = new File('C:/Program Files/Git/mingw64/bin')
+        def pathEntries = [gitUsrBin, gitMingwBin]
+          .findAll { it.isDirectory() }
+          .collect { it.absolutePath }
+        def inheritedPath = System.getenv('PATH')
+        if (inheritedPath) pathEntries.add(inheritedPath)
+        task.environment 'PATH', pathEntries.join(File.pathSeparator)
+      }
+    }
+  }
+
+  // CMake 3.22's Ninja generator can fail to create object directories for
+  // Worklets' deeply nested absolute source paths on Windows. Lowering this
+  // limit makes CMake hash long object paths before Ninja sees them.
+  if (subproject.name == 'react-native-worklets' && System.getProperty('os.name').toLowerCase().contains('windows')) {
+    subproject.plugins.withId('com.android.library') {
+      subproject.afterEvaluate {
+        subproject.android.defaultConfig.externalNativeBuild.cmake.arguments(
+          '-DCMAKE_OBJECT_PATH_MAX=240'
+        )
+      }
+    }
+  }
+}

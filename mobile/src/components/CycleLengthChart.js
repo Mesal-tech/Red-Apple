@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { Text, View, Dimensions } from 'react-native';
+import { Text, View } from 'react-native';
 import { colors } from '../theme/colors';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function CycleLengthChart({ historyData = null, averageLength = 28 }) {
   const months = React.useMemo(() => {
@@ -25,7 +23,7 @@ export default function CycleLengthChart({ historyData = null, averageLength = 2
     return result;
   }, [historyData, averageLength]);
 
-  const [plotWidth, setPlotWidth] = useState(SCREEN_WIDTH - 104);
+  const [plotWidth, setPlotWidth] = useState(0);
   const values = months.map((m) => m.value);
   const rawMin = Math.min(...values, 24);
   const rawMax = Math.max(...values, 32);

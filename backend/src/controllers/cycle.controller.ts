@@ -82,13 +82,22 @@ export async function logCycleSymptoms(
       notes,
     });
 
-    // If a period start date was logged, sync with user health_profile
-    if (startDate && userId !== 'usr_anonymous') {
+    // Keep the profile's last period date anchored to the first day of a new bleed.
+    if (userId !== 'usr_anonymous' && (startDate || isPeriodDay)) {
       const user = await userStore.findById(userId);
       if (user) {
+        const existingDate = user.health_profile?.lastPeriodDate;
+        const periodDuration = Number(user.health_profile?.periodDuration || 5);
+        const daysSinceLastStart = existingDate
+          ? Math.floor((new Date(`${logDate}T00:00:00Z`).getTime() - new Date(`${String(existingDate).split('T')[0]}T00:00:00Z`).getTime()) / 86400000)
+          : Number.POSITIVE_INFINITY;
+        const isNewStart = Boolean(startDate) || (Boolean(isPeriodDay) && daysSinceLastStart >= periodDuration);
+        if (!isNewStart) {
+          return res.status(201).json({ success: true, message: 'Cycle symptom log saved securely', log });
+        }
         const updatedProfile = {
           ...(user.health_profile || {}),
-          lastPeriodDate: startDate,
+          lastPeriodDate: startDate || logDate,
         };
         await userStore.updateUser(userId, { health_profile: updatedProfile });
       }

@@ -10,7 +10,7 @@ import {
   Image,
   ImageBackground,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,14 +18,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useTheme } from '../context/ThemeContext';
 import { getEducationArticles } from '../services/educationService';
+import EducationArticleModals from '../components/EducationArticleModals';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUSBAR_HEIGHT =
   Platform.OS === 'android'
     ? (StatusBar.currentHeight || 28)
     : 44;
-const CARD_WIDTH = Math.floor((SCREEN_WIDTH - 40 - 12) / 2);
-const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.35);
 
 const ALL_ARTICLES = [
   {
@@ -122,6 +120,11 @@ const ALL_ARTICLES = [
 ];
 
 export default function LearnScreen({ navigation }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const availableWidth = Math.max(0, windowWidth - (windowWidth >= 820 ? 248 : 0));
+  const contentWidth = Math.min(availableWidth, 1440);
+  const columnCount = contentWidth >= 1300 ? 4 : contentWidth >= 980 ? 3 : 2;
+  const cardWidth = Math.floor((contentWidth - 40 - 12 * (columnCount - 1)) / columnCount);
   const { isDarkMode, theme } = useTheme();
   const [articles, setArticles] = useState(ALL_ARTICLES);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -447,7 +450,7 @@ export default function LearnScreen({ navigation }) {
                 key={item.id}
                 activeOpacity={0.88}
                 style={{
-                  width: CARD_WIDTH,
+                  width: cardWidth,
                   marginBottom: 18,
                 }}
                 onPress={() => handleOpenArticle(item)}
@@ -455,8 +458,8 @@ export default function LearnScreen({ navigation }) {
                 {/* Thumbnail Image Container */}
                 <View
                   style={{
-                    width: CARD_WIDTH,
-                    height: Math.round(CARD_WIDTH * 0.82),
+                    width: cardWidth,
+                    height: Math.round(cardWidth * 0.82),
                     borderRadius: 20,
                     overflow: 'hidden',
                     backgroundColor: '#F1F5F9',
@@ -598,215 +601,24 @@ export default function LearnScreen({ navigation }) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Article Preview Bottom Sheet (Matching HomeScreen) */}
-      <Modal
-        visible={!!selectedArticle && !isFullReadingMode}
-        transparent
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setSelectedArticle(null)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' }}
-          onPress={() => setSelectedArticle(null)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: theme.modalBg,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              overflow: 'hidden',
-              maxHeight: '85%',
-            }}
-          >
-            {selectedArticle?.thumbnail ? (
-              <View style={{ width: '100%', height: 190, position: 'relative' }}>
-                <Image
-                  source={{ uri: selectedArticle.thumbnail }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={{
-                    position: 'absolute',
-                    top: 14,
-                    right: 16,
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: 'rgba(0,0,0,0.45)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  onPress={() => setSelectedArticle(null)}
-                >
-                  <Ionicons name="close" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.cardBorder }}>
-                <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                    {selectedArticle?.category}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: isDarkMode ? '#363636' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}
-                  onPress={() => setSelectedArticle(null)}
-                >
-                  <Ionicons name="close" size={18} color={theme.textPrimary} />
-                </TouchableOpacity>
-              </View>
-            )}
+      <EducationArticleModals
+        article={selectedArticle}
+        isReading={isFullReadingMode}
+        onReadFull={() => setIsFullReadingMode(true)}
+        onClosePreview={() => setSelectedArticle(null)}
+        onCloseReader={() => setIsFullReadingMode(false)}
+        onAskDrRed={(article) => {
+          const title = article?.title || 'this article';
+          setIsFullReadingMode(false);
+          setSelectedArticle(null);
+          navigation?.navigate('AICompanion', {
+            initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my health?`,
+            autoSend: true,
+            timestamp: Date.now(),
+          });
+        }}
+      />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 36 }}>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: theme.textPrimary, lineHeight: 26, marginBottom: 6 }}>
-                {selectedArticle?.title}
-              </Text>
-              <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginBottom: 12 }}>
-                {selectedArticle?.readTime} • {selectedArticle?.author}
-              </Text>
-
-              <View style={{ height: 1, backgroundColor: theme.divider, marginVertical: 8 }} />
-
-              <Text style={{ fontSize: 13, color: theme.textPrimary, lineHeight: 20, marginBottom: 16 }}>
-                {selectedArticle?.summary}
-              </Text>
-
-              {selectedArticle?.bulletPoints && selectedArticle.bulletPoints.length > 0 && (
-                <>
-                  <Text style={{ fontSize: 12, fontWeight: '900', color: theme.textPrimary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                    Key Takeaways
-                  </Text>
-                  {selectedArticle.bulletPoints.map((point, index) => (
-                    <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={{ marginRight: 8, marginTop: 1 }} />
-                      <Text style={{ fontSize: 13, color: theme.textSecondary, flex: 1, lineHeight: 18, fontWeight: '500' }}>
-                        {point}
-                      </Text>
-                    </View>
-                  ))}
-                </>
-              )}
-
-              {/* Read Full Article Button */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.primary,
-                  paddingVertical: 13,
-                  borderRadius: 50,
-                  marginTop: 16,
-                  shadowColor: colors.primary,
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 5,
-                  elevation: 2,
-                }}
-                onPress={() => setIsFullReadingMode(true)}
-              >
-                <Ionicons name="book" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Read Full Article</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Full Article Reader Page Modal (Matching HomeScreen) */}
-      <Modal
-        visible={!!selectedArticle && isFullReadingMode}
-        animationType="slide"
-        statusBarTranslucent={true}
-        onRequestClose={() => setIsFullReadingMode(false)}
-      >
-        {selectedArticle && (
-          <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: STATUSBAR_HEIGHT + 4 }}>
-            {/* Header with Back Button */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.cardBorder }}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDarkMode ? '#2B2B2B' : '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.cardBorder }}
-                onPress={() => setIsFullReadingMode(false)}
-              >
-                <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 14, fontWeight: '900', color: theme.textPrimary }}>Clinical Education</Text>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-              {selectedArticle.thumbnail && (
-                <View style={{ width: '100%', height: 210, borderRadius: 20, overflow: 'hidden', marginBottom: 18 }}>
-                  <Image
-                    source={{ uri: selectedArticle.thumbnail }}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
-                  />
-                </View>
-              )}
-
-              <Text style={{ fontSize: 22, fontWeight: '900', color: theme.textPrimary, lineHeight: 28, marginBottom: 6 }}>
-                {selectedArticle.title}
-              </Text>
-              <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600', marginBottom: 12 }}>
-                {selectedArticle.readTime} • {selectedArticle.author}
-              </Text>
-
-              <View style={{ height: 1, backgroundColor: theme.divider, marginVertical: 12 }} />
-
-              <Text style={{ fontSize: 14, color: theme.textPrimary, lineHeight: 22, marginBottom: 16 }}>
-                {selectedArticle.fullText}
-              </Text>
-
-              <Text style={{ fontSize: 14, color: theme.textSecondary, lineHeight: 22, marginBottom: 24 }}>
-                Consistency in learning about your reproductive wellness empowers informed health decisions and personalized care throughout each phase of life.
-              </Text>
-
-              {/* Ask Dr. Red AI about this article */}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#584988',
-                  paddingVertical: 14,
-                  borderRadius: 18,
-                  shadowColor: '#584988',
-                  shadowOffset: { width: 0, height: 3 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 5,
-                  elevation: 2,
-                }}
-                onPress={() => {
-                  const title = selectedArticle.title;
-                  setIsFullReadingMode(false);
-                  setSelectedArticle(null);
-                  if (navigation?.navigate) {
-                    navigation.navigate('AICompanion', {
-                      initialQuery: `Hi Dr. Red, I was reading your article "${title}". Can you give me more insights on how this relates to my health?`,
-                      autoSend: true,
-                      timestamp: Date.now(),
-                    });
-                  }
-                }}
-              >
-                <Ionicons name="sparkles" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Ask Dr. Red about this</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        )}
-      </Modal>
     </View>
   );
 }

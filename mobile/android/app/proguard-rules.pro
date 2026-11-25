@@ -11,6 +11,11 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# Keep the constructors WorkManager and Room instantiate reflectively. R8 full
+# mode removes these constructors in minified SDK 58 release builds otherwise.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }
+-keep class * extends androidx.work.InputMerger { <init>(); }
+
 # WebRTC & Stream Video Video SDK keep rules
 -keep class org.webrtc.** { *; }
 -dontwarn org.webrtc.**

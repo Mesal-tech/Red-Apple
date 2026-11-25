@@ -6,8 +6,6 @@ import {
   RefreshControl,
   TouchableOpacity,
   Modal,
-  Dimensions,
-  useWindowDimensions,
   Alert,
   ActivityIndicator,
   StatusBar,
@@ -16,6 +14,7 @@ import {
   TextInput,
   Platform,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -35,7 +34,6 @@ import {
   DoctorSeeAllSkeleton,
 } from '../components/DoctorCareSkeleton';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUSBAR_HEIGHT =
   Platform.OS === 'android'
     ? (StatusBar.currentHeight || 38)
@@ -122,6 +120,13 @@ const isSlotInPast = (slot, date) => {
   return slotDateTime <= now;
 };
 
+const formatDoctorMetric = (value, addPlus = false) => {
+  if (value === null || value === undefined || value === '') return '—';
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return String(value);
+  return `${numericValue.toLocaleString()}${addPlus ? '+' : ''}`;
+};
+
 export default function DoctorCareScreen({
   route,
   navigation,
@@ -134,8 +139,14 @@ export default function DoctorCareScreen({
   onNavigateHome,
   onOpenAIAssistant,
 }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const isWideLayout = windowWidth >= 1024;
+  const isTabletLayout = windowWidth >= 820;
   const { user } = useAuth();
   const { isDarkMode, theme } = useTheme();
+  const profileSurface = theme.card;
+  const profileHeroSurface = isDarkMode ? '#242424' : '#F7F7F7';
+  const profileSoftSurface = isDarkMode ? '#242424' : '#F8FAFC';
   const isDoctorAccount = user?.role === 'doctor';
 
   const userName = isDoctorAccount
@@ -151,11 +162,16 @@ export default function DoctorCareScreen({
   // Fullscreen Booking Modal State (2-Step Flow: Step 1 Profile -> Step 2 Book Appointment)
   const [showProfile, setShowProfile] = useState(false);
   const [profileStep, setProfileStep] = useState('profile'); // 'profile' (Step 1) | 'booking' (Step 2)
-  const [isFavoriteDoctor, setIsFavoriteDoctor] = useState(false);
   const [consultationType, setConsultationType] = useState('video'); // 'video' | 'in_person' | 'chat'
   const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [doctorProfileTab, setDoctorProfileTab] = useState('About');
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [doctorSlots, setDoctorSlots] = useState([]);
+  const browseDates = useMemo(() => Array.from({ length: 6 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() + index);
+    return date;
+  }), []);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [consultationReason, setConsultationReason] = useState('Reproductive Health Consultation');
@@ -180,11 +196,13 @@ export default function DoctorCareScreen({
   const [showSeeAll, setShowSeeAll] = useState(false);
   const [seeAllSearchQuery, setSeeAllSearchQuery] = useState('');
   const [seeAllFilterSpecialty, setSeeAllFilterSpecialty] = useState('All');
+  const [showSpecialtyFilters, setShowSpecialtyFilters] = useState(false);
+  const [sortDoctorsByRating, setSortDoctorsByRating] = useState(false);
 
   // Filtered doctors for See All modal
   const filteredAllDoctors = useMemo(() => {
     if (!specialists) return [];
-    return specialists.filter((d) => {
+    const matches = specialists.filter((d) => {
       const q = seeAllSearchQuery.trim().toLowerCase();
       const matchesSearch =
         !q ||
@@ -196,7 +214,14 @@ export default function DoctorCareScreen({
         d.specialty?.toLowerCase() === seeAllFilterSpecialty.toLowerCase();
       return matchesSearch && matchesSpec;
     });
-  }, [specialists, seeAllSearchQuery, seeAllFilterSpecialty]);
+    return sortDoctorsByRating
+      ? matches.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0))
+      : matches;
+  }, [specialists, seeAllSearchQuery, seeAllFilterSpecialty, sortDoctorsByRating]);
+
+  const specialtyFilters = useMemo(() => (
+    ['All', ...new Set((specialists || []).map((doctor) => doctor.specialty).filter(Boolean))]
+  ), [specialists]);
 
   // Paystack Telemedicine Payment State
   const [showPaystackModal, setShowPaystackModal] = useState(false);
@@ -303,16 +328,16 @@ export default function DoctorCareScreen({
     }
   };
 
-  const handleOpenBooking = (doctor) => {
+  const handleOpenBooking = (doctor, date = new Date(), tab = 'About') => {
     const doc = doctor || (specialists && specialists[0]) || null;
     if (!doc) return;
     setSelectedDoctor(doc);
+    setDoctorProfileTab(tab);
     setProfileStep('profile');
     setConsultationType('video');
-    const initialDate = new Date();
-    setSelectedDate(initialDate);
+    setSelectedDate(date);
     setShowProfile(true);
-    loadSlotsForDate(doc, initialDate);
+    loadSlotsForDate(doc, date);
   };
 
   const handleSelectDate = (date) => {
@@ -631,8 +656,8 @@ export default function DoctorCareScreen({
       <ScrollView
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={{
-          paddingTop: STATUSBAR_HEIGHT + 10,
-          paddingBottom: 110,
+          paddingTop: STATUSBAR_HEIGHT + (isWideLayout ? 24 : 10),
+          paddingBottom: isWideLayout ? 36 : 110,
           alignItems: 'center',
         }}
         showsVerticalScrollIndicator={false}
@@ -647,7 +672,7 @@ export default function DoctorCareScreen({
           />
         }
       >
-        <View className="w-full max-w-[520px] px-5">
+        <View style={{ width: '100%', maxWidth: isWideLayout ? 1120 : isTabletLayout ? 760 : 520, paddingHorizontal: isWideLayout ? 28 : isTabletLayout ? 24 : 20 }}>
           {/* TOP NAV BAR */}
           <View className="flex-row items-center justify-between w-full mb-6">
             <TouchableOpacity
@@ -671,7 +696,7 @@ export default function DoctorCareScreen({
               <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
 
-            <Text className="text-xl font-black tracking-tight" style={{ color: theme.textPrimary }}>Appointments</Text>
+            <Text className="text-lg font-extrabold tracking-tight" style={{ color: theme.textPrimary }}>Doctor care</Text>
 
             <TouchableOpacity
               activeOpacity={0.75}
@@ -694,202 +719,63 @@ export default function DoctorCareScreen({
             </TouchableOpacity>
           </View>
 
-          {/* UPCOMING SECTION */}
-          <View className="flex-row items-center justify-between w-full mb-3.5 px-1">
-            <Text className="text-lg font-extrabold" style={{ color: theme.textPrimary }}>Upcoming</Text>
-            {userBookings.length > 0 && (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setShowAppointmentsModal(true)}
-              >
-                <Text className="text-sm font-bold" style={{ color: theme.textSecondary }}>View all</Text>
-              </TouchableOpacity>
-            )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ color: theme.textPrimary, fontSize: 17, fontWeight: '800' }}>Upcoming</Text>
+              <View style={{ minWidth: 19, height: 19, paddingHorizontal: 5, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: isDarkMode ? '#303A37' : '#E6EBE9' }}>
+                <Text style={{ color: theme.textPrimary, fontSize: 10, fontWeight: '700' }}>{displayedUpcomingBookings.length}</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setShowAppointmentsModal(true)} accessibilityRole="button">
+              <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '600' }}>See all</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* UPCOMING CONSULTATION CARDS */}
-          {isLoading ? (
-            <UpcomingCardSkeleton />
-          ) : displayedUpcomingBookings.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20, paddingRight: 8 }}>
-              {displayedUpcomingBookings.map((meeting, index) => {
-                const cardColors = isDarkMode
-                  ? ['#30243A', '#21333A', '#3A3021']
-                  : ['#F8E7EC', '#E6EEF9', '#EAF2E4'];
-                const cardTextColor = isDarkMode ? '#FFFFFF' : '#17212B';
-                return (
-                  <View
-                    key={meeting.booking_id || `${meeting.doctor_name}-${index}`}
-                    style={{
-                      width: 208,
-                      minHeight: 180,
-                      marginRight: 12,
-                      borderRadius: 20,
-                      padding: 14,
-                      backgroundColor: cardColors[index % cardColors.length],
-                      borderWidth: isDarkMode ? 1 : 0,
-                      borderColor: theme.cardBorder,
-                      justifyContent: 'space-between',
-                    }}
-                  >
+          {isLoading ? <UpcomingCardSkeleton /> : displayedUpcomingBookings.length > 0 ? (
+            <View style={{ gap: 10, marginBottom: 26 }}>
+              {displayedUpcomingBookings.slice(0, 3).map((meeting) => (
+                <View key={meeting.booking_id} style={{ padding: 16, borderRadius: 20, backgroundColor: isDarkMode ? '#302333' : '#F1E7F4' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
                     <View>
-                      <View className="flex-row items-center justify-between mb-3">
-                        <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)' }}>
-                          <Ionicons name="medical-outline" size={17} color={cardTextColor} />
-                        </View>
-                        <View className="flex-row items-center">
-                          <View className="w-2.5 h-2.5 rounded-full mr-1.5" style={{ backgroundColor: meeting.is_paid ? '#55CF79' : '#F5A623' }} />
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary }} numberOfLines={1}>
-                            {meeting.is_paid ? 'Confirmed' : 'Payment due'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={{ color: cardTextColor, fontSize: 15, lineHeight: 19, fontWeight: '800' }} numberOfLines={1}>
-                        {meeting.doctor_name}
-                      </Text>
-                      <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600', marginTop: 3 }} numberOfLines={1}>
-                        {meeting.doctor_specialty}
-                      </Text>
-                      <View className="flex-row items-center mt-3">
-                        {meeting.doctor_photo ? (
-                          <Image source={{ uri: meeting.doctor_photo }} style={{ width: 28, height: 28, borderRadius: 14 }} />
-                        ) : (
-                          <View className="w-7 h-7 rounded-full items-center justify-center" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.75)' }}>
-                            <Ionicons name="person" size={14} color={theme.textSecondary} />
-                          </View>
-                        )}
-                        <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600', marginLeft: 7 }} numberOfLines={1}>
-                          {meeting.date} · {meeting.time}
-                        </Text>
-                      </View>
+                      <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600' }}>{meeting.date} · {meeting.time}</Text>
+                      <Text style={{ color: theme.textPrimary, fontSize: 16, lineHeight: 21, fontWeight: '700', marginTop: 4 }}>Consultation</Text>
+                      <Text style={{ color: theme.textPrimary, fontSize: 16, lineHeight: 21, fontWeight: '700' }}>with {meeting.doctor_specialty}</Text>
                     </View>
-                    <View className="flex-row items-center justify-between mt-3">
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${meeting.is_paid ? 'Join' : 'Pay for'} consultation with ${meeting.doctor_name}`}
-                        onPress={() => meeting.is_paid ? handleJoinVideoCall(meeting.raw) : handlePayForBooking(meeting.raw)}
-                      >
-                        <Text style={{ color: cardTextColor, fontSize: 12, fontWeight: '800' }}>
-                          {meeting.is_paid ? 'Join meeting' : 'Pay now'}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="View all appointments"
-                        onPress={() => setShowAppointmentsModal(true)}
-                        className="w-7 h-7 rounded-full items-center justify-center"
-                        style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)' }}
-                      >
-                        <Ionicons name="add" size={17} color={cardTextColor} />
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity onPress={() => setShowAppointmentsModal(true)} accessibilityRole="button" accessibilityLabel="View appointment details" style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: isDarkMode ? '#403044' : '#FBF7FC' }}>
+                      <Ionicons name="arrow-up-outline" size={18} color={theme.textPrimary} />
+                    </TouchableOpacity>
                   </View>
-                );
-              })}
-            </ScrollView>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      {meeting.doctor_photo ? <Image source={{ uri: meeting.doctor_photo }} style={{ width: 38, height: 38, borderRadius: 12 }} /> : <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: isDarkMode ? '#403044' : '#FBF7FC' }}><Ionicons name="person" size={19} color={theme.textSecondary} /></View>}
+                      <View style={{ marginLeft: 9, flex: 1 }}>
+                        <Text style={{ color: theme.textPrimary, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>{meeting.doctor_name}</Text>
+                        <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 2 }}>{meeting.doctor_specialty}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity onPress={() => meeting.is_paid ? handleJoinVideoCall(meeting.raw) : handlePayForBooking(meeting.raw)} accessibilityRole="button" style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: isDarkMode ? '#403044' : '#FBF7FC' }}>
+                      <Text style={{ color: theme.textPrimary, fontSize: 11, fontWeight: '700' }}>{meeting.is_paid ? 'Join' : 'Pay'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
           ) : (
-            <View
-              className="w-full rounded-3xl p-5 mb-6 shadow-sm"
-              style={{
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-                borderWidth: 1,
-              }}
-            >
-              <View className="flex-row items-center mb-4">
-                <View
-                  className="w-14 h-14 rounded-2xl items-center justify-center"
-                  style={{ backgroundColor: isDarkMode ? '#241B2E' : '#FAF5FF' }}
-                >
-                  <Ionicons name="calendar-outline" size={26} color="#A78BFA" />
-                </View>
-                <View className="flex-1 ml-3.5">
-                  <Text className="text-base font-black mb-1" style={{ color: theme.textPrimary }}>No Consultations Scheduled</Text>
-                  <Text className="text-sm leading-relaxed" style={{ color: theme.textSecondary }}>
-                    Schedule a 1-on-1 virtual HD video visit with an accredited specialist.
-                  </Text>
-                </View>
+            <View style={{ padding: 16, borderRadius: 20, marginBottom: 26, backgroundColor: isDarkMode ? '#302333' : '#F1E7F4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ color: theme.textPrimary, fontSize: 15, fontWeight: '700' }}>No visits booked</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 4 }}>Choose a specialist to schedule a consultation.</Text>
               </View>
-
-              <TouchableOpacity
-                activeOpacity={0.88}
-                className="w-full h-12 bg-red-600 rounded-full items-center justify-center flex-row shadow-xs"
-                onPress={() => {
-                  if (specialists && specialists.length > 0) {
-                    handleOpenBooking(specialists[0]);
-                  } else {
-                    setShowSeeAll(true);
-                  }
-                }}
-              >
-                <Ionicons name="videocam" size={18} color="#FFFFFF" className="mr-1.5" />
-                <Text className="text-sm font-bold text-white ml-1.5">Book a Specialist</Text>
+              <TouchableOpacity onPress={() => setShowSeeAll(true)} accessibilityRole="button" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D84440' }}>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           )}
 
-          {/* TALK WITH DR. RED — keeps the single featured-card treatment. */}
-          <View
-            className="w-full rounded-3xl p-5 mb-6 shadow-sm"
-            style={{
-              backgroundColor: isDarkMode ? '#241B2E' : '#E8D7F9',
-              borderColor: isDarkMode ? '#3E294B' : 'transparent',
-              borderWidth: isDarkMode ? 1 : 0,
-            }}
-          >
-            <View className="flex-row items-center mb-4">
-              <View
-                className="w-14 h-14 rounded-full items-center justify-center"
-                style={{ backgroundColor: isDarkMode ? '#49325D' : '#D8C4F0' }}
-              >
-                <Ionicons name="sparkles" size={25} color={isDarkMode ? '#E8D5FF' : '#6D45A0'} />
-              </View>
-              <View className="flex-1 ml-3.5">
-                <Text className="text-lg font-black" style={{ color: isDarkMode ? '#FFFFFF' : '#111827' }} numberOfLines={1}>
-                  Talk with Dr. Red
-                </Text>
-                <Text className="text-sm font-semibold mt-0.5" style={{ color: isDarkMode ? '#C7B9D2' : '#4B3C5C' }} numberOfLines={2}>
-                  Talk by voice with an audio-reactive orb. No camera needed.
-                </Text>
-              </View>
-              <View
-                className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
-                style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.8)' }}
-              >
-                <View className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8B5CF6' }} />
-                <Text className="text-xs font-bold" style={{ color: isDarkMode ? '#FFFFFF' : '#1F2937' }}>Voice call</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.88}
-              className="w-full h-12 rounded-full items-center justify-center flex-row"
-              style={{ backgroundColor: '#584988' }}
-              onPress={() => setShowDoctorRedVideoCallModal(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Start a voice call with Dr. Red"
-            >
-              <Ionicons name="radio" size={17} color="#FFFFFF" />
-              <Text className="text-sm font-extrabold text-white ml-2">Start voice call</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.88}
-              className="w-full h-11 rounded-full items-center justify-center flex-row mt-2"
-              style={{ backgroundColor: isDarkMode ? '#382A46' : 'rgba(255,255,255,0.72)' }}
-              onPress={onOpenAIAssistant}
-              accessibilityRole="button"
-              accessibilityLabel="Open Dr. Red chat"
-            >
-              <Ionicons name="chatbubble-ellipses" size={16} color={isDarkMode ? '#E8D5FF' : '#584988'} />
-              <Text className="text-sm font-extrabold ml-2" style={{ color: isDarkMode ? '#E8D5FF' : '#584988' }}>Continue in chat</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* VERIFIED SPECIALISTS SECTION */}
           <View className="flex-row items-center justify-between w-full mb-3.5 px-1 mt-6">
             <Text className="text-lg font-extrabold" style={{ color: theme.textPrimary }}>
-              Verified Specialists
+              Available specialists
             </Text>
             <TouchableOpacity
               activeOpacity={0.7}
@@ -918,89 +804,39 @@ export default function DoctorCareScreen({
               </View>
             </View>
           ) : (
-            <View
-              className="w-full rounded-3xl p-4 shadow-sm mb-6"
-              style={{
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-                borderWidth: 1,
-              }}
-            >
+            <View style={{ width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, marginBottom: 24 }}>
               {displayedSpecialistsList.map((item, idx) => (
-                <View key={item.id || idx}>
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    className="flex-row items-center py-2.5"
-                    onPress={() => handleDoctorPress(item)}
-                  >
-                    <Image
-                      source={{
-                        uri:
-                          item.photo ||
-                          'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-                      }}
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: isDarkMode ? '#212121' : '#F3F4F6',
-                      }}
-                      resizeMode="cover"
-                    />
-
-                    <View className="flex-1 ml-3.5">
-                      <View className="flex-row items-center gap-1.5">
-                        <Text className="text-base font-black" style={{ color: theme.textPrimary }} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Ionicons name="checkmark-circle" size={15} color="#10B981" />
-                      </View>
-                      <Text className="text-sm font-semibold mt-0.5" style={{ color: theme.textSecondary }} numberOfLines={1}>
-                        {item.specialty}
-                      </Text>
+                <TouchableOpacity
+                  key={item.id || idx}
+                  activeOpacity={0.82}
+                  onPress={() => handleDoctorPress(item)}
+                  style={{ width: isWideLayout ? '48.5%' : '100%', minHeight: 88, padding: 12, borderRadius: 17, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder, flexDirection: 'row', alignItems: 'center' }}
+                >
+                  <Image
+                    source={{ uri: item.photo || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80' }}
+                    style={{ width: 52, height: 58, borderRadius: 13, backgroundColor: isDarkMode ? '#292929' : '#F3F4F6' }}
+                    resizeMode="cover"
+                  />
+                  <View style={{ flex: 1, marginLeft: 11, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '700', flexShrink: 1 }} numberOfLines={1}>{item.name}</Text>
+                      <Ionicons name="checkmark-circle" size={14} color="#39A873" />
                     </View>
-
-                    <View className="items-end">
-                      <Text className="text-sm font-black" style={{ color: theme.textPrimary }}>{item.date}</Text>
-                      <Text className="text-xs font-bold text-amber-500 mt-0.5">{item.time}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 3 }} numberOfLines={1}>{item.specialty}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 10, marginTop: 4 }}>Available for consultation</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <Ionicons name="star" size={11} color="#D99A32" />
+                      <Text style={{ color: theme.textPrimary, fontSize: 11, fontWeight: '700' }}>{item.time.replace('★ ', '')}</Text>
                     </View>
-                  </TouchableOpacity>
-
-                  {idx < displayedSpecialistsList.length - 1 && (
-                    <View className="h-[1px] my-2" style={{ backgroundColor: theme.divider }} />
-                  )}
-                </View>
+                    <Text style={{ color: theme.textSecondary, fontSize: 10, marginTop: 5 }}>{item.date}</Text>
+                    <Ionicons name="chevron-forward" size={14} color={theme.textMuted} style={{ marginTop: 2 }} />
+                  </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
-
-          {/* BOTTOM PROMO CARD */}
-          <TouchableOpacity
-            activeOpacity={0.88}
-            className="w-full rounded-3xl p-5 flex-row items-center justify-between mb-8 shadow-sm"
-            style={{
-              backgroundColor: isDarkMode ? '#1B2A30' : '#D2EDF6',
-              borderColor: isDarkMode ? '#26424D' : 'transparent',
-              borderWidth: isDarkMode ? 1 : 0,
-            }}
-            onPress={() => setShowSeeAll(true)}
-          >
-            <View className="flex-1 mr-3">
-              <Text className="text-lg font-black mb-1" style={{ color: isDarkMode ? '#FFFFFF' : '#111827' }}>Get a Check-up Today</Text>
-              <Text className="text-sm font-medium leading-snug" style={{ color: isDarkMode ? '#ABABAB' : '#374151' }}>
-                Complete health screening at a special price
-              </Text>
-            </View>
-
-            <View className="w-12 h-12 rounded-full bg-red-600 items-center justify-center shadow-xs">
-              <Ionicons
-                name="arrow-up"
-                size={22}
-                color="#FFFFFF"
-                style={{ transform: [{ rotate: '45deg' }] }}
-              />
-            </View>
-          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -1013,43 +849,58 @@ export default function DoctorCareScreen({
         height="92%"
         maxHeight="94%"
         showHandle={true}
-        showCloseChevron={false}
         noPadding={true}
         scrollable={false}
-        headerLeft={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            className="w-10 h-10 rounded-full items-center justify-center"
-            onPress={() => setShowSeeAll(false)}
-          >
-            <Ionicons name="arrow-back" size={22} color="#111827" />
-          </TouchableOpacity>
-        }
-        title="All Specialists"
-        subtitle={`${specialists?.length || 0} Specialists Available`}
+        title="Find a doctor"
+        subtitle={`${specialists?.length || 0} ${(specialists?.length || 0) === 1 ? 'doctor' : 'doctors'} available`}
       >
         <View className="flex-1" style={{ flex: 1, width: '100%' }}>
           {/* SEARCH BAR */}
-          <View className="flex-row items-center bg-gray-100 rounded-2xl px-4 py-3 mx-5 my-3">
-            <Ionicons name="search" size={20} color="#9CA3AF" className="mr-2" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 22, paddingHorizontal: 15, paddingVertical: 12, marginHorizontal: 20, marginTop: 14, marginBottom: 8, backgroundColor: isDarkMode ? '#222222' : '#FFFFFF', borderWidth: 1, borderColor: theme.cardBorder }}>
+            <Ionicons name="search" size={19} color={theme.textMuted} />
             <TextInput
-              className="flex-1 text-sm font-medium text-gray-900 ml-2"
-              placeholder="Search by doctor name or specialty..."
-              placeholderTextColor="#9CA3AF"
+              style={{ flex: 1, fontSize: 14, fontWeight: '500', color: theme.textPrimary, marginLeft: 10, paddingVertical: 0 }}
+              placeholder="Search specialty or condition"
+              placeholderTextColor={theme.textMuted}
               value={seeAllSearchQuery}
               onChangeText={setSeeAllSearchQuery}
             />
             {seeAllSearchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSeeAllSearchQuery('')}>
-                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                <Ionicons name="close-circle" size={18} color={theme.textMuted} />
               </TouchableOpacity>
             )}
           </View>
 
+          <View style={{ minHeight: 48, marginHorizontal: 22, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '600' }}>{filteredAllDoctors.length} {filteredAllDoctors.length === 1 ? 'doctor' : 'doctors'} found</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity onPress={() => setSortDoctorsByRating((value) => !value)} accessibilityRole="button" accessibilityLabel="Sort doctors by rating" style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: sortDoctorsByRating ? (isDarkMode ? '#382326' : '#FCE8E6') : theme.card, borderWidth: 1, borderColor: sortDoctorsByRating ? '#D84440' : theme.cardBorder }}>
+                <Ionicons name="swap-vertical-outline" size={18} color={sortDoctorsByRating ? '#D84440' : theme.textPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowSpecialtyFilters((value) => !value)} accessibilityRole="button" accessibilityLabel="Filter doctors by specialty" accessibilityState={{ expanded: showSpecialtyFilters }} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: showSpecialtyFilters ? (isDarkMode ? '#382326' : '#FCE8E6') : theme.card, borderWidth: 1, borderColor: showSpecialtyFilters ? '#D84440' : theme.cardBorder }}>
+                <Ionicons name="options-outline" size={18} color={showSpecialtyFilters ? '#D84440' : theme.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {showSpecialtyFilters && (
+            <ScrollView horizontal style={{ height: 48, flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, height: 44, alignItems: 'center', gap: 8 }}>
+              {specialtyFilters.map((specialty) => {
+                const selected = seeAllFilterSpecialty === specialty;
+                return (
+                  <TouchableOpacity key={specialty} onPress={() => setSeeAllFilterSpecialty(specialty)} accessibilityRole="button" accessibilityState={{ selected }} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: selected ? '#D84440' : theme.cardBorder, backgroundColor: selected ? (isDarkMode ? '#382326' : '#FCE8E6') : theme.card }}>
+                    <Text style={{ color: selected ? '#D84440' : theme.textSecondary, fontSize: 12, fontWeight: selected ? '700' : '500' }}>{specialty}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
           {/* SPECIALIST LIST (FLUSH CARDS) */}
           <ScrollView
             className="flex-1"
-            contentContainerClassName="px-5 pb-10 gap-3"
+            contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 40, gap: 12 }}
             showsVerticalScrollIndicator={false}
           >
             {isLoading ? (
@@ -1064,86 +915,59 @@ export default function DoctorCareScreen({
                 </Text>
               </View>
             ) : (
-              filteredAllDoctors.map((doc) => (
-                <TouchableOpacity
-                  key={doc.doctor_id}
-                  activeOpacity={0.85}
-                  className="flex-row rounded-2xl p-3.5 shadow-sm gap-3.5"
-                  style={{
-                    backgroundColor: isDarkMode ? '#212121' : '#FFFFFF',
-                    borderColor: theme.cardBorder,
-                    borderWidth: 1,
-                  }}
-                  onPress={() => {
-                    setShowSeeAll(false);
-                    handleOpenBooking(doc);
-                  }}
-                >
-                  <View className="relative">
-                    <Image
-                      source={{
-                        uri:
-                          doc.photo_url ||
-                          'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-                      }}
-                      style={{ width: 84, height: 100, borderRadius: 16 }}
-                      className="rounded-2xl bg-gray-100"
-                      resizeMode="cover"
-                    />
-                    <View
-                      className="absolute bottom-1.5 right-1.5 flex-row items-center px-2 py-0.5 rounded-full gap-0.5 shadow-xs"
-                      style={{ backgroundColor: isDarkMode ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.95)' }}
-                    >
-                      <Ionicons name="star" size={11} color="#DC2626" />
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
-                        {Number(doc.rating || 5.0).toFixed(1)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View className="flex-1 justify-between py-0.5">
-                    <View className="flex-row items-start justify-between">
-                      <View className="flex-1 mr-1.5">
-                        <View className="flex-row items-center gap-1.5">
-                          <Text className="text-base font-black" style={{ color: theme.textPrimary }} numberOfLines={1}>
-                            {doc.name}
-                          </Text>
-                          <Ionicons name="checkmark-circle" size={16} color="#059669" />
+              filteredAllDoctors.map((doc, index) => {
+                const cardIsDark = isDarkMode || index % 2 === 1;
+                const cardBackground = isDarkMode
+                  ? (index % 2 === 0 ? '#232323' : '#171717')
+                  : (index % 2 === 0 ? '#F1F2F3' : '#292625');
+                const cardText = cardIsDark ? '#FFFFFF' : '#202020';
+                const cardMuted = cardIsDark ? '#C4C0BF' : '#777777';
+                const openProfile = (date = new Date(), tab = 'About') => {
+                  setShowSeeAll(false);
+                  handleOpenBooking(doc, date, tab);
+                };
+                return (
+                  <View key={doc.doctor_id} style={{ minHeight: 194, padding: 14, borderRadius: 20, overflow: 'hidden', backgroundColor: cardBackground }}>
+                    <TouchableOpacity activeOpacity={0.85} onPress={() => openProfile()} style={{ minHeight: 100 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 14, backgroundColor: cardIsDark ? '#3A3838' : '#FFFFFF' }}>
+                            <Ionicons name="star" size={11} color="#D99A32" />
+                            <Text style={{ color: cardText, fontSize: 10, fontWeight: '700' }}>{Number(doc.rating || 5).toFixed(1)}</Text>
+                            <View style={{ width: 1, height: 12, backgroundColor: cardMuted, marginHorizontal: 2 }} />
+                            <Text style={{ color: cardText, fontSize: 10, fontWeight: '600' }}>₦{Number(doc.fee_ngn || 0).toLocaleString()}</Text>
+                          </View>
+                          <Text style={{ color: cardText, fontSize: 14, fontWeight: '700', marginTop: 12 }} numberOfLines={1}>{doc.name}</Text>
+                          <Text style={{ color: cardMuted, fontSize: 11, marginTop: 3 }} numberOfLines={1}>{doc.specialty || 'General practitioner'}</Text>
+                          <Text style={{ color: cardMuted, fontSize: 10, marginTop: 12 }}>Choose a day to check availability</Text>
                         </View>
-                        <Text className="text-sm text-red-600 font-bold mt-0.5" numberOfLines={1}>
-                          {doc.specialty}
-                        </Text>
+                        <Image
+                          source={{ uri: doc.photo_url || doc.avatar_url || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80' }}
+                          style={{ width: 112, height: 106, borderRadius: 16, backgroundColor: cardIsDark ? '#3B3939' : '#E5E5E5' }}
+                          resizeMode="cover"
+                        />
                       </View>
-                    </View>
-
-                    <Text className="text-xs font-medium mt-1" style={{ color: theme.textSecondary }} numberOfLines={1}>
-                      {doc.hospital_affiliation || 'Red Apple Telemedicine Clinic'}
-                    </Text>
-
-                    <View
-                      className="flex-row items-center justify-between mt-2.5 pt-2"
-                      style={{ borderTopWidth: 1, borderTopColor: theme.divider }}
-                    >
-                      <Text className="text-sm font-black" style={{ color: theme.textPrimary }}>
-                        ₦{Number(doc.fee_ngn || 0).toLocaleString()}
-                        <Text className="text-xs font-normal" style={{ color: theme.textSecondary }}> / session</Text>
-                      </Text>
-
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        className="flex-row items-center bg-red-600 px-4 py-2 rounded-full gap-1 shadow-xs"
-                        onPress={() => {
-                          setShowSeeAll(false);
-                          handleOpenBooking(doc);
-                        }}
-                      >
-                        <Text className="text-xs font-extrabold text-white">View Profile</Text>
-                        <Ionicons name="arrow-forward" size={13} color="#FFFFFF" className="ml-0.5" />
-                      </TouchableOpacity>
+                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginTop: 10 }}>
+                      {browseDates.map((date) => {
+                        const isToday = date.toDateString() === new Date().toDateString();
+                        return (
+                          <TouchableOpacity
+                            key={date.toISOString()}
+                            onPress={() => openProfile(date, 'Availability')}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Check availability on ${date.toLocaleDateString()}`}
+                            style={{ flex: 1, minWidth: 0, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: isToday ? (cardIsDark ? '#111111' : '#202020') : (cardIsDark ? '#3A3838' : '#FFFFFF') }}
+                          >
+                            <Text style={{ color: isToday || cardIsDark ? '#FFFFFF' : '#777777', fontSize: 9 }}>{date.toLocaleDateString(undefined, { weekday: 'short' })}</Text>
+                            <Text style={{ color: isToday || cardIsDark ? '#FFFFFF' : '#202020', fontSize: 11, fontWeight: '700', marginTop: 1 }}>{date.getDate()}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
-                </TouchableOpacity>
-              ))
+                );
+              })
             )}
 
             <View className="h-10" />
@@ -1160,19 +984,21 @@ export default function DoctorCareScreen({
       <AppBottomSheet
         visible={showProfile}
         onClose={() => setShowProfile(false)}
-        height="88%"
-        maxHeight="92%"
+        height={isWideLayout ? '78%' : '88%'}
+        maxHeight={isWideLayout ? '84%' : '92%'}
         showHandle={false}
-        showCloseChevron={false}
         noPadding={true}
         scrollable={true}
-        cardStyle={{ backgroundColor: theme.card }}
-        footerStyle={{ paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
+        cardStyle={{ backgroundColor: theme.card, width: isWideLayout ? 620 : undefined }}
+        footerStyle={{ backgroundColor: theme.card, borderTopColor: theme.cardBorder, paddingTop: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 16 }}
         footer={
           profileStep === 'profile' ? (
             <TouchableOpacity
               activeOpacity={0.88}
               style={{
+                width: isWideLayout ? 420 : '100%',
+                maxWidth: '100%',
+                alignSelf: 'center',
                 backgroundColor: '#DC2626',
                 height: 52,
                 borderRadius: 26,
@@ -1189,7 +1015,7 @@ export default function DoctorCareScreen({
               onPress={() => setProfileStep('booking')}
             >
               <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
-                Book Appointment
+                Book Now
               </Text>
               <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </TouchableOpacity>
@@ -1250,6 +1076,9 @@ export default function DoctorCareScreen({
               <TouchableOpacity
                 activeOpacity={0.88}
                 style={{
+                  width: isWideLayout ? 420 : '100%',
+                  maxWidth: '100%',
+                  alignSelf: 'center',
                   backgroundColor:
                     !selectedSlot || isSlotInPast(selectedSlot, selectedDate)
                       ? '#CBD5E1'
@@ -1294,120 +1123,54 @@ export default function DoctorCareScreen({
         {/* STEP 1: DOCTOR PROFILE VIEW (SCREEN 1 IN REFERENCE DESIGN)                */}
         {/* ========================================================================= */}
         {profileStep === 'profile' && (
-          <View style={{ width: '100%', flex: 1, backgroundColor: '#FFFFFF' }}>
-            {/* Soft Rose Hero Section with Back, Heart & Doctor Portrait */}
+          <View style={{ width: '100%', flex: 1, backgroundColor: profileSurface }}>
+            {/* Compact doctor summary, matching the discovery profile reference */}
             <View
               style={{
-                backgroundColor: '#FFF1F2',
+                backgroundColor: profileHeroSurface,
                 borderTopLeftRadius: 32,
                 borderTopRightRadius: 32,
                 paddingHorizontal: 20,
                 paddingTop: 16,
                 paddingBottom: 26,
-                alignItems: 'center',
+                alignItems: 'stretch',
               }}
             >
-              {/* Top Navigation Row: Back Button Left, Favorite Heart Right */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 21,
-                    backgroundColor: '#FFFFFF',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 4,
-                    elevation: 2,
-                  }}
-                  onPress={() => setShowProfile(false)}
-                >
-                  <Ionicons name="arrow-back" size={20} color="#1E293B" />
-                </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.2, marginBottom: 16 }}>
+                Doctors Profile
+              </Text>
 
-                <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 }}>
-                  Doctor Profile
-                </Text>
-
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 21,
-                    backgroundColor: '#FFFFFF',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 4,
-                    elevation: 2,
-                  }}
-                  onPress={() => setIsFavoriteDoctor(!isFavoriteDoctor)}
-                >
-                  <Ionicons
-                    name={isFavoriteDoctor ? 'heart' : 'heart-outline'}
-                    size={22}
-                    color={isFavoriteDoctor ? '#DC2626' : '#1E293B'}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Centered Doctor Portrait with Floating "Top Rated" Badge */}
-              <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, backgroundColor: profileSurface }}>
+                    <Ionicons name="star" size={12} color="#D99A32" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textPrimary }}>{Number(selectedDoctor?.rating || 5).toFixed(1)}</Text>
+                    <View style={{ width: 1, height: 12, backgroundColor: '#D5D5D5', marginHorizontal: 3 }} />
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textPrimary }}>{selectedDoctor?.fee_ngn ? `₦${Number(selectedDoctor.fee_ngn).toLocaleString()}/session` : 'Fee not listed'}</Text>
+                  </View>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: theme.textPrimary, marginTop: 12 }} numberOfLines={2}>{selectedDoctor?.name || 'Doctor'}</Text>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 3 }} numberOfLines={2}>{selectedDoctor?.specialty || 'General Consultation'}</Text>
+                  <TouchableOpacity
+                    onPress={() => { setConsultationType('chat'); setProfileStep('booking'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${selectedDoctor?.name || 'doctor'} about a chat consultation`}
+                    style={{ alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 7, marginTop: 10, borderRadius: 16, borderWidth: 1, borderColor: isDarkMode ? '#4A4A4A' : '#D8D8D8' }}
+                  >
+                    <Text style={{ color: theme.textPrimary, fontSize: 11, fontWeight: '600' }}>Message</Text>
+                  </TouchableOpacity>
+                </View>
                 <Image
-                  source={{
-                    uri:
-                      selectedDoctor?.photo_url ||
-                      'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80',
-                  }}
-                  style={{
-                    width: 122,
-                    height: 122,
-                    borderRadius: 61,
-                    borderWidth: 4,
-                    borderColor: '#FFFFFF',
-                    backgroundColor: '#E2E8F0',
-                  }}
+                  source={{ uri: selectedDoctor?.photo_url || selectedDoctor?.avatar_url || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=500&auto=format&fit=crop&q=80' }}
+                  style={{ width: 126, height: 136, borderRadius: 18, backgroundColor: '#E2E8F0' }}
                   resizeMode="cover"
                 />
-
-                {/* Floating Top Rated Pill Badge */}
-                <View
-                  style={{
-                    position: 'absolute',
-                    bottom: -10,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 4,
-                    backgroundColor: '#FFFFFF',
-                    paddingHorizontal: 12,
-                    paddingVertical: 4.5,
-                    borderRadius: 20,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 4,
-                    elevation: 3,
-                    borderWidth: 1,
-                    borderColor: '#FEE2E2',
-                  }}
-                >
-                  <Ionicons name="star" size={13} color="#D97706" />
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#DC2626' }}>Top Rated</Text>
-                </View>
               </View>
             </View>
 
             {/* Overlapping White Body Card */}
             <View
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: profileSurface,
                 borderTopLeftRadius: 32,
                 borderTopRightRadius: 32,
                 marginTop: -14,
@@ -1417,75 +1180,97 @@ export default function DoctorCareScreen({
                 flex: 1,
               }}
             >
-              {/* Doctor Name */}
-              <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 }}>
-                {selectedDoctor?.name || 'Doctor'}
-              </Text>
-
-              {/* Specialty, Rating & Experience Row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 18 }}>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
-                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#475569' }}>
-                      {selectedDoctor?.specialty || 'General Consultation'}
-                    </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 13, marginBottom: 14, borderRadius: 15, backgroundColor: profileSoftSurface }}>
+                {[
+                  { value: selectedDoctor?.years_experience ? `${formatDoctorMetric(selectedDoctor.years_experience)} years` : '—', label: 'Experience' },
+                  { value: formatDoctorMetric(selectedDoctor?.patients_served ?? selectedDoctor?.patients_count ?? selectedDoctor?.patient_count, true), label: 'Patients' },
+                  { value: formatDoctorMetric(selectedDoctor?.operations_count ?? selectedDoctor?.procedures_count), label: 'Operations' },
+                ].map((stat) => (
+                  <View key={stat.label} style={{ alignItems: 'center', paddingHorizontal: 4 }}>
+                    <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '800' }}>{stat.value}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 10, marginTop: 3 }}>{stat.label}</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                    <Ionicons name="star" size={14} color="#D97706" />
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#64748B' }}>
-                      {Number(selectedDoctor?.rating || 5.0).toFixed(1)} ({selectedDoctor?.reviews_count || 0} reviews)
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
-                    {selectedDoctor?.years_experience ? `${selectedDoctor.years_experience}+ Years` : '5+ Years'}
-                  </Text>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 1 }}>
-                    Experience
-                  </Text>
-                </View>
+                ))}
               </View>
 
-              {/* About Doctor */}
-              <View style={{ marginBottom: 18 }}>
-                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 6 }}>
-                  About Doctor
-                </Text>
-                <Text style={{ fontSize: 13, color: '#475569', lineHeight: 20 }}>
-                  {selectedDoctor?.bio ||
-                    (selectedDoctor?.specialty
-                      ? `Specialist in ${selectedDoctor.specialty} providing verified clinical consultations and telemedicine care on Red Apple.`
-                      : 'Verified clinical specialist providing telemedicine consultations on Red Apple.')}
-                </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: theme.divider, marginBottom: 16 }}>
+                {['About', 'Reviews', 'Availability'].map((tab) => {
+                  const active = doctorProfileTab === tab;
+                  return (
+                    <TouchableOpacity key={tab} onPress={() => setDoctorProfileTab(tab)} style={{ flex: 1, alignItems: 'center', paddingVertical: 11, borderBottomWidth: active ? 2 : 0, borderBottomColor: '#D84440' }}>
+                      <Text style={{ fontSize: 12, fontWeight: active ? '700' : '500', color: active ? theme.textPrimary : theme.textSecondary }}>{tab}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              {/* Specializations */}
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 8 }}>
-                  Specializations
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {(() => {
-                    const tags = [];
-                    if (selectedDoctor?.specialty) tags.push(selectedDoctor.specialty);
-                    if (selectedDoctor?.sub_specialty && selectedDoctor.sub_specialty !== selectedDoctor.specialty) {
-                      tags.push(selectedDoctor.sub_specialty);
-                    }
-                    if (selectedDoctor?.subspecialty && selectedDoctor.subspecialty !== selectedDoctor.specialty) {
-                      tags.push(selectedDoctor.subspecialty);
-                    }
-                    tags.push('Telemedicine', 'Virtual Care');
-                    return tags.map((tag) => (
-                      <View key={tag} style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>{tag}</Text>
+              {doctorProfileTab === 'About' && (
+                <View style={{ flexDirection: isWideLayout ? 'row' : 'column', alignItems: 'stretch', gap: isWideLayout ? 20 : 0, marginBottom: 18 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: theme.textPrimary, marginBottom: 7 }}>About the doctor</Text>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20 }}>
+                      {selectedDoctor?.bio || `Dr. ${selectedDoctor?.name || 'This specialist'} provides ${selectedDoctor?.specialty || 'clinical'} consultations through Red Apple.`}
+                    </Text>
+                  </View>
+                  <View style={{ flex: isWideLayout ? 0.82 : undefined, marginTop: isWideLayout ? 0 : 20, padding: 14, borderRadius: 16, backgroundColor: profileSoftSurface }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: theme.textPrimary }}>Reviews & ratings</Text>
+                      <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, justifyContent: 'center', alignItems: 'center', backgroundColor: profileSurface }}>
+                        <Text style={{ color: theme.textPrimary, fontSize: 10, fontWeight: '700' }}>{selectedDoctor?.reviews_count || 0}</Text>
                       </View>
-                    ));
-                  })()}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Text style={{ fontSize: 30, fontWeight: '700', color: theme.textPrimary }}>{Number(selectedDoctor?.rating || 5).toFixed(1)}</Text>
+                      <View>
+                        <View style={{ flexDirection: 'row', gap: 2 }}>{[1, 2, 3, 4, 5].map((star) => { const rating = Number(selectedDoctor?.rating || 5); const name = rating >= star ? 'star' : rating >= star - 0.5 ? 'star-half' : 'star-outline'; return <Ionicons key={star} name={name} size={16} color="#D9A62E" />; })}</View>
+                        <Text style={{ color: theme.textSecondary, fontSize: 10, marginTop: 3 }}>Overall rating</Text>
+                      </View>
+                    </View>
+                  </View>
                 </View>
-              </View>
+              )}
+
+              {doctorProfileTab === 'Reviews' && (
+                <View style={{ paddingVertical: 10 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: theme.textPrimary, marginBottom: 12 }}>Reviews & ratings</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ fontSize: 34, fontWeight: '700', color: theme.textPrimary }}>{Number(selectedDoctor?.rating || 5).toFixed(1)}</Text>
+                    <View>
+                      <View style={{ flexDirection: 'row', gap: 2 }}>{[1, 2, 3, 4, 5].map((star) => { const rating = Number(selectedDoctor?.rating || 5); const name = rating >= star ? 'star' : rating >= star - 0.5 ? 'star-half' : 'star-outline'; return <Ionicons key={star} name={name} size={16} color="#D9A62E" />; })}</View>
+                      <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 3 }}>{selectedDoctor?.reviews_count || 0} ratings</Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 14 }}>{selectedDoctor?.reviews_count ? 'Patient feedback will appear here.' : 'No written reviews yet.'}</Text>
+                </View>
+              )}
+
+              {doctorProfileTab === 'Availability' && (
+                <View style={{ marginBottom: 18 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 10 }}>Available dates</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7, paddingBottom: 12 }}>
+                    {upcomingDateStrip.map((item, index) => {
+                      const isSelected = item.date.toDateString() === selectedDate.toDateString();
+                      return (
+                        <TouchableOpacity key={`${item.date.toISOString()}-${index}`} onPress={() => handleSelectDate(item.date)} style={{ width: 48, paddingVertical: 8, alignItems: 'center', borderRadius: 13, backgroundColor: isSelected ? '#D84440' : (isDarkMode ? '#292929' : '#F1F3F5') }}>
+                          <Text style={{ color: isSelected ? '#FFFFFF' : theme.textSecondary, fontSize: 9 }}>{item.dayName}</Text>
+                          <Text style={{ color: isSelected ? '#FFFFFF' : theme.textPrimary, fontSize: 11, fontWeight: '700', marginTop: 4 }}>{item.monthDay}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  {isLoadingSlots ? <ActivityIndicator color="#D84440" style={{ paddingVertical: 14 }} /> : doctorSlots.length > 0 ? (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {doctorSlots.map((slot) => {
+                        const disabled = Boolean(slot.is_booked) || isSlotInPast(slot, selectedDate);
+                        const active = selectedSlot?.slot_id === slot.slot_id && !disabled;
+                        return <TouchableOpacity key={slot.slot_id} disabled={disabled} onPress={() => setSelectedSlot(slot)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: active ? '#D84440' : theme.cardBorder, backgroundColor: active ? (isDarkMode ? '#382326' : '#FCE8E6') : profileSurface, opacity: disabled ? 0.45 : 1 }}><Text style={{ color: active ? '#D84440' : theme.textPrimary, fontSize: 11, fontWeight: '600' }}>{formatSlotDisplayTime(slot)}</Text></TouchableOpacity>;
+                      })}
+                    </View>
+                  ) : (
+                    <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18, paddingVertical: 5 }}>{`No times available for ${selectedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}. Choose another day.`}</Text>
+                  )}
+                </View>
+              )}
 
 
             </View>
@@ -1518,10 +1303,10 @@ export default function DoctorCareScreen({
               </TouchableOpacity>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 21, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 }}>
-                  Book Appointment
+                  {consultationType === 'chat' ? 'Message consultation' : 'Book Appointment'}
                 </Text>
                 <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                  Choose your preferred date and time to continue.
+                  {consultationType === 'chat' ? 'Choose a time to message this doctor.' : 'Choose your preferred date and time to continue.'}
                 </Text>
               </View>
             </View>
@@ -1687,13 +1472,6 @@ export default function DoctorCareScreen({
             <Text className="text-base font-extrabold text-white">Enter Video Room</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            className="h-11 px-6 rounded-full w-full items-center justify-center"
-            onPress={() => setShowBookingSuccessModal(false)}
-          >
-            <Text className="text-sm font-bold text-gray-600">Done</Text>
-          </TouchableOpacity>
         </View>
       </AppBottomSheet>
 

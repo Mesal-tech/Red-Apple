@@ -34,7 +34,7 @@ export default function AppBottomSheet({
   title = null,
   subtitle = null,
   showHandle = true,
-  showCloseChevron = false,
+  showCloseChevron = true,
   headerLeft = null,
   headerRight = null,
   scrollable = true, // Default to true so user can drag and scroll content freely
@@ -52,7 +52,8 @@ export default function AppBottomSheet({
   showsVerticalScrollIndicator = false,
   children,
 }) {
-  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+  const isLargeScreen = SCREEN_WIDTH >= 820;
   let insets = { bottom: 0, top: 0 };
   try {
     insets = useSafeAreaInsets();
@@ -91,11 +92,15 @@ export default function AppBottomSheet({
   };
 
   const resolvedMaxHeight = resolveDimension(maxHeight, Math.round(SCREEN_HEIGHT * 0.94));
+  const maxCardHeight = isLargeScreen
+    ? Math.min(resolvedMaxHeight, SCREEN_HEIGHT - 80)
+    : resolvedMaxHeight;
   const hasFixedHeight = height !== null && height !== undefined;
   const resolvedHeight = hasFixedHeight ? resolveDimension(height, null) : null;
 
   // Pan animation for drag-to-dismiss gesture on header / drag handle
   const translateY = useRef(new Animated.Value(0)).current;
+  const scrollOffset = useRef(0);
 
   useEffect(() => {
     if (visible) {
@@ -106,9 +111,13 @@ export default function AppBottomSheet({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only trigger downward drag on header when moving vertically downwards
-        return gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        // Let scrollable content scroll normally. At its top edge, a downward pull
+        // belongs to the sheet and dismisses it, even when the drag starts on content.
+        const contentIsAtTop = scrollOffset.current <= 1;
+        return gestureState.dy > 6
+          && Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
+          && (!scrollable || contentIsAtTop);
       },
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dy > 0) {
@@ -141,10 +150,9 @@ export default function AppBottomSheet({
     return (
       <View
         className={`w-full mb-1 ${noPadding ? 'px-5' : ''}`}
-        {...panResponder.panHandlers}
       >
         {/* Top Centered Pill Drag Handle */}
-        {showHandle && (
+        {showHandle && !isLargeScreen && (
           <View className="w-full py-1.5 items-center justify-center">
             <View
               className="w-11 h-[5px] rounded-[3px]"
@@ -153,26 +161,34 @@ export default function AppBottomSheet({
           </View>
         )}
 
-        {/* Optional Action Bar Row (Chevron left, custom actions right) */}
+        {/* Action bar keeps a close chevron available on every sheet. */}
         {hasHeaderRow && (
           <View className="flex-row items-center justify-between h-10 mb-1">
             <View className="flex-row items-center">
-              {headerLeft ? (
-                headerLeft
-              ) : showCloseChevron ? (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={onClose}
-                  className="py-1 px-1"
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                >
-                  <Ionicons name="chevron-down" size={26} color={isDarkMode ? '#FFFFFF' : '#374151'} />
-                </TouchableOpacity>
-              ) : null}
+              {headerLeft || null}
             </View>
 
             <View className="flex-row items-center space-x-3">
               {headerRight || null}
+              {showCloseChevron ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Close bottom sheet"
+                  activeOpacity={0.72}
+                  onPress={onClose}
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isDarkMode ? '#303936' : '#F3F4F6',
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name={isLargeScreen ? 'close' : 'chevron-down'} size={22} color={isDarkMode ? '#FFFFFF' : '#374151'} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         )}
@@ -216,8 +232,13 @@ export default function AppBottomSheet({
       )}
 
       <View
-        className="flex-1 bg-slate-900/60 justify-end"
-        style={overlayStyle}
+        className={`flex-1 bg-slate-900/60 ${isLargeScreen ? 'justify-center' : 'justify-end'}`}
+        style={[{
+          justifyContent: isLargeScreen ? 'center' : 'flex-end',
+          backgroundColor: 'rgba(15, 23, 42, 0.62)',
+          paddingHorizontal: isLargeScreen ? 24 : 0,
+          paddingVertical: isLargeScreen ? 40 : 0,
+        }, overlayStyle]}
       >
         <TouchableWithoutFeedback
           onPress={dismissOnBackdropPress ? onClose : undefined}
@@ -229,19 +250,33 @@ export default function AppBottomSheet({
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           enabled={avoidKeyboard}
-          className="w-full justify-end"
+          className={`w-full ${isLargeScreen ? 'items-center justify-center' : 'justify-end'}`}
+          style={isLargeScreen ? { alignItems: 'center', justifyContent: 'center' } : undefined}
           pointerEvents="box-none"
         >
           <Animated.View
-            className={`rounded-t-[32px] border-t border-l border-r shadow-2xl overflow-hidden ${
+            {...(!isLargeScreen ? panResponder.panHandlers : {})}
+            className={`${isLargeScreen ? 'rounded-[32px] border' : 'rounded-t-[32px] border-t border-l border-r'} shadow-2xl overflow-hidden ${
               noPadding ? '' : 'px-[22px] pt-2.5'
             }`}
             style={[
               {
                 backgroundColor: theme.card,
                 borderColor: theme.cardBorder,
+                width: isLargeScreen ? Math.min(SCREEN_WIDTH - 48, 680) : '100%',
+                alignSelf: 'center',
+                borderWidth: isLargeScreen ? 1 : undefined,
+                borderRadius: isLargeScreen ? 24 : undefined,
+                paddingHorizontal: noPadding ? 0 : (isLargeScreen ? 28 : 22),
+                paddingTop: noPadding ? 0 : (isLargeScreen ? 20 : 10),
+                paddingBottom: noPadding ? 0 : (isLargeScreen ? 24 : 0),
+                shadowColor: '#000000',
+                shadowOffset: { width: 0, height: 16 },
+                shadowOpacity: isLargeScreen ? 0.24 : 0.2,
+                shadowRadius: isLargeScreen ? 32 : 18,
+                elevation: isLargeScreen ? 20 : 12,
               },
-              { maxHeight: resolvedMaxHeight },
+              { maxHeight: maxCardHeight },
               resolvedHeight ? { height: resolvedHeight } : null,
               { transform: [{ translateY }] },
               noPadding ? { paddingHorizontal: 0 } : null,
@@ -254,7 +289,7 @@ export default function AppBottomSheet({
                 width: '100%',
                 flex: hasFixedHeight ? 1 : undefined,
                 flexShrink: 1,
-                maxHeight: resolvedMaxHeight,
+                maxHeight: maxCardHeight,
               }}
             >
               {renderHeader()}
@@ -262,6 +297,8 @@ export default function AppBottomSheet({
               {scrollable ? (
                 <ScrollView
                   showsVerticalScrollIndicator={showsVerticalScrollIndicator}
+                  onScroll={(event) => { scrollOffset.current = event.nativeEvent.contentOffset.y; }}
+                  scrollEventThrottle={16}
                   bounces={true}
                   overScrollMode="always"
                   keyboardShouldPersistTaps="handled"
@@ -271,7 +308,7 @@ export default function AppBottomSheet({
                     flex: hasFixedHeight ? 1 : undefined,
                     flexGrow: hasFixedHeight ? 1 : 0,
                     flexShrink: 1,
-                    maxHeight: resolvedMaxHeight,
+                    maxHeight: maxCardHeight,
                   }}
                   contentContainerStyle={[
                     { width: '100%', flexGrow: 1, paddingBottom: footer ? 0 : safeBottomPadding },
@@ -289,7 +326,7 @@ export default function AppBottomSheet({
                       flex: hasFixedHeight ? 1 : undefined,
                       flexShrink: 1,
                       paddingBottom: footer ? 0 : safeBottomPadding,
-                      maxHeight: resolvedMaxHeight,
+                      maxHeight: maxCardHeight,
                     },
                     contentStyle,
                   ]}
@@ -300,9 +337,18 @@ export default function AppBottomSheet({
 
               {footer && (
                 <View
-                  className={`w-full bg-white border-t border-gray-100 pt-3 ${noPadding ? 'px-5' : ''}`}
+                  className="bg-white border-t border-gray-100 pt-3"
                   style={[
-                    { paddingBottom: safeBottomPadding },
+                    {
+                      alignSelf: 'stretch',
+                      flexShrink: 0,
+                      marginHorizontal: isLargeScreen && noPadding ? 20 : 0,
+                      marginBottom: isLargeScreen && noPadding ? 16 : 0,
+                      borderRadius: isLargeScreen && noPadding ? 18 : 0,
+                      overflow: 'hidden',
+                      paddingHorizontal: noPadding ? 16 : 0,
+                      paddingBottom: safeBottomPadding,
+                    },
                     footerStyle,
                   ]}
                 >
